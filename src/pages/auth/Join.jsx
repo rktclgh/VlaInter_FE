@@ -1,229 +1,322 @@
-import { useState } from "react";
-import { Link } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { TopNav } from "../../components/TopNav";
+import eyeOpenIcon from "../../assets/icon/eye-open.svg";
+import eyeOffIcon from "../../assets/icon/eye-off.svg";
+import kakaoLoginButtonImage from "../../assets/icon/kakao_login_medium_wide.png";
+import { sendVerificationEmail, signup, verifyEmailCode } from "../../lib/authApi";
+
+const footerLinks = [
+  { text: "이용약관", href: "#" },
+  { text: "개인정보처리방침", href: "#" },
+  { text: "고객센터", href: "#" },
+  { text: "회사소개", href: "#" },
+];
+
+const labelClass = "mb-1 block text-[11px] font-semibold text-[#2f2f2f]";
+const inputClass =
+  "h-7 w-full border-b border-[#d9d9d9] text-[11px] text-[#2f2f2f] placeholder:text-[#c0c0c0]";
+const EMAIL_REGEX = /^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+$/;
+const EMAIL_SEND_COOLDOWN_SECONDS = 60;
 
 export const Join = () => {
-    const [formData, setFormData] = useState({
-        name: "",
-        email: "",
-        verificationCode: "",
-        password: "",
-        passwordConfirm: "",
-    });
+  const navigate = useNavigate();
+  const [formData, setFormData] = useState({
+    name: "",
+    email: "",
+    verificationCode: "",
+    password: "",
+    passwordConfirm: "",
+  });
+  const [showPassword, setShowPassword] = useState(false);
+  const [showPasswordConfirm, setShowPasswordConfirm] = useState(false);
+  const [isEmailVerified, setIsEmailVerified] = useState(false);
+  const [sendingCode, setSendingCode] = useState(false);
+  const [verifyingCode, setVerifyingCode] = useState(false);
+  const [pendingSignup, setPendingSignup] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
+  const [cooldownSeconds, setCooldownSeconds] = useState(0);
 
-    const [showPassword, setShowPassword] = useState(false);
-    const [showPasswordConfirm, setShowPasswordConfirm] = useState(false);
+  useEffect(() => {
+    if (cooldownSeconds <= 0) return;
+    const timer = setInterval(() => {
+      setCooldownSeconds((prev) => (prev <= 1 ? 0 : prev - 1));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [cooldownSeconds]);
 
-    const handleInputChange = (field, value) => {
-        setFormData((prev) => ({
-            ...prev,
-            [field]: value,
-        }));
-    };
+  const isEmailFormatValid = useMemo(
+    () => EMAIL_REGEX.test(formData.email.trim()),
+    [formData.email]
+  );
+  const hasVerificationCodeInput = formData.verificationCode.trim().length > 0;
+  const canSendVerificationCode = isEmailFormatValid && cooldownSeconds === 0 && !sendingCode;
+  const canVerifyCode = isEmailFormatValid && hasVerificationCodeInput && !verifyingCode;
+  const isPasswordMatched =
+    formData.password.length > 0 &&
+    formData.passwordConfirm.length > 0 &&
+    formData.password === formData.passwordConfirm;
+  const canSubmitSignup = isPasswordMatched && isEmailVerified;
 
-    const handleSendVerificationCode = () => {
-        console.log("Sending verification code to:", formData.email);
-    };
+  const handleInputChange = (field, value) => {
+    if (field === "email") {
+      setIsEmailVerified(false);
+    }
+    setFormData((prev) => ({ ...prev, [field]: value }));
+  };
 
-    const handleVerifyCode = () => {
-        console.log("Verifying code:", formData.verificationCode);
-    };
+  const handleSendVerificationCode = async () => {
+    if (!isEmailFormatValid) {
+      setErrorMessage("유효한 이메일 형식을 입력해 주세요.");
+      return;
+    }
+    if (cooldownSeconds > 0) return;
 
-    const handleVlinterSignup = () => {
-        console.log("Vlinter ID signup:", formData);
-    };
+    setSendingCode(true);
+    setErrorMessage("");
+    setSuccessMessage("");
+    try {
+      await sendVerificationEmail(formData.email.trim());
+      setIsEmailVerified(false);
+      setCooldownSeconds(EMAIL_SEND_COOLDOWN_SECONDS);
+      setSuccessMessage("인증 코드를 발송했습니다.");
+    } catch (error) {
+      if (error.status === 429) {
+        setCooldownSeconds((prev) => (prev > 0 ? prev : EMAIL_SEND_COOLDOWN_SECONDS));
+      }
+      setErrorMessage(error.message);
+    } finally {
+      setSendingCode(false);
+    }
+  };
 
-    const handleKakaoSignup = () => {
-        console.log("Kakao signup");
-    };
+  const handleVerifyCode = async () => {
+    if (!formData.email.trim() || !formData.verificationCode.trim()) {
+      setErrorMessage("이메일과 인증 코드를 입력해 주세요.");
+      return;
+    }
+    setVerifyingCode(true);
+    setErrorMessage("");
+    setSuccessMessage("");
+    try {
+      await verifyEmailCode(formData.email.trim(), formData.verificationCode.trim());
+      setIsEmailVerified(true);
+      setSuccessMessage("이메일 인증이 완료되었습니다.");
+    } catch (error) {
+      setIsEmailVerified(false);
+      setErrorMessage(error.message);
+    } finally {
+      setVerifyingCode(false);
+    }
+  };
 
-    const footerLinks = [
-        { text: "이용약관", href: "#" },
-        { text: "개인정보처리방침", href: "#" },
-        { text: "고객센터", href: "#" },
-        { text: "회사소개", href: "#" },
-    ];
+  const handleJoin = async () => {
+    if (!formData.name.trim() || !formData.email.trim() || !formData.password || !formData.passwordConfirm) {
+      setErrorMessage("필수 항목을 모두 입력해 주세요.");
+      return;
+    }
+    if (formData.password !== formData.passwordConfirm) {
+      setErrorMessage("비밀번호와 비밀번호 확인이 일치하지 않습니다.");
+      return;
+    }
+    if (!isEmailVerified) {
+      setErrorMessage("이메일 인증을 먼저 완료해 주세요.");
+      return;
+    }
 
-    return (
-        <div className="bg-white w-full min-h-screen relative flex flex-col items-center justify-between pb-8 overflow-x-hidden md:min-w-[1256px]">
-            <header className="absolute top-[37px] left-4 md:left-[41px] z-50">
-                <Link to="/">
-                    <span className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-[#5d83de] to-[#ff1c91] font-['Pretendard-Bold'] inline-block select-none cursor-pointer">
-                        Vlinter
-                    </span>
-                </Link>
+    setPendingSignup(true);
+    setErrorMessage("");
+    setSuccessMessage("");
+    try {
+      await signup({
+        name: formData.name.trim(),
+        email: formData.email.trim(),
+        password: formData.password,
+      });
+      navigate("/login");
+    } catch (error) {
+      setErrorMessage(error.message);
+    } finally {
+      setPendingSignup(false);
+    }
+  };
+
+  const handleKakaoJoin = () => {
+    console.log("kakao-join");
+  };
+
+  return (
+    <div className="min-h-screen w-full bg-white">
+      <TopNav />
+
+      <div className="flex min-h-[calc(100vh-54px)] flex-col pt-[54px]">
+        <main className="flex flex-1 items-center justify-center px-6 py-14">
+          <section className="w-full max-w-[410px]">
+            <header className="text-center">
+              <h1 className="bg-[linear-gradient(145deg,#5D83DE_0%,#FF1C91_100%)] bg-clip-text text-[54px] font-medium leading-none text-transparent">
+                Vlainter
+              </h1>
+              <p className="mt-1 text-[12px] text-[#7e7e7e]">회원가입</p>
             </header>
 
-            <main className="w-full px-6 flex flex-col items-center justify-center flex-1 mt-[120px] md:mt-[220px] md:w-[411px] md:px-0">
-                <h1 className="[font-family:'Pretendard-SemiBold',Helvetica] font-semibold text-[#2d3748] text-xl leading-[21px] whitespace-nowrap text-center tracking-[0] mb-[50px]">
-                    회원가입
-                </h1>
+            <form className="mt-8" onSubmit={(e) => e.preventDefault()}>
+              <div className="mb-3">
+                <label className={labelClass} htmlFor="join-name">
+                  <span className="text-[#ff3a3a]">*</span> 이름
+                </label>
+                <input
+                  id="join-name"
+                  type="text"
+                  className={inputClass}
+                  placeholder="이름 입력"
+                  value={formData.name}
+                  onChange={(e) => handleInputChange("name", e.target.value)}
+                />
+              </div>
 
-                <form onSubmit={(e) => e.preventDefault()} className="w-full">
-                    <div className="mb-[45px]">
-                        <label
-                            htmlFor="name"
-                            className="[font-family:'Pretendard-SemiBold',Helvetica] font-semibold text-black text-sm leading-[21px] whitespace-nowrap block mb-2"
-                        >
-                            <span className="text-pink-500 mr-1">*</span>이름
-                        </label>
-                        <input
-                            type="text"
-                            id="name"
-                            value={formData.name}
-                            onChange={(e) => handleInputChange("name", e.target.value)}
-                            placeholder="ex) 홍길동"
-                            className="w-full h-[35px] border-b [border-bottom-style:solid] border-gray-300 [font-family:'Pretendard-Regular',Helvetica] font-normal text-black text-[14px] tracking-[0] leading-[normal] px-2 focus:border-gray-500 transition-colors"
-                            aria-required="true"
-                        />
-                    </div>
-
-                    <div className="mb-[30px]">
-                        <label
-                            htmlFor="email"
-                            className="[font-family:'Pretendard-SemiBold',Helvetica] font-semibold text-black text-sm leading-[21px] whitespace-nowrap block mb-2"
-                        >
-                            <span className="text-pink-500 mr-1">*</span>이메일
-                        </label>
-                        <div className="flex gap-2">
-                            <input
-                                type="email"
-                                id="email"
-                                value={formData.email}
-                                onChange={(e) => handleInputChange("email", e.target.value)}
-                                placeholder="ex) example@gmail.com"
-                                className="flex-1 h-[35px] border-b [border-bottom-style:solid] border-gray-300 [font-family:'Pretendard-Regular',Helvetica] font-normal text-black text-[14px] tracking-[0] leading-[normal] px-2 focus:border-gray-500 transition-colors"
-                                aria-required="true"
-                            />
-                            <button
-                                type="button"
-                                onClick={handleSendVerificationCode}
-                                className="w-[100px] md:w-[109px] h-[35px] bg-[#f3f3f3] hover:bg-gray-200 transition-colors rounded-md [font-family:'Pretendard-Medium',Helvetica] font-medium text-[#777] text-xs md:text-sm leading-[normal] tracking-[0]"
-                                aria-label="인증코드 발송"
-                            >
-                                인증코드 발송
-                            </button>
-                        </div>
-                    </div>
-
-                    <div className="mb-[45px]">
-                        <div className="flex gap-2">
-                            <input
-                                type="text"
-                                id="verificationCode"
-                                value={formData.verificationCode}
-                                onChange={(e) => handleInputChange("verificationCode", e.target.value)}
-                                placeholder="인증코드 7자리"
-                                maxLength={7}
-                                className="flex-1 min-w-[109px] h-[35px] border-b [border-bottom-style:solid] border-gray-300 [font-family:'Pretendard-Regular',Helvetica] font-normal text-black text-[14px] leading-[normal] tracking-[0] px-2 focus:border-gray-500 transition-colors"
-                                aria-required="true"
-                            />
-                            <button
-                                type="button"
-                                onClick={handleVerifyCode}
-                                className="w-[80px] h-[35px] bg-[#f3f3f3] hover:bg-gray-200 transition-colors rounded-md [font-family:'Pretendard-Medium',Helvetica] font-medium text-[#777] text-xs md:text-sm leading-[normal] tracking-[0]"
-                                aria-label="인증코드 확인"
-                            >
-                                확인
-                            </button>
-                        </div>
-                    </div>
-
-                    <div className="mb-[45px]">
-                        <label
-                            htmlFor="password"
-                            className="[font-family:'Pretendard-SemiBold',Helvetica] font-semibold text-black text-sm leading-[21px] whitespace-nowrap block mb-2"
-                        >
-                            <span className="text-pink-500 mr-1">*</span>비밀번호
-                        </label>
-                        <div className="relative">
-                            <input
-                                type={showPassword ? "text" : "password"}
-                                id="password"
-                                value={formData.password}
-                                onChange={(e) => handleInputChange("password", e.target.value)}
-                                placeholder="비밀번호를 입력하세요"
-                                className="w-full h-[35px] border-b [border-bottom-style:solid] border-gray-300 [font-family:'Pretendard-Regular',Helvetica] font-normal text-black text-[14px] leading-[normal] tracking-[0] px-2 focus:border-gray-500 transition-colors"
-                                aria-required="true"
-                            />
-                            <button
-                                type="button"
-                                onClick={() => setShowPassword(!showPassword)}
-                                className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-gray-500 font-bold px-2 py-1 bg-gray-100 rounded"
-                                aria-label={showPassword ? "비밀번호 숨기기" : "비밀번호 보기"}
-                            >
-                                {showPassword ? "숨기기" : "보기"}
-                            </button>
-                        </div>
-                    </div>
-
-                    <div className="mb-[60px]">
-                        <label
-                            htmlFor="passwordConfirm"
-                            className="[font-family:'Pretendard-SemiBold',Helvetica] font-semibold text-black text-sm leading-[21px] whitespace-nowrap block mb-2"
-                        >
-                            <span className="text-pink-500 mr-1">*</span>비밀번호 확인
-                        </label>
-                        <div className="relative">
-                            <input
-                                type={showPasswordConfirm ? "text" : "password"}
-                                id="passwordConfirm"
-                                value={formData.passwordConfirm}
-                                onChange={(e) => handleInputChange("passwordConfirm", e.target.value)}
-                                placeholder="비밀번호를 한번 더 입력하세요"
-                                className="w-full h-[35px] border-b [border-bottom-style:solid] border-gray-300 [font-family:'Pretendard-Regular',Helvetica] font-normal text-black text-[14px] leading-[normal] tracking-[0] px-2 focus:border-gray-500 transition-colors"
-                                aria-required="true"
-                            />
-                            <button
-                                type="button"
-                                onClick={() => setShowPasswordConfirm(!showPasswordConfirm)}
-                                className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-gray-500 font-bold px-2 py-1 bg-gray-100 rounded"
-                                aria-label={showPasswordConfirm ? "비밀번호 숨기기" : "비밀번호 보기"}
-                            >
-                                {showPasswordConfirm ? "숨기기" : "보기"}
-                            </button>
-                        </div>
-                    </div>
-
+              <div className="mb-3">
+                <label className={labelClass} htmlFor="join-email">
+                  <span className="text-[#ff3a3a]">*</span> 이메일
+                </label>
+                <div className="flex items-end gap-2">
+                  <input
+                    id="join-email"
+                    type="email"
+                    className={`${inputClass} ${isEmailVerified ? "text-[#8a8a8a]" : ""}`}
+                    placeholder="ex) example1234@gmail.com"
+                    value={formData.email}
+                    onChange={(e) => handleInputChange("email", e.target.value)}
+                    disabled={isEmailVerified}
+                  />
+                  {!isEmailVerified && (
                     <button
-                        type="button"
-                        onClick={handleVlinterSignup}
-                        className="w-full h-12 bg-[#f3f3f3] rounded-[10px] hover:bg-gray-200 transition-colors text-black [font-family:'Pretendard-SemiBold',Helvetica] font-semibold text-base text-center tracking-[0.48px] leading-6 whitespace-nowrap mb-4"
+                      type="button"
+                      onClick={handleSendVerificationCode}
+                      disabled={!canSendVerificationCode}
+                      className={`h-6 shrink-0 rounded px-3 text-[10px] ${canSendVerificationCode ? "bg-black text-white" : "bg-[#f4f4f4] text-[#b1b1b1]"}`}
                     >
-                        Vlinter ID로 가입하기
+                      {sendingCode
+                        ? "발송 중"
+                        : cooldownSeconds > 0
+                          ? `${cooldownSeconds}초`
+                          : "인증코드 발송"}
                     </button>
+                  )}
+                </div>
+                {isEmailVerified && (
+                  <p className="mt-1 text-[11px] font-medium text-[#2f8f4e]">이메일 인증이 완료되었습니다.</p>
+                )}
+              </div>
 
+              {!isEmailVerified && (
+                <div className="mb-3">
+                  <div className="flex items-end gap-2">
+                    <input
+                      type="text"
+                      className={inputClass}
+                      placeholder="인증코드 7자리"
+                      value={formData.verificationCode}
+                      onChange={(e) => handleInputChange("verificationCode", e.target.value)}
+                    />
                     <button
-                        type="button"
-                        onClick={handleKakaoSignup}
-                        className="w-full h-12 bg-[#fee500] hover:bg-[#ffeb3b] transition-colors rounded-lg flex items-center justify-center gap-2"
+                      type="button"
+                      onClick={handleVerifyCode}
+                      disabled={!canVerifyCode}
+                      className={`h-6 shrink-0 rounded px-4 text-[10px] ${canVerifyCode ? "bg-black text-white" : "bg-[#f4f4f4] text-[#b1b1b1]"}`}
                     >
-                        <span className="[font-family:'Pretendard-SemiBold',Helvetica] font-semibold text-[#3c1e1e] text-[15px] text-center leading-[21px] whitespace-nowrap tracking-[0]">
-                            카카오로 가입하기
-                        </span>
+                      {verifyingCode ? "확인 중" : "확인"}
                     </button>
-                </form>
-            </main>
+                  </div>
+                </div>
+              )}
 
-            <footer className="w-full border-t border-gray-200 mt-24 py-8 px-4 flex flex-col items-center md:h-[205px] md:relative md:mt-auto md:border-t-[1px]">
-                <p className="[font-family:'Pretendard-Regular',Helvetica] font-normal text-[#666666] text-sm md:text-base text-center leading-6 whitespace-nowrap mb-6 md:absolute md:top-16 md:left-1/2 md:-translate-x-1/2">
-                    간편하고 안전한 행사 관리 솔루션
-                </p>
+              <div className="mb-3">
+                <label className={labelClass} htmlFor="join-password">
+                  <span className="text-[#ff3a3a]">*</span> 비밀번호
+                </label>
+                <div className="relative">
+                  <input
+                    id="join-password"
+                    type={showPassword ? "text" : "password"}
+                    className={`${inputClass} pr-7`}
+                    placeholder="비밀번호를 입력해주세요"
+                    value={formData.password}
+                    onChange={(e) => handleInputChange("password", e.target.value)}
+                  />
+                  <button
+                    type="button"
+                    className="absolute right-0 top-1/2 -translate-y-1/2"
+                    onClick={() => setShowPassword((prev) => !prev)}
+                    aria-label={showPassword ? "비밀번호 숨기기" : "비밀번호 보기"}
+                  >
+                    <img src={showPassword ? eyeOffIcon : eyeOpenIcon} alt="" className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
 
-                <nav
-                    className="flex flex-wrap justify-center gap-4 md:absolute md:top-[120px] md:left-1/2 md:-translate-x-1/2 md:gap-[14px]"
-                    aria-label="푸터 네비게이션"
-                >
-                    {footerLinks.map((link, index) => (
-                        <a
-                            key={index}
-                            href={link.href}
-                            className="[font-family:'Pretendard-Regular',Helvetica] font-normal text-[#666666] text-xs md:text-sm text-center leading-[21px] whitespace-nowrap tracking-[0] hover:text-gray-900"
-                        >
-                            {link.text}
-                        </a>
-                    ))}
-                </nav>
-            </footer>
-        </div>
-    );
+              <div className="mb-6">
+                <label className={labelClass} htmlFor="join-password-confirm">
+                  <span className="text-[#ff3a3a]">*</span> 비밀번호 확인
+                </label>
+                <div className="relative">
+                  <input
+                    id="join-password-confirm"
+                    type={showPasswordConfirm ? "text" : "password"}
+                    className={`${inputClass} pr-7`}
+                    placeholder="비밀번호를 한번 더 입력하세요"
+                    value={formData.passwordConfirm}
+                    onChange={(e) => handleInputChange("passwordConfirm", e.target.value)}
+                  />
+                  <button
+                    type="button"
+                    className="absolute right-0 top-1/2 -translate-y-1/2"
+                    onClick={() => setShowPasswordConfirm((prev) => !prev)}
+                    aria-label={showPasswordConfirm ? "비밀번호 숨기기" : "비밀번호 보기"}
+                  >
+                    <img src={showPasswordConfirm ? eyeOffIcon : eyeOpenIcon} alt="" className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleJoin}
+                disabled={pendingSignup || !canSubmitSignup}
+                className={`h-11 w-full rounded-[8px] text-[12px] font-semibold ${
+                  canSubmitSignup
+                    ? "bg-black text-white"
+                    : "bg-[#ececec] text-[#d1d1d1]"
+                }`}
+              >
+                {pendingSignup ? "가입 중..." : "Vlainter ID로 가입하기"}
+              </button>
+
+              {errorMessage && <p className="mt-2 text-[11px] text-[#ff3a3a]">{errorMessage}</p>}
+              {successMessage && <p className="mt-2 text-[11px] text-[#2f8f4e]">{successMessage}</p>}
+
+              <button
+                type="button"
+                onClick={handleKakaoJoin}
+                className="mx-auto mt-3 block h-[45px] w-full max-w-[300px]"
+              >
+                <img src={kakaoLoginButtonImage} alt="카카오 로그인" className="h-full w-full" />
+              </button>
+            </form>
+          </section>
+        </main>
+
+        <footer className="border-t border-[#ececec] py-9">
+          <p className="text-center text-[12px] text-[#7a7a7a]">간편하고 안전한 행사 관리 솔루션</p>
+          <nav className="mt-4 flex items-center justify-center gap-6">
+            {footerLinks.map((item) => (
+              <a key={item.text} href={item.href} className="text-[10px] text-[#7a7a7a]">
+                {item.text}
+              </a>
+            ))}
+          </nav>
+        </footer>
+      </div>
+    </div>
+  );
 };
