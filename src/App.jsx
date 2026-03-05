@@ -6,6 +6,7 @@ import { ForgotPassword } from './pages/auth/ForgotPassword'
 import { KakaoCallback } from './pages/auth/KakaoCallback'
 import { InterviewStartPage } from './pages/content/InterviewStartPage'
 import { PointChargePage } from './pages/content/PointChargePage'
+import { PointChargeCallbackPage } from './pages/content/PointChargeCallbackPage'
 import { FileUploadPage } from './pages/content/FileUploadPage'
 import { MyPage } from './pages/content/MyPage'
 import { ErrorPage } from './pages/ErrorPage'
@@ -23,6 +24,7 @@ function App() {
       <Route path="/content/files" element={<FileUploadPage />} />
       <Route path="/content/mypage" element={<MyPage />} />
       <Route path="/content/point-charge" element={<PointChargePage />} />
+      <Route path="/content/point-charge/callback" element={<PointChargeCallbackPage />} />
       <Route path="/errors/403" element={<ErrorPage code={403} />} />
       <Route path="/errors/404" element={<ErrorPage code={404} />} />
       <Route path="*" element={<ErrorPage code={404} />} />

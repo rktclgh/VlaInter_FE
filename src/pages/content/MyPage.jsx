@@ -4,8 +4,10 @@ import { ContentTopNav } from "../../components/ContentTopNav";
 import { Sidebar } from "../../components/Sidebar";
 import { MobileSidebarDrawer } from "../../components/MobileSidebarDrawer";
 import { PointChargeModal } from "../../components/PointChargeModal";
+import { PointChargeSuccessModal } from "../../components/PointChargeSuccessModal";
 import tempProfileImage from "../../assets/icon/temp.png";
 import { logout } from "../../lib/authApi";
+import { consumePointChargeSuccessResult } from "../../lib/pointChargeFlow";
 import { getMyFiles, getMyProfile } from "../../lib/userApi";
 
 const formatPoint = (value) => {
@@ -87,7 +89,16 @@ export const MyPage = () => {
   const [profileImageUrl, setProfileImageUrl] = useState(tempProfileImage);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [showPointChargeModal, setShowPointChargeModal] = useState(false);
+  const [showPointChargeSuccessModal, setShowPointChargeSuccessModal] = useState(false);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
+
+  useEffect(() => {
+    const charged = consumePointChargeSuccessResult();
+    if (!charged) return;
+    const nextPoint = parsePoint(charged?.currentPoint);
+    setUserPoint(nextPoint);
+    setShowPointChargeSuccessModal(true);
+  }, []);
 
   useEffect(() => {
     const loadData = async () => {
@@ -194,7 +205,19 @@ export const MyPage = () => {
       </div>
 
       {showLogoutModal ? <LogoutConfirmModal onCancel={() => setShowLogoutModal(false)} onConfirm={confirmLogout} /> : null}
-      {showPointChargeModal ? <PointChargeModal onClose={() => setShowPointChargeModal(false)} /> : null}
+      {showPointChargeModal ? (
+        <PointChargeModal
+          onClose={() => setShowPointChargeModal(false)}
+          onCharged={(result) => {
+            const nextPoint = parsePoint(result?.currentPoint);
+            setUserPoint(nextPoint);
+            setShowPointChargeSuccessModal(true);
+          }}
+        />
+      ) : null}
+      {showPointChargeSuccessModal ? (
+        <PointChargeSuccessModal onClose={() => setShowPointChargeSuccessModal(false)} />
+      ) : null}
     </div>
   );
 };
