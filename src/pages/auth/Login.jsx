@@ -121,9 +121,9 @@ export const Login = () => {
 
               <div className="mt-4 flex items-center justify-end text-[11px] font-medium text-[#9d9d9d]">
                 <div className="flex items-center gap-2.5">
-                  <a href="#" className="hover:text-[#7f7f7f]">
+                  <Link to="/password/forgot" className="hover:text-[#7f7f7f]">
                     비밀번호 찾기
-                  </a>
+                  </Link>
                   <span>|</span>
                   <Link to="/join" className="hover:text-[#7f7f7f]">
                     회원가입

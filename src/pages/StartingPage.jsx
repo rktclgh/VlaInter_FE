@@ -130,7 +130,11 @@ export const StartingPage = () => {
                 이력서는 문을 열어주고
               </span>
               <br />
-              <span className="font-bold text-black">이야기는 합격을 만들어줍니다.</span>
+              <span className="font-bold text-black">
+                이야기는
+                <br />
+                합격을 만들어줍니다.
+              </span>
             </h1>
 
             <div className="mt-4 flex flex-wrap gap-2">
