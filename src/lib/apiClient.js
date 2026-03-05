@@ -8,9 +8,9 @@ export class ApiError extends Error {
   }
 }
 
-export async function apiRequest(path, options = {}) {
+async function executeJsonRequest(path, options = {}) {
   const { method = "GET", body, headers = {}, credentials = "include" } = options;
-  const response = await fetch(`${API_BASE_URL}${path}`, {
+  return fetch(`${API_BASE_URL}${path}`, {
     method,
     credentials,
     headers: {
@@ -19,6 +19,37 @@ export async function apiRequest(path, options = {}) {
     },
     body: body ? JSON.stringify(body) : undefined,
   });
+}
+
+export async function refreshAuthSession() {
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/auth/refresh`, {
+      method: "POST",
+      credentials: "include",
+    });
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
+export async function apiRequest(path, options = {}) {
+  const { retryOnUnauthorized = true } = options;
+
+  let response = await executeJsonRequest(path, options);
+  if (
+    response.status === 401 &&
+    retryOnUnauthorized &&
+    path !== "/api/auth/refresh"
+  ) {
+    const refreshed = await refreshAuthSession();
+    if (refreshed) {
+      response = await executeJsonRequest(path, {
+        ...options,
+        retryOnUnauthorized: false,
+      });
+    }
+  }
 
   const raw = await response.text();
   let data = null;

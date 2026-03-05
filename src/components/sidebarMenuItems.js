@@ -11,4 +11,3 @@ export const MY_MENU_ITEMS = [
   { key: "file_upload", label: "이력서 및 자기소개서 업로드", path: "/content/files" },
   { key: "mypage", label: "마이페이지", path: "/content/mypage" },
 ];
-

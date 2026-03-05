@@ -24,3 +24,21 @@ export async function confirmPointCharge({ impUid, merchantUid }) {
     },
   });
 }
+
+export async function getPointPaymentHistory(page = 0, size = 10) {
+  return apiRequest(`/api/payments/points/history?page=${page}&size=${size}`, {
+    method: "GET",
+  });
+}
+
+export async function getPointLedgerHistory(page = 0, size = 10) {
+  return apiRequest(`/api/payments/points/ledger?page=${page}&size=${size}`, {
+    method: "GET",
+  });
+}
+
+export async function refundPointPayment(chargeId) {
+  return apiRequest(`/api/payments/points/${chargeId}/refund`, {
+    method: "POST",
+  });
+}
