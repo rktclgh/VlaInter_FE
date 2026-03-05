@@ -2,11 +2,45 @@ export const POINT_CHARGE_RETURN_PATH_KEY = "POINT_CHARGE_RETURN_PATH";
 export const POINT_CHARGE_SUCCESS_RESULT_KEY = "POINT_CHARGE_SUCCESS_RESULT";
 export const MOBILE_POINT_CHARGE_CALLBACK_PATH = "/content/point-charge/callback";
 
+const normalizePathname = (pathname) => {
+  const segments = String(pathname || "")
+    .split("/")
+    .filter(Boolean);
+  const stack = [];
+  for (const segment of segments) {
+    if (segment === ".") continue;
+    if (segment === "..") {
+      stack.pop();
+      continue;
+    }
+    stack.push(segment);
+  }
+  return `/${stack.join("/")}`;
+};
+
 export function sanitizeReturnPath(rawPath) {
-  if (typeof rawPath !== "string") return "/content/mypage";
-  if (!rawPath.startsWith("/content/")) return "/content/mypage";
-  if (rawPath.startsWith(MOBILE_POINT_CHARGE_CALLBACK_PATH)) return "/content/mypage";
-  return rawPath;
+  const fallbackPath = "/content/mypage";
+  const safeRawPath = typeof rawPath === "string" ? rawPath : String(rawPath || "");
+  const base = typeof window !== "undefined" ? window.location.origin : "http://localhost";
+
+  let normalizedPath = fallbackPath;
+  try {
+    const url = new URL(safeRawPath, base);
+    const pathname = normalizePathname(url.pathname || "/");
+    normalizedPath = `${pathname}${url.search || ""}${url.hash || ""}`;
+  } catch {
+    return fallbackPath;
+  }
+
+  if (!normalizedPath.startsWith("/content/")) return fallbackPath;
+  if (
+    normalizedPath === MOBILE_POINT_CHARGE_CALLBACK_PATH ||
+    normalizedPath.startsWith(`${MOBILE_POINT_CHARGE_CALLBACK_PATH}?`) ||
+    normalizedPath.startsWith(`${MOBILE_POINT_CHARGE_CALLBACK_PATH}#`)
+  ) {
+    return fallbackPath;
+  }
+  return normalizedPath;
 }
 
 export function buildMobileRedirectUrl() {

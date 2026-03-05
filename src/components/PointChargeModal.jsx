@@ -180,7 +180,13 @@ export const PointChargeModal = ({ onClose, onCharged }) => {
         } catch (error) {
           lastError = error;
           const message = String(error?.message || "");
-          const retryable = message.includes("결제 정보를 찾을 수 없습니다") || error?.status === 502;
+          const status = Number(error?.status || 0);
+          const retryable =
+            message.includes("결제 정보를 찾을 수 없습니다") ||
+            status === 408 ||
+            status === 429 ||
+            status >= 500 ||
+            [502, 503, 504].includes(status);
           if (!retryable || attempt === 2) {
             throw error;
           }
@@ -193,7 +199,7 @@ export const PointChargeModal = ({ onClose, onCharged }) => {
       }
 
       if (typeof onCharged === "function") {
-        onCharged(confirmResult);
+        await onCharged(confirmResult);
       }
 
       onClose();
@@ -205,7 +211,12 @@ export const PointChargeModal = ({ onClose, onCharged }) => {
   };
 
   return (
-    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/45 px-4" onClick={onClose}>
+    <div
+      className="fixed inset-0 z-[80] flex items-center justify-center bg-black/45 px-4"
+      onClick={() => {
+        if (!processing) onClose();
+      }}
+    >
       <div
         className="w-full max-w-[520px] rounded-[18px] border border-[#d9d9d9] bg-white p-5 sm:p-6"
         onClick={(event) => event.stopPropagation()}
@@ -217,8 +228,12 @@ export const PointChargeModal = ({ onClose, onCharged }) => {
           </div>
           <button
             type="button"
-            onClick={onClose}
-            className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-[#dddddd] text-[16px] text-[#777]"
+            onClick={() => {
+              if (!processing) onClose();
+            }}
+            disabled={processing}
+            aria-disabled={processing}
+            className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-[#dddddd] text-[16px] text-[#777] disabled:cursor-not-allowed disabled:opacity-50"
             aria-label="충전 모달 닫기"
           >
             ×
@@ -260,7 +275,7 @@ export const PointChargeModal = ({ onClose, onCharged }) => {
             type="button"
             onClick={onClose}
             disabled={processing}
-            className="rounded-[10px] border border-[#d6d6d6] px-4 py-2 text-[12px] text-[#666] disabled:opacity-60"
+            className="rounded-[10px] border border-[#d6d6d6] px-4 py-2 text-[12px] text-[#666] disabled:cursor-not-allowed disabled:opacity-60"
           >
             취소
           </button>
@@ -268,7 +283,7 @@ export const PointChargeModal = ({ onClose, onCharged }) => {
             type="button"
             onClick={handleCharge}
             disabled={processing || loadingProducts || !selectedProduct}
-            className="rounded-[10px] border border-[#1f1f1f] bg-[#1f1f1f] px-4 py-2 text-[12px] text-white disabled:opacity-60"
+            className="rounded-[10px] border border-[#1f1f1f] bg-[#1f1f1f] px-4 py-2 text-[12px] text-white disabled:cursor-not-allowed disabled:opacity-60"
           >
             {processing ? "결제 진행 중..." : "결제하기"}
           </button>

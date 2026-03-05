@@ -33,36 +33,54 @@ export const PointChargeCallbackPage = () => {
   }, []);
 
   useEffect(() => {
+    let mounted = true;
+    let timeoutId = null;
+
     const run = async () => {
       const { impUid, merchantUid, impSuccess, errorMsg } = parseResultParams(window.location.search);
 
       if (!impUid || !merchantUid) {
-        setStatus("failed");
-        setMessage("결제 결과 파라미터가 누락되었습니다. 다시 시도해 주세요.");
+        if (mounted) {
+          setStatus("failed");
+          setMessage("결제 결과 파라미터가 누락되었습니다. 다시 시도해 주세요.");
+        }
         return;
       }
 
       if (isExplicitFail(impSuccess)) {
-        setStatus("failed");
-        setMessage(errorMsg || "결제가 취소되었거나 실패했습니다.");
+        if (mounted) {
+          setStatus("failed");
+          setMessage(errorMsg || "결제가 취소되었거나 실패했습니다.");
+        }
         return;
       }
 
       try {
         const confirmResult = await confirmPointCharge({ impUid, merchantUid });
         savePointChargeSuccessResult(confirmResult);
+        if (!mounted) return;
         setStatus("success");
         setMessage("결제가 완료되었습니다. 잠시 후 이전 화면으로 이동합니다.");
-        window.setTimeout(() => {
+        timeoutId = window.setTimeout(() => {
+          if (!mounted) return;
           navigate(returnPath, { replace: true });
         }, 900);
       } catch (error) {
-        setStatus("failed");
-        setMessage(error?.message || "결제 확인에 실패했습니다. 다시 시도해 주세요.");
+        if (mounted) {
+          setStatus("failed");
+          setMessage(error?.message || "결제 확인에 실패했습니다. 다시 시도해 주세요.");
+        }
       }
     };
 
     run();
+
+    return () => {
+      mounted = false;
+      if (timeoutId) {
+        window.clearTimeout(timeoutId);
+      }
+    };
   }, [navigate, returnPath]);
 
   return (

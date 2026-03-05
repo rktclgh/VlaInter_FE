@@ -66,7 +66,13 @@ export const ForgotPassword = () => {
               <p className="mt-1 text-[12px] text-[#7e7e7e]">비밀번호 찾기</p>
             </header>
 
-            <form className="mt-8" onSubmit={(e) => e.preventDefault()}>
+            <form
+              className="mt-8"
+              onSubmit={(event) => {
+                event.preventDefault();
+                handleSendTemporaryPassword();
+              }}
+            >
               <div className="mb-3">
                 <input
                   type="text"
@@ -94,8 +100,7 @@ export const ForgotPassword = () => {
               </div>
 
               <button
-                type="button"
-                onClick={handleSendTemporaryPassword}
+                type="submit"
                 disabled={isSendDisabled}
                 className="mx-auto mt-4 block h-[45px] w-full max-w-[300px] rounded-[8px] bg-[linear-gradient(138deg,#5D83DE_0%,#FF1C91_100%)] text-[12px] font-semibold text-white disabled:cursor-not-allowed disabled:bg-[#c8c8c8] disabled:bg-none disabled:text-[#6f6f6f]"
               >

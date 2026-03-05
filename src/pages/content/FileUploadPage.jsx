@@ -76,7 +76,12 @@ const resolveDisplayFileName = (file, fallback = "") => {
   const rawUrl = rawUrlCandidates.find((value) => typeof value === "string" && value.trim().length > 0);
   if (rawUrl) {
     const lastSegment = rawUrl.split("/").pop() || "";
-    const decoded = decodeURIComponent(lastSegment);
+    let decoded = lastSegment;
+    try {
+      decoded = decodeURIComponent(lastSegment);
+    } catch {
+      decoded = lastSegment;
+    }
     // key 예: uuid-original.pdf 형태일 수 있으므로 UUID prefix 제거
     const withoutUuidPrefix = decoded.replace(/^[0-9a-fA-F-]{16,}-/, "");
     return withoutUuidPrefix || decoded || "파일명 없음";

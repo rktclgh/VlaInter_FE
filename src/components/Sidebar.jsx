@@ -42,7 +42,10 @@ export const Sidebar = ({
           alt="프로필"
           className="h-8 w-8 rounded-full border border-[#d7d7d7] object-cover"
           onError={(event) => {
-            if (fallbackProfileImageUrl) {
+            const target = event.currentTarget;
+            const alreadyTriedFallback = target.dataset.fallbackTried === "true";
+            if (!alreadyTriedFallback && fallbackProfileImageUrl && target.src !== fallbackProfileImageUrl) {
+              target.dataset.fallbackTried = "true";
               event.currentTarget.src = fallbackProfileImageUrl;
             }
           }}

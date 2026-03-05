@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { ContentTopNav } from "../../components/ContentTopNav";
 import { Sidebar } from "../../components/Sidebar";
 import { MobileSidebarDrawer } from "../../components/MobileSidebarDrawer";
@@ -324,6 +324,7 @@ const LogoutConfirmModal = ({ onCancel, onConfirm }) => {
 
 export const MyPage = () => {
   const navigate = useNavigate();
+  const location = useLocation();
 
   const [userName, setUserName] = useState("사용자");
   const [userEmail, setUserEmail] = useState("-");
@@ -588,6 +589,10 @@ export const MyPage = () => {
   };
 
   const pointSummaryText = useMemo(() => formatPoint(userPoint), [userPoint]);
+  const sidebarActiveKey = useMemo(() => {
+    if (location.pathname.startsWith("/content/point-charge")) return "mypage";
+    return "mypage";
+  }, [location.pathname]);
 
   return (
     <div className="min-h-screen bg-white pt-[54px]">
@@ -599,7 +604,7 @@ export const MyPage = () => {
 
       <MobileSidebarDrawer
         open={isMobileMenuOpen}
-        activeKey="mypage"
+        activeKey={sidebarActiveKey}
         onClose={() => setIsMobileMenuOpen(false)}
         onNavigate={onSelectSidebar}
         userName={userName}
@@ -614,7 +619,7 @@ export const MyPage = () => {
       <div className="flex min-h-[calc(100vh-54px)]">
         <div className="hidden w-[272px] shrink-0 md:block">
           <Sidebar
-            activeKey="mypage"
+            activeKey={sidebarActiveKey}
             onNavigate={onSelectSidebar}
             userName={userName}
             profileImageUrl={profileImageUrl}
