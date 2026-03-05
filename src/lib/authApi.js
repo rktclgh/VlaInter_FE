@@ -1,0 +1,42 @@
+import { apiRequest } from "./apiClient";
+
+export async function login(payload) {
+  return apiRequest("/api/auth/login", {
+    method: "POST",
+    body: payload,
+  });
+}
+
+export async function signup(payload) {
+  return apiRequest("/api/auth/signup", {
+    method: "POST",
+    body: payload,
+  });
+}
+
+export async function sendVerificationEmail(email) {
+  return apiRequest("/api/auth/email-verification/send", {
+    method: "POST",
+    body: { email },
+  });
+}
+
+export async function verifyEmailCode(email, code) {
+  return apiRequest("/api/auth/email-verification/verify", {
+    method: "POST",
+    body: { email, code },
+  });
+}
+
+export async function kakaoLogin(payload) {
+  return apiRequest("/api/auth/kakao/login", {
+    method: "POST",
+    body: payload,
+  });
+}
+
+export async function logout() {
+  return apiRequest("/api/auth/logout", {
+    method: "POST",
+  });
+}
