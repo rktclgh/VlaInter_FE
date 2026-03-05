@@ -44,7 +44,7 @@ export const Login = () => {
         email: loginId.trim(),
         password,
       });
-      navigate("/");
+      navigate("/content/interview");
     } catch (error) {
       setErrorMessage(error.message);
     } finally {

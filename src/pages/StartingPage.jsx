@@ -1,5 +1,7 @@
+import { useEffect } from "react";
 import { TopNav } from "../components/TopNav";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+import { getMyProfile } from "../lib/userApi";
 import icon11st from "../assets/icon/11st.png";
 import iconDaum from "../assets/icon/Daum.png";
 import iconHmail from "../assets/icon/Hmail.png";
@@ -26,6 +28,20 @@ import iconTvn from "../assets/icon/tvn.png";
 import iconYogiyo from "../assets/icon/yogiyo.png";
 
 export const StartingPage = () => {
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    const checkSession = async () => {
+      try {
+        await getMyProfile();
+        navigate("/content/interview", { replace: true });
+      } catch {
+        // 비로그인 상태는 랜딩 유지
+      }
+    };
+    checkSession();
+  }, [navigate]);
+
   const heroTags = ["이력서 분석하기", "예상질문 50개", "대기업 인재상 Top5", "···"];
 
   const statTagsOne = [

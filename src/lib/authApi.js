@@ -34,3 +34,9 @@ export async function kakaoLogin(payload) {
     body: payload,
   });
 }
+
+export async function logout() {
+  return apiRequest("/api/auth/logout", {
+    method: "POST",
+  });
+}

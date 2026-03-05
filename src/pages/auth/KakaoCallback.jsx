@@ -55,7 +55,7 @@ export const KakaoCallback = () => {
         });
         sessionStorage.removeItem("kakao_client_id");
         sessionStorage.removeItem("kakao_redirect_uri");
-        navigate("/", { replace: true });
+        navigate("/content/interview", { replace: true });
       } catch (error) {
         setAsyncErrorMessage(error.message || "카카오 로그인 처리에 실패했습니다.");
       }
