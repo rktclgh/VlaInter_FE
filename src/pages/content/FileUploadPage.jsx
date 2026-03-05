@@ -5,6 +5,7 @@ import { Sidebar } from "../../components/Sidebar";
 import { MobileSidebarDrawer } from "../../components/MobileSidebarDrawer";
 import { PointChargeModal } from "../../components/PointChargeModal";
 import dragDropIcon from "../../assets/icon/Drag_Drop.png";
+import plusIcon from "../../assets/icon/plus.png";
 import tempProfileImage from "../../assets/icon/temp.png";
 import { logout } from "../../lib/authApi";
 import { deleteMyFile, getMyFiles, getMyProfile, uploadMyFile } from "../../lib/userApi";
@@ -163,6 +164,38 @@ const LogoutConfirmModal = ({ onCancel, onConfirm }) => {
   );
 };
 
+const FileDeleteConfirmModal = ({ onCancel, onConfirm }) => {
+  return (
+    <div className="fixed inset-0 z-[72] flex items-center justify-center bg-black/35 px-4">
+      <div className="w-full max-w-[360px] rounded-[16px] border border-[#d9d9d9] bg-white p-5">
+        <div className="flex items-start gap-3">
+          <div className="relative mt-[2px] h-0 w-0 border-l-[14px] border-r-[14px] border-b-[24px] border-l-transparent border-r-transparent border-b-[#ff4d4f]">
+            <span className="absolute left-[-3px] top-[7px] text-[10px] font-bold leading-none text-white">!</span>
+          </div>
+          <p className="text-[15px] font-medium text-[#252525]">정말 파일을 삭제하시겠습니까?</p>
+        </div>
+
+        <div className="mt-4 flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="rounded-[10px] border border-[#d6d6d6] px-3 py-1.5 text-[12px] text-[#666]"
+          >
+            취소
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            className="rounded-[10px] border border-[#ff4a4a] bg-[#ff4a4a] px-3 py-1.5 text-[12px] text-white"
+          >
+            삭제
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const FileRow = ({ fileName, uploadedDate, sizeLabel, showPdfBadge = true, actionNode = null }) => {
   return (
     <div className="flex flex-col gap-3 rounded-[12px] border border-[#dddddd] bg-[#f7f7f7] px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
@@ -197,8 +230,31 @@ const UploadDropZone = ({
   onDeletePending,
   onSavePending,
   onDeleteSaved,
+  isExpanded,
+  onToggleExpanded,
   inputId,
 }) => {
+  const renderDropArea = () => (
+    <div
+      onDragEnter={onDragEnter}
+      onDragOver={onDragOver}
+      onDragLeave={onDragLeave}
+      onDrop={onDrop}
+      className={`rounded-[14px] border border-dashed px-4 py-7 text-center transition-colors ${
+        dragActive ? "border-[#8db0ff] bg-[#f7faff]" : "border-[#dfdfdf] bg-white"
+      }`}
+    >
+      <img src={dragDropIcon} alt="드래그 앤 드롭" className="mx-auto h-7 w-7" />
+      <p className="mt-3 text-[16px] text-[#222] sm:text-[18px]">드래그하여 업로드하기</p>
+      <label htmlFor={inputId} className="mt-1 inline-block cursor-pointer text-[11px] text-[#8d8d8d] underline">
+        또는 파일 불러오기
+      </label>
+      <input id={inputId} type="file" accept="application/pdf,.pdf" onChange={onFileInput} className="hidden" />
+      <p className="mt-2 text-[10px] text-[#c0c0c0]">pdf</p>
+      {error ? <p className="mt-2 text-[11px] text-[#e34b4b]">{error}</p> : null}
+    </div>
+  );
+
   if (pendingFile) {
     return (
       <div className="relative rounded-[14px] border border-[#dedede] bg-white px-4 py-4">
@@ -235,45 +291,51 @@ const UploadDropZone = ({
 
   if (savedFile) {
     return (
-      <div className="rounded-[14px] border border-[#dedede] bg-white px-4 py-4">
-        <FileRow
-          fileName={resolveDisplayFileName(savedFile)}
-          uploadedDate={formatDate(savedFile.createdAt ?? savedFile.created_at)}
-          sizeLabel="PDF"
-          actionNode={
-            <button
-              type="button"
-              onClick={onDeleteSaved}
-              className="rounded-full bg-[#ff4a4a] px-2 py-1 text-[10px] font-semibold text-white"
-            >
-              삭제
-            </button>
-          }
-        />
+      <div>
+        <div className="rounded-[14px] border border-[#dedede] bg-white px-4 py-4">
+          <FileRow
+            fileName={resolveDisplayFileName(savedFile)}
+            uploadedDate={formatDate(savedFile.createdAt ?? savedFile.created_at)}
+            sizeLabel="PDF"
+            actionNode={
+              <button
+                type="button"
+                onClick={onDeleteSaved}
+                className="rounded-full bg-[#ff4a4a] px-2 py-1 text-[10px] font-semibold text-white"
+              >
+                삭제
+              </button>
+            }
+          />
+        </div>
+
+        <div className="mt-3 flex justify-center">
+          <button
+            type="button"
+            onClick={onToggleExpanded}
+            aria-label={isExpanded ? "업로드 창 닫기" : "업로드 창 열기"}
+            className="flex h-7 w-7 items-center justify-center rounded-full border border-[#d7d7d7] bg-[#fcfcfc] transition-colors hover:bg-[#f3f3f3]"
+          >
+            <img
+              src={plusIcon}
+              alt=""
+              className={`h-[11px] w-[11px] transition-transform duration-300 ${isExpanded ? "rotate-45" : "rotate-0"}`}
+            />
+          </button>
+        </div>
+
+        <div
+          className={`overflow-hidden transition-all duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${
+            isExpanded ? "mt-2 max-h-[230px] translate-y-0 opacity-100" : "max-h-0 -translate-y-1 opacity-0"
+          }`}
+        >
+          <div className={isExpanded ? "pointer-events-auto" : "pointer-events-none"}>{renderDropArea()}</div>
+        </div>
       </div>
     );
   }
 
-  return (
-    <div
-      onDragEnter={onDragEnter}
-      onDragOver={onDragOver}
-      onDragLeave={onDragLeave}
-      onDrop={onDrop}
-      className={`rounded-[14px] border border-dashed px-4 py-7 text-center transition-colors ${
-        dragActive ? "border-[#8db0ff] bg-[#f7faff]" : "border-[#dfdfdf] bg-white"
-      }`}
-    >
-      <img src={dragDropIcon} alt="드래그 앤 드롭" className="mx-auto h-7 w-7" />
-      <p className="mt-3 text-[16px] text-[#222] sm:text-[18px]">드래그하여 업로드하기</p>
-      <label htmlFor={inputId} className="mt-1 inline-block cursor-pointer text-[11px] text-[#8d8d8d] underline">
-        또는 파일 불러오기
-      </label>
-      <input id={inputId} type="file" accept="application/pdf,.pdf" onChange={onFileInput} className="hidden" />
-      <p className="mt-2 text-[10px] text-[#c0c0c0]">pdf</p>
-      {error ? <p className="mt-2 text-[11px] text-[#e34b4b]">{error}</p> : null}
-    </div>
-  );
+  return renderDropArea();
 };
 
 export const FileUploadPage = () => {
@@ -285,9 +347,11 @@ export const FileUploadPage = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [showPointChargeModal, setShowPointChargeModal] = useState(false);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
+  const [deleteConfirmTarget, setDeleteConfirmTarget] = useState(null);
 
   const [savedFiles, setSavedFiles] = useState({ RESUME: null, INTRODUCE: null, PORTFOLIO: null });
   const [pendingFiles, setPendingFiles] = useState({ RESUME: null, INTRODUCE: null, PORTFOLIO: null });
+  const [expandedUploadByType, setExpandedUploadByType] = useState({ RESUME: false, INTRODUCE: false, PORTFOLIO: false });
   const [errors, setErrors] = useState({ RESUME: "", INTRODUCE: "", PORTFOLIO: "" });
   const [dragActiveType, setDragActiveType] = useState("");
   const [savingType, setSavingType] = useState("");
@@ -362,6 +426,7 @@ export const FileUploadPage = () => {
 
     setTypeError(type, "");
     setPendingFiles((prev) => ({ ...prev, [type]: file }));
+    setExpandedUploadByType((prev) => ({ ...prev, [type]: false }));
   };
 
   const makeDragHandlers = (type) => ({
@@ -400,6 +465,10 @@ export const FileUploadPage = () => {
     setTypeError(type, "");
   };
 
+  const toggleExpandedUploader = (type) => {
+    setExpandedUploadByType((prev) => ({ ...prev, [type]: !prev[type] }));
+  };
+
   const savePending = async (type) => {
     const file = pendingFiles[type];
     if (!file) return;
@@ -429,9 +498,34 @@ export const FileUploadPage = () => {
     try {
       await deleteMyFile(target.fileId);
       setSavedFiles((prev) => ({ ...prev, [type]: null }));
+      setExpandedUploadByType((prev) => ({ ...prev, [type]: false }));
     } catch (error) {
       setTypeError(type, error?.message || "파일 삭제 중 오류가 발생했습니다.");
     }
+  };
+
+  const requestDeletePending = (type) => {
+    setDeleteConfirmTarget({ type, mode: "pending" });
+  };
+
+  const requestDeleteSaved = (type) => {
+    setDeleteConfirmTarget({ type, mode: "saved" });
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteConfirmTarget?.type) {
+      setDeleteConfirmTarget(null);
+      return;
+    }
+
+    const { type, mode } = deleteConfirmTarget;
+    setDeleteConfirmTarget(null);
+
+    if (mode === "pending") {
+      removePending(type);
+      return;
+    }
+    await deleteSaved(type);
   };
 
   const hasAnyPending = useMemo(() => Object.values(pendingFiles).some(Boolean), [pendingFiles]);
@@ -497,9 +591,11 @@ export const FileUploadPage = () => {
                       onDragLeave={dragHandlers.onDragLeave}
                       onDrop={dragHandlers.onDrop}
                       onFileInput={(event) => handleFileInput(item.key, event)}
-                      onDeletePending={() => removePending(item.key)}
+                      onDeletePending={() => requestDeletePending(item.key)}
                       onSavePending={() => savePending(item.key)}
-                      onDeleteSaved={() => deleteSaved(item.key)}
+                      onDeleteSaved={() => requestDeleteSaved(item.key)}
+                      isExpanded={expandedUploadByType[item.key]}
+                      onToggleExpanded={() => toggleExpandedUploader(item.key)}
                       inputId={`file-input-${item.key}`}
                     />
                   </section>
@@ -512,6 +608,9 @@ export const FileUploadPage = () => {
       </div>
 
       {showLogoutModal ? <LogoutConfirmModal onCancel={() => setShowLogoutModal(false)} onConfirm={confirmLogout} /> : null}
+      {deleteConfirmTarget ? (
+        <FileDeleteConfirmModal onCancel={() => setDeleteConfirmTarget(null)} onConfirm={confirmDelete} />
+      ) : null}
       {showPointChargeModal ? <PointChargeModal onClose={() => setShowPointChargeModal(false)} /> : null}
     </div>
   );
