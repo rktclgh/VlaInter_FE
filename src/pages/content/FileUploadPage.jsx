@@ -204,7 +204,7 @@ const UploadDropZone = ({
         dragActive ? "border-[#8db0ff] bg-[#f7faff]" : "border-[#dfdfdf] bg-white"
       }`}
     >
-      <img src={dragDropIcon} alt="드래그 앤 드롭" className="mx-auto h-10 w-10" />
+      <img src={dragDropIcon} alt="드래그 앤 드롭" className="mx-auto h-7 w-7" />
       <p className="mt-3 text-[18px] text-[#222]">드래그하여 업로드하기</p>
       <label htmlFor={inputId} className="mt-1 inline-block cursor-pointer text-[11px] text-[#8d8d8d] underline">
         또는 파일 불러오기
