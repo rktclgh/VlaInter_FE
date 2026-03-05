@@ -28,3 +28,9 @@ export async function verifyEmailCode(email, code) {
   });
 }
 
+export async function kakaoLogin(payload) {
+  return apiRequest("/api/auth/kakao/login", {
+    method: "POST",
+    body: payload,
+  });
+}

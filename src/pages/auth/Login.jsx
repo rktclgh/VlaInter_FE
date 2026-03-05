@@ -23,6 +23,13 @@ export const Login = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [pending, setPending] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
+  const kakaoClientId = import.meta.env.VITE_KAKAO_CLIENT_ID || "";
+  const kakaoRedirectUriFromEnv = import.meta.env.VITE_KAKAO_REDIRECT_URI || "";
+  const kakaoRedirectUri =
+    import.meta.env.DEV
+      ? `${window.location.origin}/auth/kakao/callback`
+      : kakaoRedirectUriFromEnv || `${window.location.origin}/auth/kakao/callback`;
+  const kakaoAuthUri = import.meta.env.VITE_KAKAO_AUTH_URI || "https://kauth.kakao.com/oauth/authorize";
 
   const handleLogin = async () => {
     if (!loginId.trim() || !password.trim()) {
@@ -46,7 +53,25 @@ export const Login = () => {
   };
 
   const handleKakaoLogin = () => {
-    console.log("kakao-login");
+    if (!kakaoClientId) {
+      setErrorMessage("카카오 클라이언트 ID 설정이 필요합니다.");
+      return;
+    }
+    const params = new URLSearchParams({
+      response_type: "code",
+      client_id: kakaoClientId,
+      redirect_uri: kakaoRedirectUri,
+    });
+    const authorizeUrl = `${kakaoAuthUri}?${params.toString()}`;
+    sessionStorage.setItem("kakao_redirect_uri", kakaoRedirectUri);
+    sessionStorage.setItem("kakao_client_id", kakaoClientId);
+    console.info("[KAKAO_AUTH_URL]", authorizeUrl);
+    console.info("[KAKAO_AUTH_CONFIG]", {
+      clientId: kakaoClientId,
+      redirectUri: kakaoRedirectUri,
+      origin: window.location.origin,
+    });
+    window.location.href = authorizeUrl;
   };
 
   return (
