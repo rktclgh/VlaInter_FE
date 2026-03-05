@@ -7,6 +7,7 @@ import { InterviewStartPage } from './pages/content/InterviewStartPage'
 import { PointChargePage } from './pages/content/PointChargePage'
 import { FileUploadPage } from './pages/content/FileUploadPage'
 import { MyPage } from './pages/content/MyPage'
+import { ErrorPage } from './pages/ErrorPage'
 import './App.css'
 
 function App() {
@@ -20,6 +21,9 @@ function App() {
       <Route path="/content/files" element={<FileUploadPage />} />
       <Route path="/content/mypage" element={<MyPage />} />
       <Route path="/content/point-charge" element={<PointChargePage />} />
+      <Route path="/errors/403" element={<ErrorPage code={403} />} />
+      <Route path="/errors/404" element={<ErrorPage code={404} />} />
+      <Route path="*" element={<ErrorPage code={404} />} />
     </Routes>
   )
 }
