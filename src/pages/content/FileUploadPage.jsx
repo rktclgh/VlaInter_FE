@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ContentTopNav } from "../../components/ContentTopNav";
 import { Sidebar } from "../../components/Sidebar";
+import { MobileSidebarDrawer } from "../../components/MobileSidebarDrawer";
+import { PointChargeModal } from "../../components/PointChargeModal";
 import dragDropIcon from "../../assets/icon/Drag_Drop.png";
 import tempProfileImage from "../../assets/icon/temp.png";
 import { logout } from "../../lib/authApi";
@@ -42,6 +44,64 @@ const extractFileList = (payload) => {
   if (Array.isArray(payload?.content)) return payload.content;
   if (Array.isArray(payload?.items)) return payload.items;
   return [];
+};
+
+const extractFileRecord = (payload) => {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return null;
+  if (payload.fileId || payload.fileType || payload.fileUrl || payload.fileName) return payload;
+  if (payload.data && typeof payload.data === "object" && !Array.isArray(payload.data)) return payload.data;
+  if (payload.result && typeof payload.result === "object" && !Array.isArray(payload.result)) return payload.result;
+  if (payload.file && typeof payload.file === "object" && !Array.isArray(payload.file)) return payload.file;
+  if (payload.item && typeof payload.item === "object" && !Array.isArray(payload.item)) return payload.item;
+  return payload;
+};
+
+const resolveDisplayFileName = (file, fallback = "") => {
+  const rawNameCandidates = [
+    file?.fileName,
+    file?.filename,
+    file?.file_name,
+    file?.originalFileName,
+    file?.original_filename,
+    file?.name,
+    fallback,
+  ];
+  const directName = rawNameCandidates.find((value) => typeof value === "string" && value.trim().length > 0);
+  if (directName) return directName.trim();
+
+  const rawUrlCandidates = [file?.fileUrl, file?.url, file?.file_url];
+  const rawUrl = rawUrlCandidates.find((value) => typeof value === "string" && value.trim().length > 0);
+  if (rawUrl) {
+    const lastSegment = rawUrl.split("/").pop() || "";
+    const decoded = decodeURIComponent(lastSegment);
+    // key 예: uuid-original.pdf 형태일 수 있으므로 UUID prefix 제거
+    const withoutUuidPrefix = decoded.replace(/^[0-9a-fA-F-]{16,}-/, "");
+    return withoutUuidPrefix || decoded || "파일명 없음";
+  }
+
+  return "파일명 없음";
+};
+
+const normalizeFileRecord = (file, fallbackName = "") => {
+  const source = extractFileRecord(file);
+  if (!source || typeof source !== "object") {
+    return {
+      fileId: null,
+      fileType: "",
+      fileUrl: "",
+      fileName: fallbackName || "파일명 없음",
+      createdAt: new Date().toISOString(),
+    };
+  }
+
+  return {
+    ...source,
+    fileId: source.fileId ?? source.file_id ?? null,
+    fileType: source.fileType ?? source.file_type ?? "",
+    fileUrl: source.fileUrl ?? source.file_url ?? source.url ?? "",
+    fileName: resolveDisplayFileName(source, fallbackName),
+    createdAt: source.createdAt ?? source.created_at ?? new Date().toISOString(),
+  };
 };
 
 const extractProfile = (payload) => {
@@ -105,20 +165,20 @@ const LogoutConfirmModal = ({ onCancel, onConfirm }) => {
 
 const FileRow = ({ fileName, uploadedDate, sizeLabel, showPdfBadge = true, actionNode = null }) => {
   return (
-    <div className="flex items-center justify-between rounded-[12px] border border-[#dddddd] bg-[#f7f7f7] px-4 py-3">
-      <div className="flex items-center gap-3">
+    <div className="flex flex-col gap-3 rounded-[12px] border border-[#dddddd] bg-[#f7f7f7] px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex min-w-0 items-center gap-3">
         {showPdfBadge ? (
-          <div className="flex h-9 w-7 flex-col items-center justify-center rounded-[4px] border border-[#ff5c5c] text-[9px] font-semibold text-[#ff3d3d]">
+          <div className="flex h-9 w-7 shrink-0 flex-col items-center justify-center rounded-[4px] border border-[#ff5c5c] text-[9px] font-semibold text-[#ff3d3d]">
             PDF
           </div>
         ) : null}
-        <div>
-          <p className="text-[13px] font-medium text-[#2b2b2b]">{fileName}</p>
+        <div className="min-w-0">
+          <p className="truncate text-[13px] font-medium text-[#2b2b2b]">{fileName}</p>
           <p className="mt-0.5 text-[10px] text-[#9d9d9d]">업로드 날짜: {uploadedDate}</p>
           <p className="text-[10px] text-[#9d9d9d]">{sizeLabel}</p>
         </div>
       </div>
-      {actionNode}
+      <div className="self-end sm:self-auto">{actionNode}</div>
     </div>
   );
 };
@@ -177,8 +237,8 @@ const UploadDropZone = ({
     return (
       <div className="rounded-[14px] border border-[#dedede] bg-white px-4 py-4">
         <FileRow
-          fileName={savedFile.fileName}
-          uploadedDate={formatDate(savedFile.createdAt)}
+          fileName={resolveDisplayFileName(savedFile)}
+          uploadedDate={formatDate(savedFile.createdAt ?? savedFile.created_at)}
           sizeLabel="PDF"
           actionNode={
             <button
@@ -205,7 +265,7 @@ const UploadDropZone = ({
       }`}
     >
       <img src={dragDropIcon} alt="드래그 앤 드롭" className="mx-auto h-7 w-7" />
-      <p className="mt-3 text-[18px] text-[#222]">드래그하여 업로드하기</p>
+      <p className="mt-3 text-[16px] text-[#222] sm:text-[18px]">드래그하여 업로드하기</p>
       <label htmlFor={inputId} className="mt-1 inline-block cursor-pointer text-[11px] text-[#8d8d8d] underline">
         또는 파일 불러오기
       </label>
@@ -222,6 +282,8 @@ export const FileUploadPage = () => {
   const [userName, setUserName] = useState("사용자");
   const [userPoint, setUserPoint] = useState(0);
   const [profileImageUrl, setProfileImageUrl] = useState(tempProfileImage);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [showPointChargeModal, setShowPointChargeModal] = useState(false);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
 
   const [savedFiles, setSavedFiles] = useState({ RESUME: null, INTRODUCE: null, PORTFOLIO: null });
@@ -248,7 +310,7 @@ export const FileUploadPage = () => {
 
       try {
         const filesPayload = await getMyFiles();
-        const files = extractFileList(filesPayload);
+        const files = extractFileList(filesPayload).map((file) => normalizeFileRecord(file));
 
         const nextSaved = { RESUME: null, INTRODUCE: null, PORTFOLIO: null };
         for (const file of files) {
@@ -270,6 +332,7 @@ export const FileUploadPage = () => {
   }, [navigate]);
 
   const onSelectSidebar = (item) => {
+    setIsMobileMenuOpen(false);
     if (item?.path) navigate(item.path);
   };
 
@@ -346,7 +409,8 @@ export const FileUploadPage = () => {
 
     try {
       const uploaded = await uploadMyFile(type, file);
-      setSavedFiles((prev) => ({ ...prev, [type]: uploaded }));
+      const normalizedUploaded = normalizeFileRecord(uploaded, file.name);
+      setSavedFiles((prev) => ({ ...prev, [type]: normalizedUploaded }));
       setPendingFiles((prev) => ({ ...prev, [type]: null }));
     } catch (error) {
       setTypeError(type, error?.message || "파일 저장 중 오류가 발생했습니다.");
@@ -373,10 +437,28 @@ export const FileUploadPage = () => {
   const hasAnyPending = useMemo(() => Object.values(pendingFiles).some(Boolean), [pendingFiles]);
 
   return (
-    <div className="h-screen overflow-hidden bg-white pt-[54px]">
-      <ContentTopNav point={formatPoint(userPoint)} onClickCharge={() => navigate("/content/point-charge")} />
+    <div className="min-h-screen bg-white pt-[54px]">
+      <ContentTopNav
+        point={formatPoint(userPoint)}
+        onClickCharge={() => setShowPointChargeModal(true)}
+        onOpenMenu={() => setIsMobileMenuOpen(true)}
+      />
 
-      <div className="flex h-full">
+      <MobileSidebarDrawer
+        open={isMobileMenuOpen}
+        activeKey="file_upload"
+        onClose={() => setIsMobileMenuOpen(false)}
+        onNavigate={onSelectSidebar}
+        userName={userName}
+        profileImageUrl={profileImageUrl}
+        fallbackProfileImageUrl={tempProfileImage}
+        onLogout={() => {
+          setIsMobileMenuOpen(false);
+          requestLogout();
+        }}
+      />
+
+      <div className="flex min-h-[calc(100vh-54px)]">
         <div className="hidden w-[272px] shrink-0 md:block">
           <Sidebar
             activeKey="file_upload"
@@ -388,9 +470,10 @@ export const FileUploadPage = () => {
           />
         </div>
 
-        <main className="flex min-w-0 flex-1 flex-col overflow-y-auto px-5 pb-6 pt-8 md:px-8 md:pt-10">
+        <main className="flex min-w-0 flex-1 flex-col">
+          <div className="flex-1 overflow-y-auto px-4 pb-6 pt-6 sm:px-5 md:px-8 md:pt-10">
           <div className="mx-auto w-full max-w-[980px]">
-            <h1 className="text-[30px] font-medium text-[#202020]">이력서 및 자기소개서 업로드</h1>
+            <h1 className="text-[24px] font-medium text-[#202020] sm:text-[28px] md:text-[30px]">이력서 및 자기소개서 업로드</h1>
 
             {hasAnyPending ? (
               <p className="mt-2 text-[12px] text-[#8a8a8a]">저장 버튼을 눌러 업로드를 확정해 주세요.</p>
@@ -401,7 +484,7 @@ export const FileUploadPage = () => {
                 const dragHandlers = makeDragHandlers(item.key);
                 return (
                   <section key={item.key}>
-                    <h2 className="mb-2 text-[18px] font-medium text-[#2a2a2a]">{item.title}</h2>
+                    <h2 className="mb-2 text-[16px] font-medium text-[#2a2a2a] sm:text-[18px]">{item.title}</h2>
 
                     <UploadDropZone
                       dragActive={dragActiveType === item.key}
@@ -424,10 +507,12 @@ export const FileUploadPage = () => {
               })}
             </div>
           </div>
+          </div>
         </main>
       </div>
 
       {showLogoutModal ? <LogoutConfirmModal onCancel={() => setShowLogoutModal(false)} onConfirm={confirmLogout} /> : null}
+      {showPointChargeModal ? <PointChargeModal onClose={() => setShowPointChargeModal(false)} /> : null}
     </div>
   );
 };

@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ContentTopNav } from "../../components/ContentTopNav";
 import { Sidebar } from "../../components/Sidebar";
+import { MobileSidebarDrawer } from "../../components/MobileSidebarDrawer";
+import { PointChargeModal } from "../../components/PointChargeModal";
 import tempProfileImage from "../../assets/icon/temp.png";
 import { logout } from "../../lib/authApi";
 import { getMyFiles, getMyProfile } from "../../lib/userApi";
@@ -83,6 +85,8 @@ export const MyPage = () => {
   const [userEmail, setUserEmail] = useState("-");
   const [userPoint, setUserPoint] = useState(0);
   const [profileImageUrl, setProfileImageUrl] = useState(tempProfileImage);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [showPointChargeModal, setShowPointChargeModal] = useState(false);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
 
   useEffect(() => {
@@ -131,14 +135,33 @@ export const MyPage = () => {
   };
 
   const onSelectSidebar = (item) => {
+    setIsMobileMenuOpen(false);
     if (item?.path) navigate(item.path);
   };
 
   return (
-    <div className="h-screen overflow-hidden bg-white pt-[54px]">
-      <ContentTopNav point={formatPoint(userPoint)} onClickCharge={() => navigate("/content/point-charge")} />
+    <div className="min-h-screen bg-white pt-[54px]">
+      <ContentTopNav
+        point={formatPoint(userPoint)}
+        onClickCharge={() => setShowPointChargeModal(true)}
+        onOpenMenu={() => setIsMobileMenuOpen(true)}
+      />
 
-      <div className="flex h-full">
+      <MobileSidebarDrawer
+        open={isMobileMenuOpen}
+        activeKey="mypage"
+        onClose={() => setIsMobileMenuOpen(false)}
+        onNavigate={onSelectSidebar}
+        userName={userName}
+        profileImageUrl={profileImageUrl}
+        fallbackProfileImageUrl={tempProfileImage}
+        onLogout={() => {
+          setIsMobileMenuOpen(false);
+          requestLogout();
+        }}
+      />
+
+      <div className="flex min-h-[calc(100vh-54px)]">
         <div className="hidden w-[272px] shrink-0 md:block">
           <Sidebar
             activeKey="mypage"
@@ -150,25 +173,28 @@ export const MyPage = () => {
           />
         </div>
 
-        <main className="flex min-w-0 flex-1 flex-col overflow-y-auto px-5 pb-6 pt-8 md:px-8 md:pt-10">
+        <main className="flex min-w-0 flex-1 flex-col">
+          <div className="flex-1 overflow-y-auto px-4 pb-6 pt-6 sm:px-5 md:px-8 md:pt-10">
           <div className="mx-auto w-full max-w-[980px]">
-            <h1 className="text-[32px] font-medium text-[#1f1f1f]">마이페이지</h1>
+            <h1 className="text-[26px] font-medium text-[#1f1f1f] sm:text-[30px] md:text-[32px]">마이페이지</h1>
 
             <div className="mt-6 rounded-[16px] border border-[#e0e0e0] bg-white p-6">
-              <div className="flex items-center gap-4">
-                <img src={profileImageUrl} alt="프로필" className="h-16 w-16 rounded-full border border-[#dddddd] object-cover" />
+              <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center">
+                <img src={profileImageUrl} alt="프로필" className="h-16 w-16 rounded-full border border-[#dddddd] object-cover sm:h-20 sm:w-20" />
                 <div>
-                  <p className="text-[20px] font-medium text-[#1f1f1f]">{userName}</p>
-                  <p className="text-[13px] text-[#777]">{userEmail}</p>
+                  <p className="text-[18px] font-medium text-[#1f1f1f] sm:text-[20px]">{userName}</p>
+                  <p className="text-[12px] text-[#777] sm:text-[13px]">{userEmail}</p>
                   <p className="mt-1 text-[12px] text-[#666]">보유 포인트: {formatPoint(userPoint)}</p>
                 </div>
               </div>
             </div>
           </div>
+          </div>
         </main>
       </div>
 
       {showLogoutModal ? <LogoutConfirmModal onCancel={() => setShowLogoutModal(false)} onConfirm={confirmLogout} /> : null}
+      {showPointChargeModal ? <PointChargeModal onClose={() => setShowPointChargeModal(false)} /> : null}
     </div>
   );
 };
