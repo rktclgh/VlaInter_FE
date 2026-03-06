@@ -9,6 +9,7 @@ import dragDropIcon from "../../assets/icon/Drag_Drop.png";
 import plusIcon from "../../assets/icon/plus.png";
 import tempProfileImage from "../../assets/icon/temp.png";
 import { logout } from "../../lib/authApi";
+import { ingestMockDocument } from "../../lib/interviewApi";
 import { consumePointChargeSuccessResult } from "../../lib/pointChargeFlow";
 import { deleteMyFile, getMyFiles, getMyProfile, getMyProfileImageUrl, uploadMyFile } from "../../lib/userApi";
 
@@ -153,6 +154,13 @@ const formatDate = (iso) => {
   return date.toISOString().slice(0, 10).replace(/-/g, ".");
 };
 
+const formatIngestionStatus = (rawStatus, ingested) => {
+  if (ingested || rawStatus === "READY") return "AI 분석 완료";
+  if (rawStatus === "PROCESSING" || rawStatus === "QUEUED") return "AI 분석 중";
+  if (rawStatus === "FAILED") return "AI 분석 실패";
+  return "AI 분석 전";
+};
+
 const LogoutConfirmModal = ({ onCancel, onConfirm }) => {
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/35 px-4">
@@ -216,7 +224,7 @@ const FileDeleteConfirmModal = ({ onCancel, onConfirm }) => {
   );
 };
 
-const FileRow = ({ fileName, uploadedDate, sizeLabel, showPdfBadge = true, actionNode = null }) => {
+const FileRow = ({ fileName, uploadedDate, sizeLabel, statusLabel = "", showPdfBadge = true, actionNode = null }) => {
   return (
     <div className="flex flex-col gap-3 rounded-[12px] border border-[#dddddd] bg-[#f7f7f7] px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
       <div className="flex min-w-0 items-center gap-3">
@@ -229,6 +237,7 @@ const FileRow = ({ fileName, uploadedDate, sizeLabel, showPdfBadge = true, actio
           <p className="truncate text-[13px] font-medium text-[#2b2b2b]">{fileName}</p>
           <p className="mt-0.5 text-[10px] text-[#9d9d9d]">업로드 날짜: {uploadedDate}</p>
           <p className="text-[10px] text-[#9d9d9d]">{sizeLabel}</p>
+          {statusLabel ? <p className="mt-1 text-[11px] font-medium text-[#4f6ddf]">{statusLabel}</p> : null}
         </div>
       </div>
       <div className="self-end sm:self-auto">{actionNode}</div>
@@ -250,6 +259,8 @@ const UploadDropZone = ({
   onDeletePending,
   onSavePending,
   onDeleteSaved,
+  onAnalyzeSaved,
+  analyzingFileId,
   isExpanded,
   onToggleExpanded,
   inputId,
@@ -319,14 +330,33 @@ const UploadDropZone = ({
               fileName={resolveDisplayFileName(file)}
               uploadedDate={formatDate(file?.createdAt ?? file?.created_at)}
               sizeLabel="PDF"
+              statusLabel={formatIngestionStatus(file?.ingestionStatus, file?.ingested)}
               actionNode={
-                <button
-                  type="button"
-                  onClick={() => onDeleteSaved(file?.fileId)}
-                  className="rounded-full bg-[#ff4a4a] px-2 py-1 text-[10px] font-semibold text-white"
-                >
-                  삭제
-                </button>
+                <div className="flex items-center gap-2">
+                  {file?.ingested ? (
+                    <span className="rounded-full bg-[#e9f5ee] px-2 py-1 text-[10px] font-semibold text-[#2f7a4d]">
+                      READY
+                    </span>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => onAnalyzeSaved(file?.fileId)}
+                      disabled={analyzingFileId === String(file?.fileId) || file?.ingestionStatus === "PROCESSING"}
+                      className="rounded-full border border-[#5d6ef8] px-2 py-1 text-[10px] font-semibold text-[#5d6ef8] disabled:opacity-60"
+                    >
+                      {analyzingFileId === String(file?.fileId) || file?.ingestionStatus === "PROCESSING"
+                        ? "분석 중..."
+                        : "AI 분석"}
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => onDeleteSaved(file?.fileId)}
+                    className="rounded-full bg-[#ff4a4a] px-2 py-1 text-[10px] font-semibold text-white"
+                  >
+                    삭제
+                  </button>
+                </div>
               }
             />
           ))}
@@ -380,6 +410,7 @@ export const FileUploadPage = () => {
   const [errors, setErrors] = useState({ RESUME: "", INTRODUCE: "", PORTFOLIO: "" });
   const [dragActiveType, setDragActiveType] = useState("");
   const [savingType, setSavingType] = useState("");
+  const [analyzingFileId, setAnalyzingFileId] = useState("");
 
   useEffect(() => {
     const charged = consumePointChargeSuccessResult();
@@ -548,6 +579,33 @@ export const FileUploadPage = () => {
     }
   };
 
+  const analyzeSaved = async (type, fileId) => {
+    const target = (savedFilesByType[type] || []).find((file) => String(file?.fileId) === String(fileId));
+    if (!target?.fileId) return;
+
+    setAnalyzingFileId(String(target.fileId));
+    setTypeError(type, "");
+    try {
+      const result = await ingestMockDocument(target.fileId);
+      setSavedFilesByType((prev) => ({
+        ...prev,
+        [type]: (prev[type] || []).map((file) =>
+          String(file?.fileId) === String(target.fileId)
+            ? {
+                ...file,
+                ingestionStatus: result?.status || "READY",
+                ingested: result?.status === "READY",
+              }
+            : file
+        ),
+      }));
+    } catch (error) {
+      setTypeError(type, error?.message || "AI 분석 요청 중 오류가 발생했습니다.");
+    } finally {
+      setAnalyzingFileId("");
+    }
+  };
+
   const requestDeletePending = (type) => {
     setDeleteConfirmTarget({ type, mode: "pending" });
   };
@@ -638,6 +696,8 @@ export const FileUploadPage = () => {
                       onDeletePending={() => requestDeletePending(item.key)}
                       onSavePending={() => savePending(item.key)}
                       onDeleteSaved={(fileId) => requestDeleteSaved(item.key, fileId)}
+                      onAnalyzeSaved={(fileId) => analyzeSaved(item.key, fileId)}
+                      analyzingFileId={analyzingFileId}
                       isExpanded={expandedUploadByType[item.key]}
                       onToggleExpanded={() => toggleExpandedUploader(item.key)}
                       inputId={`file-input-${item.key}`}
