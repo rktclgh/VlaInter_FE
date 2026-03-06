@@ -5,7 +5,10 @@ import { Join } from './pages/auth/Join'
 import { ForgotPassword } from './pages/auth/ForgotPassword'
 import { KakaoCallback } from './pages/auth/KakaoCallback'
 import { InterviewStartPage } from './pages/content/InterviewStartPage'
+import { TechPracticePage } from './pages/content/TechPracticePage'
 import { InterviewSessionPage } from './pages/content/InterviewSessionPage'
+import { InterviewHistoryPage } from './pages/content/InterviewHistoryPage'
+import { PracticeHistoryPage } from './pages/content/PracticeHistoryPage'
 import { SavedQuestionsPage } from './pages/content/SavedQuestionsPage'
 import { QuestionSetsPage } from './pages/content/QuestionSetsPage'
 import { PointChargeCallbackPage } from './pages/content/PointChargeCallbackPage'
@@ -23,6 +26,9 @@ function App() {
       <Route path="/password/forgot" element={<ForgotPassword />} />
       <Route path="/auth/kakao/callback" element={<KakaoCallback />} />
       <Route path="/content/interview" element={<InterviewStartPage />} />
+      <Route path="/content/tech-practice" element={<TechPracticePage />} />
+      <Route path="/content/interview-history" element={<InterviewHistoryPage />} />
+      <Route path="/content/practice-history" element={<PracticeHistoryPage />} />
       <Route path="/content/interview/session" element={<InterviewSessionPage />} />
       <Route path="/content/saved-questions" element={<SavedQuestionsPage />} />
       <Route path="/content/question-sets" element={<QuestionSetsPage />} />

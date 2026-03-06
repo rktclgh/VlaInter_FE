@@ -19,6 +19,20 @@ export async function createInterviewSet(payload) {
   });
 }
 
+export async function addQuestionToInterviewSet(setId, payload) {
+  return apiRequest(`/api/interview/sets/${encodeURIComponent(setId)}/questions`, {
+    method: "POST",
+    body: payload,
+  });
+}
+
+export async function createInterviewCategory(payload) {
+  return apiRequest("/api/admin/interview/categories", {
+    method: "POST",
+    body: payload,
+  });
+}
+
 export async function getInterviewSetQuestions(setId) {
   return apiRequest(`/api/interview/sets/${encodeURIComponent(setId)}/questions`, {
     method: "GET",
@@ -60,6 +74,12 @@ export async function submitInterviewAnswer(apiBasePath, sessionId, answer) {
 
 export async function getInterviewSessionResults(apiBasePath, sessionId) {
   return apiRequest(`${apiBasePath}/sessions/${encodeURIComponent(sessionId)}/results`, {
+    method: "GET",
+  });
+}
+
+export async function getInterviewSessionHistory(apiBasePath) {
+  return apiRequest(`${apiBasePath}/sessions/history`, {
     method: "GET",
   });
 }

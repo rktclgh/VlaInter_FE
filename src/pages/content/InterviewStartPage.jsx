@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ContentTopNav } from "../../components/ContentTopNav";
 import { MobileSidebarDrawer } from "../../components/MobileSidebarDrawer";
@@ -6,32 +6,23 @@ import { OcrInfoBadge } from "../../components/OcrInfoBadge";
 import { Sidebar } from "../../components/Sidebar";
 import { PointChargeModal } from "../../components/PointChargeModal";
 import { PointChargeSuccessModal } from "../../components/PointChargeSuccessModal";
-import dropDownIcon from "../../assets/icon/drop_down.png";
+import { StarRatingInput, StarIcons } from "../../components/DifficultyStars";
 import tempProfileImage from "../../assets/icon/temp.png";
 import { logout } from "../../lib/authApi";
-import { getInterviewCategories, getReadyMockDocuments, startMockInterview } from "../../lib/interviewApi";
+import { buildCategoryCode, buildVisibleCategories, findTechRootId, getCategoryDisplayName } from "../../lib/categoryPresentation";
+import { ratingToDifficulty } from "../../lib/difficultyRating";
+import { createInterviewCategory, getInterviewCategories, getReadyMockDocuments, startMockInterview } from "../../lib/interviewApi";
 import { saveTechInterviewSession } from "../../lib/interviewSessionFlow";
 import { consumePointChargeSuccessResult } from "../../lib/pointChargeFlow";
 import { getMyProfile, getMyProfileImageUrl } from "../../lib/userApi";
 
-const DIFFICULTY_OPTIONS = [
-  { value: "EASY", label: "하" },
-  { value: "MEDIUM", label: "중" },
-  { value: "HARD", label: "상" },
-];
-
-const QUESTION_COUNT_OPTIONS = [3, 5, 7, 10];
 const DOCUMENT_TYPES = [
   { key: "RESUME", label: "이력서" },
-  { key: "INTRODUCE", label: "자소서" },
+  { key: "INTRODUCE", label: "자기소개서" },
   { key: "PORTFOLIO", label: "포트폴리오" },
 ];
 
-const formatPoint = (value) => {
-  const safeNumber = Number.isFinite(Number(value)) ? Math.max(0, Number(value)) : 0;
-  return `${new Intl.NumberFormat("ko-KR").format(safeNumber)}P`;
-};
-
+const formatPoint = (value) => `${new Intl.NumberFormat("ko-KR").format(Number(value) || 0)}P`;
 const parsePoint = (rawValue) => {
   if (typeof rawValue === "number") return rawValue;
   if (typeof rawValue === "string") {
@@ -41,7 +32,6 @@ const parsePoint = (rawValue) => {
   }
   return 0;
 };
-
 const extractProfile = (payload) => {
   if (!payload || typeof payload !== "object") return {};
   if (payload.data && typeof payload.data === "object" && !Array.isArray(payload.data)) return payload.data;
@@ -49,7 +39,6 @@ const extractProfile = (payload) => {
   if (payload.user && typeof payload.user === "object" && !Array.isArray(payload.user)) return payload.user;
   return payload;
 };
-
 const extractFileList = (payload) => {
   if (Array.isArray(payload)) return payload;
   if (Array.isArray(payload?.files)) return payload.files;
@@ -58,112 +47,64 @@ const extractFileList = (payload) => {
   if (Array.isArray(payload?.items)) return payload.items;
   return [];
 };
-
-const resolveDisplayFileName = (file) => {
-  return (
-    file?.originalFileName ||
-    file?.original_filename ||
-    file?.fileName ||
-    file?.file_name ||
-    file?.name ||
-    "미선택"
-  );
-};
-
 const toTimestamp = (rawDateTime) => {
   const time = new Date(rawDateTime || "").getTime();
   return Number.isNaN(time) ? 0 : time;
 };
-
-const formatCategoryLabel = (category) => {
-  const depth = Number(category?.depth || 0);
-  const prefix = depth > 0 ? `${"  ".repeat(depth)}- ` : "";
-  return `${prefix}${category?.name || "-"}`;
-};
-
-const renderDocumentLabel = (file) => {
-  if (!file) return <span>미선택</span>;
-  return (
-    <span className="flex min-w-0 items-center gap-2">
-      <span className="truncate">{resolveDisplayFileName(file)}</span>
-      {file?.ocrUsed ? <OcrInfoBadge compact /> : null}
-    </span>
-  );
-};
-
-const buildSelectedDocumentMeta = (file) => {
+const resolveDisplayFileName = (file) => (
+  file?.originalFileName || file?.original_filename || file?.fileName || file?.file_name || file?.name || "미선택"
+);
+const buildSelectedDocumentMeta = (file, type) => {
   if (!file) return null;
   return {
     fileId: file?.fileId || file?.file_id || null,
+    fileType: type,
     label: resolveDisplayFileName(file),
     ocrUsed: Boolean(file?.ocrUsed),
   };
 };
 
-const DropdownField = ({ label, valueNode, open, onToggle, children }) => {
-  return (
-    <div className="w-full min-w-0">
-      <p className="mb-1.5 text-[10px] font-normal text-[#b5b5b5]">{label}</p>
-
-      <button
-        type="button"
-        onClick={onToggle}
-        className={`relative z-[2] flex h-[40px] w-full items-center justify-between border border-[#dddddd] bg-[#f7f7f7] px-3 text-left text-[12px] text-[#242424] ${
-          open ? "rounded-t-[10px] rounded-b-[4px]" : "rounded-[10px]"
-        }`}
-      >
-        <span className="truncate">{valueNode}</span>
-        <img src={dropDownIcon} alt="" className="h-[6px] w-[8px] shrink-0" />
-      </button>
-
-      <div
-        className={`overflow-hidden transition-[max-height,opacity] duration-180 ease-out ${
-          open ? "max-h-[240px] opacity-100" : "pointer-events-none max-h-0 opacity-0"
-        }`}
-      >
-        <div className="relative z-[1] -mt-px max-h-[200px] overflow-y-auto rounded-b-[10px] border border-[#dddddd] bg-[#fbfbfb] p-1.5">
-          {children}
-        </div>
+const LogoutConfirmModal = ({ onCancel, onConfirm }) => (
+  <div className="fixed inset-0 z-70 flex items-center justify-center bg-black/35 px-4">
+    <div className="w-full max-w-105 rounded-2xl border border-[#d9d9d9] bg-white p-5">
+      <p className="text-[15px] font-medium text-[#252525]">정말 로그아웃 하시겠습니까?<br />종료하지 않은 면접 내용은 저장되지 않습니다.</p>
+      <div className="mt-4 flex justify-end gap-2">
+        <button type="button" onClick={onCancel} className="rounded-[10px] border border-[#d6d6d6] px-3 py-1.5 text-[12px] text-[#666]">취소</button>
+        <button type="button" onClick={onConfirm} className="rounded-[10px] border border-[#1f1f1f] bg-[#1f1f1f] px-3 py-1.5 text-[12px] text-white">로그아웃</button>
       </div>
     </div>
-  );
-};
+  </div>
+);
 
-const LogoutConfirmModal = ({ onCancel, onConfirm }) => {
-  return (
-    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/35 px-4">
-      <div className="w-full max-w-[420px] rounded-[16px] border border-[#d9d9d9] bg-white p-5">
-        <p className="text-[15px] font-medium text-[#252525]">
-          정말 로그아웃 하시겠습니까?
-          <br />
-          종료하지 않은 면접 내용은 저장되지 않습니다
-        </p>
+const InlineSpinner = ({ label }) => (
+  <div className="inline-flex items-center gap-2 text-[12px] text-[#5e6472]">
+    <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-[#cbd5e1] border-t-[#171b24]" />
+    <span>{label}</span>
+  </div>
+);
 
-        <div className="mt-4 flex justify-end gap-2">
-          <button
-            type="button"
-            onClick={onCancel}
-            className="rounded-[10px] border border-[#d6d6d6] px-3 py-1.5 text-[12px] text-[#666]"
-          >
-            취소
-          </button>
-          <button
-            type="button"
-            onClick={onConfirm}
-            className="rounded-[10px] border border-[#1f1f1f] bg-[#1f1f1f] px-3 py-1.5 text-[12px] text-white"
-          >
-            로그아웃
-          </button>
-        </div>
-      </div>
+const CategoryCard = ({ title, description, children }) => (
+  <section className="rounded-3xl border border-[#e4e7ee] bg-white p-5 shadow-[0_12px_28px_rgba(15,23,42,0.04)] sm:p-6">
+    <div className="mb-4">
+      <p className="text-[12px] font-semibold tracking-[0.08em] text-[#7a8190]">{title}</p>
+      {description ? <p className="mt-1 text-[13px] leading-[1.7] text-[#5e6472]">{description}</p> : null}
     </div>
-  );
-};
+    {children}
+  </section>
+);
+
+const FilterChip = ({ label, active = false, onClick }) => (
+  <button
+    type="button"
+    onClick={onClick}
+    className={`rounded-full border px-3 py-1 text-[12px] transition ${active ? "border-[#171b24] bg-[#171b24] text-white" : "border-[#d9dde5] bg-white text-[#505866]"}`}
+  >
+    {label}
+  </button>
+);
 
 export const InterviewStartPage = () => {
   const navigate = useNavigate();
-  const dropdownAreaRef = useRef(null);
-
   const [userName, setUserName] = useState("사용자");
   const [userPoint, setUserPoint] = useState(0);
   const [profileImageUrl, setProfileImageUrl] = useState(tempProfileImage);
@@ -175,116 +116,119 @@ export const InterviewStartPage = () => {
   const [categories, setCategories] = useState([]);
   const [filesByType, setFilesByType] = useState({ RESUME: [], INTRODUCE: [], PORTFOLIO: [] });
   const [selectedFiles, setSelectedFiles] = useState({ RESUME: "", INTRODUCE: "", PORTFOLIO: "" });
+  const [jobFilter, setJobFilter] = useState("");
+  const [jobQuery, setJobQuery] = useState("");
+  const [skillQuery, setSkillQuery] = useState("");
   const [selectedCategoryId, setSelectedCategoryId] = useState("");
-  const [selectedDifficulty, setSelectedDifficulty] = useState("MEDIUM");
+  const [selectedRating, setSelectedRating] = useState(3);
   const [selectedQuestionCount, setSelectedQuestionCount] = useState(5);
   const [loadingPage, setLoadingPage] = useState(true);
   const [startingInterview, setStartingInterview] = useState(false);
+  const [creatingCategory, setCreatingCategory] = useState(false);
   const [pageErrorMessage, setPageErrorMessage] = useState("");
-  const [openDropdown, setOpenDropdown] = useState("");
 
   useEffect(() => {
     const charged = consumePointChargeSuccessResult();
     if (!charged) return;
-    const nextPoint = parsePoint(charged?.currentPoint);
-    setUserPoint(nextPoint);
+    setUserPoint(parsePoint(charged?.currentPoint));
     setShowPointChargeSuccessModal(true);
   }, []);
 
-  useEffect(() => {
-    const loadPageData = async () => {
-      try {
-        const profilePayload = await getMyProfile();
-        const profile = extractProfile(profilePayload);
-        setUserName(profile?.name || "사용자");
-        setUserPoint(parsePoint(profile?.point));
-        setProfileImageUrl(getMyProfileImageUrl());
-      } catch {
-        navigate("/login", { replace: true });
-        return;
-      }
+  const loadPageData = useCallback(async () => {
+    let profile = {};
+    try {
+      const profilePayload = await getMyProfile();
+      profile = extractProfile(profilePayload);
+      setUserName(profile?.name || "사용자");
+      setUserPoint(parsePoint(profile?.point));
+      setProfileImageUrl(getMyProfileImageUrl());
+    } catch {
+      navigate("/login", { replace: true });
+      return;
+    }
 
-      try {
-        const [categoriesPayload, filesPayload] = await Promise.all([getInterviewCategories(), getReadyMockDocuments()]);
-        const nextCategories = categoriesPayload || [];
-        const rawFiles = extractFileList(filesPayload);
-        const nextFilesByType = { RESUME: [], INTRODUCE: [], PORTFOLIO: [] };
+    try {
+      const [categoriesPayload, filesPayload] = await Promise.all([getInterviewCategories(), getReadyMockDocuments()]);
+      const nextCategories = buildVisibleCategories(Array.isArray(categoriesPayload) ? categoriesPayload : []);
+      const rawFiles = extractFileList(filesPayload);
+      const nextFilesByType = { RESUME: [], INTRODUCE: [], PORTFOLIO: [] };
 
-        rawFiles.forEach((file) => {
-          const type = file?.fileType || file?.file_type;
-          if (!nextFilesByType[type]) return;
-          nextFilesByType[type].push(file);
-        });
+      rawFiles.forEach((file) => {
+        const type = file?.fileType || file?.file_type;
+        if (!nextFilesByType[type]) return;
+        nextFilesByType[type].push(file);
+      });
 
-        Object.keys(nextFilesByType).forEach((type) => {
-          nextFilesByType[type].sort(
-            (a, b) => toTimestamp(b?.createdAt || b?.created_at) - toTimestamp(a?.createdAt || a?.created_at)
-          );
-        });
+      Object.keys(nextFilesByType).forEach((type) => {
+        nextFilesByType[type].sort((a, b) => toTimestamp(b?.createdAt || b?.created_at) - toTimestamp(a?.createdAt || a?.created_at));
+      });
 
-        setCategories(nextCategories);
-        setFilesByType(nextFilesByType);
-        setSelectedFiles({
-          RESUME: String(nextFilesByType.RESUME[0]?.fileId || nextFilesByType.RESUME[0]?.file_id || ""),
-          INTRODUCE: String(nextFilesByType.INTRODUCE[0]?.fileId || nextFilesByType.INTRODUCE[0]?.file_id || ""),
-          PORTFOLIO: String(nextFilesByType.PORTFOLIO[0]?.fileId || nextFilesByType.PORTFOLIO[0]?.file_id || ""),
-        });
+      const jobs = nextCategories.filter((item) => Number(item.depth) === 1);
+      const profileJobName = typeof profile?.jobName === "string" ? profile.jobName.trim() : "";
+      const matchedJob = profileJobName
+        ? jobs.find((item) => [item.displayName, item.name].filter(Boolean).some((name) => name.trim().toLowerCase() === profileJobName.toLowerCase()))
+        : null;
+      const defaultJob = matchedJob?.categoryId ? String(matchedJob.categoryId) : jobs[0]?.categoryId ? String(jobs[0].categoryId) : "";
 
-        const firstLeafCategory = nextCategories.find((category) => category?.isLeaf);
-        if (firstLeafCategory?.categoryId) {
-          setSelectedCategoryId(String(firstLeafCategory.categoryId));
-        }
-      } catch (error) {
-        setPageErrorMessage(error?.message || "면접 설정 데이터를 불러오지 못했습니다.");
-      } finally {
-        setLoadingPage(false);
-      }
-    };
-
-    loadPageData();
+      setCategories(nextCategories);
+      setFilesByType(nextFilesByType);
+      setSelectedFiles({
+        RESUME: String(nextFilesByType.RESUME[0]?.fileId || nextFilesByType.RESUME[0]?.file_id || ""),
+        INTRODUCE: String(nextFilesByType.INTRODUCE[0]?.fileId || nextFilesByType.INTRODUCE[0]?.file_id || ""),
+        PORTFOLIO: String(nextFilesByType.PORTFOLIO[0]?.fileId || nextFilesByType.PORTFOLIO[0]?.file_id || ""),
+      });
+      setJobFilter((prev) => prev || defaultJob);
+    } catch (error) {
+      setPageErrorMessage(error?.message || "면접 설정 데이터를 불러오지 못했습니다.");
+    } finally {
+      setLoadingPage(false);
+    }
   }, [navigate]);
 
   useEffect(() => {
-    const handleOutsideClick = (event) => {
-      if (!dropdownAreaRef.current) return;
-      if (!dropdownAreaRef.current.contains(event.target)) {
-        setOpenDropdown("");
-      }
-    };
+    void loadPageData();
+  }, [loadPageData]);
 
-    document.addEventListener("mousedown", handleOutsideClick);
-    document.addEventListener("touchstart", handleOutsideClick);
+  const jobs = useMemo(() => categories.filter((item) => Number(item.depth) === 1), [categories]);
+  const visibleJobs = useMemo(() => {
+    const keyword = jobQuery.trim().toLowerCase();
+    if (!keyword) return jobs;
+    return jobs.filter((job) => [job.displayName, job.name, job.code].filter(Boolean).join(" ").toLowerCase().includes(keyword));
+  }, [jobQuery, jobs]);
+  const leafCategories = useMemo(() => categories.filter((item) => item?.isLeaf), [categories]);
+  const visibleSkills = useMemo(() => {
+    const keyword = skillQuery.trim().toLowerCase();
+    return leafCategories
+      .filter((category) => {
+        if (jobFilter && String(category.parentId) !== jobFilter) return false;
+        if (!keyword) return true;
+        return [category.displayName, category.name, category.code, category.path].filter(Boolean).join(" ").toLowerCase().includes(keyword);
+      })
+      .map((category) => ({
+        ...category,
+        label: category.displayName || getCategoryDisplayName(category),
+      }));
+  }, [jobFilter, leafCategories, skillQuery]);
 
-    return () => {
-      document.removeEventListener("mousedown", handleOutsideClick);
-      document.removeEventListener("touchstart", handleOutsideClick);
-    };
-  }, []);
+  useEffect(() => {
+    if (selectedCategoryId && !visibleSkills.some((item) => String(item.categoryId) === String(selectedCategoryId))) {
+      setSelectedCategoryId("");
+    }
+  }, [selectedCategoryId, visibleSkills]);
 
-  const selectedCategory = useMemo(
-    () => categories.find((item) => String(item?.categoryId) === String(selectedCategoryId)) || null,
-    [categories, selectedCategoryId]
-  );
-  const selectedDifficultyOption = useMemo(
-    () => DIFFICULTY_OPTIONS.find((item) => item.value === selectedDifficulty) || DIFFICULTY_OPTIONS[1],
-    [selectedDifficulty]
-  );
+  const canCreateJob = Boolean(jobQuery.trim() && !visibleJobs.some((job) => (job.displayName || job.name).trim().toLowerCase() === jobQuery.trim().toLowerCase()));
+  const canCreateSkill = Boolean(jobFilter && skillQuery.trim() && !visibleSkills.some((skill) => skill.label.trim().toLowerCase() === skillQuery.trim().toLowerCase()));
 
-  const selectedFileObjects = useMemo(() => {
-    return DOCUMENT_TYPES.reduce((acc, item) => {
-      acc[item.key] =
-        filesByType[item.key].find(
-          (file) => String(file?.fileId || file?.file_id || "") === String(selectedFiles[item.key] || "")
-        ) || null;
-      return acc;
-    }, {});
-  }, [filesByType, selectedFiles]);
+  const selectedSkill = useMemo(() => categories.find((item) => String(item.categoryId) === String(selectedCategoryId)) || null, [categories, selectedCategoryId]);
+  const selectedJob = useMemo(() => jobs.find((item) => String(item.categoryId) === String(jobFilter)) || null, [jobFilter, jobs]);
+  const selectedFileObjects = useMemo(() => DOCUMENT_TYPES.reduce((acc, item) => {
+    acc[item.key] = filesByType[item.key].find((file) => String(file?.fileId || file?.file_id || "") === String(selectedFiles[item.key] || "")) || null;
+    return acc;
+  }, {}), [filesByType, selectedFiles]);
 
   const handleSidebarNavigate = (item) => {
     setIsMobileMenuOpen(false);
-    if (item?.path) {
-      navigate(item.path);
-    }
+    if (item?.path) navigate(item.path);
   };
 
   const handleLogoutConfirm = async () => {
@@ -298,6 +242,50 @@ export const InterviewStartPage = () => {
     }
   };
 
+  const handleCreateJob = async () => {
+    if (!jobQuery.trim()) return;
+    setCreatingCategory(true);
+    setPageErrorMessage("");
+    try {
+      const created = await createInterviewCategory({
+        parentId: findTechRootId(categories),
+        code: buildCategoryCode(jobQuery),
+        name: jobQuery.trim(),
+        description: null,
+        sortOrder: 100,
+      });
+      await loadPageData();
+      setJobFilter(String(created.categoryId));
+      setJobQuery(created.displayName || created.name);
+    } catch (error) {
+      setPageErrorMessage(error?.message || "직무 생성에 실패했습니다.");
+    } finally {
+      setCreatingCategory(false);
+    }
+  };
+
+  const handleCreateSkill = async () => {
+    if (!jobFilter || !skillQuery.trim()) return;
+    setCreatingCategory(true);
+    setPageErrorMessage("");
+    try {
+      const created = await createInterviewCategory({
+        parentId: Number(jobFilter),
+        code: buildCategoryCode(skillQuery),
+        name: skillQuery.trim(),
+        description: null,
+        sortOrder: 100,
+      });
+      await loadPageData();
+      setSelectedCategoryId(String(created.categoryId));
+      setSkillQuery(created.displayName || created.name);
+    } catch (error) {
+      setPageErrorMessage(error?.message || "기술 카테고리 생성에 실패했습니다.");
+    } finally {
+      setCreatingCategory(false);
+    }
+  };
+
   const handleStartInterview = async () => {
     const selectedDocumentIds = DOCUMENT_TYPES
       .map((item) => selectedFiles[item.key])
@@ -308,6 +296,10 @@ export const InterviewStartPage = () => {
       setPageErrorMessage("AI 분석이 완료된 문서를 1개 이상 선택해 주세요.");
       return;
     }
+    if (!selectedCategoryId) {
+      setPageErrorMessage("모의면접에는 기술 카테고리 선택이 필요합니다.");
+      return;
+    }
 
     setStartingInterview(true);
     setPageErrorMessage("");
@@ -315,65 +307,47 @@ export const InterviewStartPage = () => {
       const response = await startMockInterview({
         documentFileIds: selectedDocumentIds,
         categoryId: selectedCategoryId ? Number(selectedCategoryId) : null,
-        difficulty: selectedDifficulty,
-        questionCount: selectedQuestionCount,
+        difficulty: ratingToDifficulty(selectedRating),
+        questionCount: Math.max(5, Number(selectedQuestionCount) || 5),
       });
 
       if (!response?.sessionId || !response?.currentQuestion) {
-        throw new Error("면접 세션은 생성되었지만 첫 질문을 불러오지 못했습니다.");
+        setPageErrorMessage("면접 세션은 생성되었지만 첫 질문을 불러오지 못했습니다.");
+        return;
       }
 
       saveTechInterviewSession({
-        sessionId: response?.sessionId,
-        currentQuestion: response?.currentQuestion || null,
-        pendingNextQuestion: null,
+        sessionId: response.sessionId,
+        currentQuestion: response.currentQuestion,
+        pendingResult: null,
         completed: false,
-        conversation: response?.currentQuestion
-          ? [
-              {
-                id: `question-${response.currentQuestion.turnId}`,
-                role: "assistant",
-                kind: "question",
-                turnId: response.currentQuestion.turnId,
-                turnNo: response.currentQuestion.turnNo,
-                questionText: response.currentQuestion.questionText,
-              },
-            ]
-          : [],
         metadata: {
           apiBasePath: "/api/interview/mock",
           selectedDocuments: {
-            resume: buildSelectedDocumentMeta(selectedFileObjects.RESUME),
-            introduce: buildSelectedDocumentMeta(selectedFileObjects.INTRODUCE),
-            portfolio: buildSelectedDocumentMeta(selectedFileObjects.PORTFOLIO),
+            resume: buildSelectedDocumentMeta(selectedFileObjects.RESUME, "RESUME"),
+            introduce: buildSelectedDocumentMeta(selectedFileObjects.INTRODUCE, "INTRODUCE"),
+            portfolio: buildSelectedDocumentMeta(selectedFileObjects.PORTFOLIO, "PORTFOLIO"),
           },
-          difficulty: selectedDifficulty,
-          difficultyLabel: selectedDifficultyOption.label,
+          difficulty: ratingToDifficulty(selectedRating),
+          difficultyRating: selectedRating,
           categoryId: selectedCategoryId ? Number(selectedCategoryId) : null,
-          categoryName: selectedCategory?.name || null,
+          categoryName: selectedSkill?.displayName || selectedSkill?.name || null,
+          jobName: selectedJob?.displayName || selectedJob?.name || null,
+          questionCount: Math.max(5, Number(selectedQuestionCount) || 5),
         },
       });
 
       navigate("/content/interview/session");
     } catch (error) {
-      setPageErrorMessage(
-        error?.message ||
-          (error?.status === 500
-            ? "질문 생성 중 서버 오류가 발생했습니다. 잠시 후 다시 시도해 주세요."
-            : "면접 시작에 실패했습니다.")
-      );
+      setPageErrorMessage(error?.message || "면접 시작에 실패했습니다.");
     } finally {
       setStartingInterview(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-white pt-[54px]">
-      <ContentTopNav
-        point={formatPoint(userPoint)}
-        onClickCharge={() => setShowPointChargeModal(true)}
-        onOpenMenu={() => setIsMobileMenuOpen(true)}
-      />
+    <div className="min-h-screen bg-white pt-13.5">
+      <ContentTopNav point={formatPoint(userPoint)} onClickCharge={() => setShowPointChargeModal(true)} onOpenMenu={() => setIsMobileMenuOpen(true)} />
 
       <MobileSidebarDrawer
         open={isMobileMenuOpen}
@@ -390,7 +364,7 @@ export const InterviewStartPage = () => {
       />
 
       <div className="flex min-h-[calc(100vh-54px)]">
-        <div className="hidden w-[272px] shrink-0 md:block">
+        <div className="hidden w-68 shrink-0 md:block">
           <Sidebar
             activeKey="interview_start"
             onNavigate={handleSidebarNavigate}
@@ -403,201 +377,188 @@ export const InterviewStartPage = () => {
 
         <main className="flex min-w-0 flex-1 flex-col">
           <div className="flex-1 overflow-y-auto px-4 pb-6 pt-6 sm:px-5 md:px-8 md:pt-10">
-            <div className="mx-auto w-full max-w-[980px]" ref={dropdownAreaRef}>
-              <section className="rounded-[24px] border border-[#e4e7ee] bg-[linear-gradient(180deg,#ffffff_0%,#f7f9fc_100%)] p-5 sm:p-6">
-                <p className="text-[12px] font-semibold tracking-[0.08em] text-[#7a8190]">INTERVIEW SETUP</p>
+            <div className="mx-auto w-full max-w-280 space-y-5">
+              <section className="rounded-3xl border border-[#e4e7ee] bg-[linear-gradient(180deg,#ffffff_0%,#f7f9fc_100%)] p-5 sm:p-6">
+                <p className="text-[12px] font-semibold tracking-[0.08em] text-[#7a8190]">MOCK INTERVIEW</p>
                 <h1 className="mt-2 text-[30px] font-semibold tracking-[-0.02em] text-[#161a22] sm:text-[42px]">
-                  서류와 카테고리를 고르고
+                  서류와 직무를 고르고
                   <br />
-                  바로 면접을 시작한다
+                  실전처럼 면접을 시작한다
                 </h1>
-                <p className="mt-3 max-w-[680px] text-[14px] leading-[1.7] text-[#5e6472] sm:text-[15px]">
-                  AI 분석이 끝난 문서만 선택할 수 있으며, 선택한 문서와 기술 카테고리를 조합해 모의면접 세션을 생성한다.
+                <p className="mt-3 max-w-180 text-[14px] leading-[1.7] text-[#5e6472] sm:text-[15px]">
+                  분석 완료된 서류만 선택할 수 있다. 직무와 기술 카테고리를 같이 선택하면 문서 질문과 기술 질문을 섞어 면접을 생성한다.
                 </p>
               </section>
 
-              <section className="mt-5 rounded-[24px] border border-[#e4e7ee] bg-white p-5 sm:p-6">
-                <h2 className="text-[22px] font-semibold text-[#171b24]">사전 설정</h2>
-                <p className="mt-1 text-[13px] text-[#6b7280]">
-                  선택한 서류와 난이도, 기술질문 카테고리가 인터뷰 화면 상단에 그대로 표시된다.
-                </p>
-
-                <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-                  {DOCUMENT_TYPES.map((documentType) => {
-                    const files = filesByType[documentType.key] || [];
-                    const selectedFile = selectedFileObjects[documentType.key];
-                    return (
-                      <DropdownField
-                        key={documentType.key}
-                        label={documentType.label}
-                        valueNode={selectedFile ? renderDocumentLabel(selectedFile) : `${documentType.label} 미선택`}
-                        open={openDropdown === documentType.key}
-                        onToggle={() =>
-                          setOpenDropdown((prev) => (prev === documentType.key ? "" : documentType.key))
-                        }
-                      >
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setSelectedFiles((prev) => ({ ...prev, [documentType.key]: "" }));
-                            setOpenDropdown("");
-                          }}
-                          className="mb-1 block w-full rounded-[9px] bg-[#f4f4f4] px-2 py-1.5 text-left text-[11px] text-[#343434] hover:bg-[#ededed]"
-                        >
-                          미선택
+              <div className="grid grid-cols-1 gap-5 xl:grid-cols-[1.15fr_0.85fr]">
+                <div className="space-y-5">
+                  <CategoryCard title="직무 선택" description="직무는 한글 기준으로 선택하고, 없다면 바로 추가한다.">
+                    <div className="grid gap-3 md:grid-cols-[1fr_auto]">
+                      <input
+                        value={jobQuery}
+                        onChange={(event) => setJobQuery(event.target.value)}
+                        placeholder="직무 검색 또는 새 직무 입력"
+                        className="rounded-[14px] border border-[#dfe3eb] px-4 py-3 text-[13px] outline-none focus:border-[#8aa2e8]"
+                      />
+                      {canCreateJob ? (
+                        <button type="button" disabled={creatingCategory} onClick={handleCreateJob} className="rounded-[14px] border border-[#171b24] px-4 py-3 text-[13px] font-semibold text-[#171b24] disabled:opacity-60">
+                          {creatingCategory ? "생성 중..." : "직무 추가"}
                         </button>
-                        {files.map((file) => {
-                          const fileId = String(file?.fileId || file?.file_id || "");
-                          return (
-                            <button
-                              key={`${documentType.key}-${fileId}`}
-                              type="button"
-                              onClick={() => {
-                                setSelectedFiles((prev) => ({ ...prev, [documentType.key]: fileId }));
-                                setOpenDropdown("");
-                              }}
-                              className="mb-1 block w-full rounded-[9px] bg-[#f4f4f4] px-2 py-1.5 text-left text-[11px] text-[#343434] hover:bg-[#ededed]"
-                            >
-                              <span className="flex min-w-0 items-center gap-2">
-                                <span className="truncate">{resolveDisplayFileName(file)}</span>
-                                {file?.ocrUsed ? <OcrInfoBadge compact /> : null}
-                              </span>
-                            </button>
-                          );
-                        })}
-                        {!loadingPage && files.length === 0 ? (
-                          <p className="px-2 py-1.5 text-[11px] text-[#8a8a8a]">AI 분석 완료된 파일이 없습니다.</p>
-                        ) : null}
-                      </DropdownField>
-                    );
-                  })}
+                      ) : <div />}
+                    </div>
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      {visibleJobs.map((job) => (
+                        <FilterChip
+                          key={job.categoryId}
+                          label={job.displayName || getCategoryDisplayName(job)}
+                          active={String(job.categoryId) === jobFilter}
+                          onClick={() => setJobFilter(String(job.categoryId))}
+                        />
+                      ))}
+                      {!visibleJobs.length && !loadingPage ? <span className="text-[12px] text-[#7a8190]">표시할 직무가 없습니다.</span> : null}
+                    </div>
+                  </CategoryCard>
 
-                  <DropdownField
-                    label="난이도"
-                    valueNode={selectedDifficultyOption.label}
-                    open={openDropdown === "difficulty"}
-                    onToggle={() => setOpenDropdown((prev) => (prev === "difficulty" ? "" : "difficulty"))}
-                  >
-                    {DIFFICULTY_OPTIONS.map((item) => (
-                      <button
-                        key={item.value}
-                        type="button"
-                        onClick={() => {
-                          setSelectedDifficulty(item.value);
-                          setOpenDropdown("");
-                        }}
-                        className="mb-1 block w-full rounded-[9px] bg-[#f4f4f4] px-2 py-1.5 text-left text-[11px] text-[#343434] hover:bg-[#ededed]"
-                      >
-                        {item.label}
-                      </button>
-                    ))}
-                  </DropdownField>
+                  <CategoryCard title="기술 카테고리 선택" description="모의면접에는 기술질문이 40% 비율로 포함된다. 직무를 먼저 고르고 기술을 선택하거나 직접 추가한다.">
+                    <div className="grid gap-3 md:grid-cols-[1fr_auto]">
+                      <input
+                        value={skillQuery}
+                        onChange={(event) => setSkillQuery(event.target.value)}
+                        placeholder={jobFilter ? "기술 검색 또는 새 기술 입력" : "직무를 먼저 선택해 주세요"}
+                        disabled={!jobFilter}
+                        className="rounded-[14px] border border-[#dfe3eb] px-4 py-3 text-[13px] outline-none focus:border-[#8aa2e8] disabled:bg-[#f4f6f8]"
+                      />
+                      {canCreateSkill ? (
+                        <button type="button" disabled={creatingCategory} onClick={handleCreateSkill} className="rounded-[14px] border border-[#171b24] px-4 py-3 text-[13px] font-semibold text-[#171b24] disabled:opacity-60">
+                          {creatingCategory ? "생성 중..." : "기술 추가"}
+                        </button>
+                      ) : <div />}
+                    </div>
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      {visibleSkills.map((skill) => (
+                        <FilterChip
+                          key={skill.categoryId}
+                          label={skill.label}
+                          active={String(skill.categoryId) === selectedCategoryId}
+                          onClick={() => setSelectedCategoryId(String(skill.categoryId))}
+                        />
+                      ))}
+                      {!visibleSkills.length && jobFilter ? <span className="text-[12px] text-[#7a8190]">현재 직무에 등록된 기술이 없다. 직접 추가하면 바로 사용할 수 있다.</span> : null}
+                    </div>
+                  </CategoryCard>
 
-                  <DropdownField
-                    label="기술질문 카테고리"
-                    valueNode={selectedCategory?.name || "기술질문 생략"}
-                    open={openDropdown === "category"}
-                    onToggle={() => setOpenDropdown((prev) => (prev === "category" ? "" : "category"))}
-                  >
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setSelectedCategoryId("");
-                        setOpenDropdown("");
-                      }}
-                      className="mb-1 block w-full rounded-[9px] bg-[#f4f4f4] px-2 py-1.5 text-left text-[11px] text-[#343434] hover:bg-[#ededed]"
-                    >
-                      기술질문 생략
-                    </button>
-                    {categories.map((item) => (
-                      <button
-                        key={item?.categoryId}
-                        type="button"
-                        onClick={() => {
-                          setSelectedCategoryId(String(item?.categoryId || ""));
-                          setOpenDropdown("");
-                        }}
-                        className="mb-1 block w-full rounded-[9px] bg-[#f4f4f4] px-2 py-1.5 text-left text-[11px] text-[#343434] hover:bg-[#ededed]"
-                      >
-                        {formatCategoryLabel(item)}
-                      </button>
-                    ))}
-                  </DropdownField>
-
-                  <DropdownField
-                    label="문항 수"
-                    valueNode={`${selectedQuestionCount}문항`}
-                    open={openDropdown === "count"}
-                    onToggle={() => setOpenDropdown((prev) => (prev === "count" ? "" : "count"))}
-                  >
-                    {QUESTION_COUNT_OPTIONS.map((count) => (
-                      <button
-                        key={count}
-                        type="button"
-                        onClick={() => {
-                          setSelectedQuestionCount(count);
-                          setOpenDropdown("");
-                        }}
-                        className="mb-1 block w-full rounded-[9px] bg-[#f4f4f4] px-2 py-1.5 text-left text-[11px] text-[#343434] hover:bg-[#ededed]"
-                      >
-                        {count}문항
-                      </button>
-                    ))}
-                  </DropdownField>
+                  <CategoryCard title="서류 선택" description="AI 분석이 끝난 서류만 노출된다. OCR fallback이 사용된 문서는 배지를 함께 표시한다.">
+                    <div className="grid gap-4 md:grid-cols-3">
+                      {DOCUMENT_TYPES.map((documentType) => {
+                        const files = filesByType[documentType.key] || [];
+                        return (
+                          <div key={documentType.key} className="rounded-[18px] border border-[#e4e7ee] bg-[#f8fafc] p-4">
+                            <p className="text-[12px] font-semibold text-[#6a7383]">{documentType.label}</p>
+                            <div className="mt-3 space-y-2">
+                              <button
+                                type="button"
+                                onClick={() => setSelectedFiles((prev) => ({ ...prev, [documentType.key]: "" }))}
+                                className={`block w-full rounded-xl border px-3 py-2 text-left text-[12px] ${!selectedFiles[documentType.key] ? "border-[#171b24] bg-[#171b24] text-white" : "border-[#d7dce5] bg-white text-[#485160]"}`}
+                              >
+                                미선택
+                              </button>
+                              {files.map((file) => {
+                                const fileId = String(file?.fileId || file?.file_id || "");
+                                const active = String(selectedFiles[documentType.key] || "") === fileId;
+                                return (
+                                  <button
+                                    key={`${documentType.key}-${fileId}`}
+                                    type="button"
+                                    onClick={() => setSelectedFiles((prev) => ({ ...prev, [documentType.key]: fileId }))}
+                                    className={`block w-full rounded-xl border px-3 py-2 text-left text-[12px] ${active ? "border-[#171b24] bg-[#171b24] text-white" : "border-[#d7dce5] bg-white text-[#485160]"}`}
+                                  >
+                                    <span className="flex min-w-0 items-center gap-2">
+                                      <span className="truncate">{resolveDisplayFileName(file)}</span>
+                                      {file?.ocrUsed ? <OcrInfoBadge compact /> : null}
+                                    </span>
+                                  </button>
+                                );
+                              })}
+                              {!loadingPage && !files.length ? <p className="text-[11px] text-[#7a8190]">분석 완료된 파일이 없다.</p> : null}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </CategoryCard>
                 </div>
 
-                <div className="mt-6 rounded-[18px] border border-[#e1e5ed] bg-[#f7f9fc] p-4">
-                  <p className="text-[12px] font-semibold text-[#7a8190]">선택 요약</p>
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    <span className="rounded-full border border-[#d8dde7] bg-white px-3 py-1 text-[12px] text-[#4f5664]">
-                      {selectedFileObjects.RESUME ? resolveDisplayFileName(selectedFileObjects.RESUME) : "이력서 미선택"}
-                    </span>
-                    <span className="rounded-full border border-[#d8dde7] bg-white px-3 py-1 text-[12px] text-[#4f5664]">
-                      {selectedFileObjects.INTRODUCE ? resolveDisplayFileName(selectedFileObjects.INTRODUCE) : "자소서 미선택"}
-                    </span>
-                    <span className="rounded-full border border-[#d8dde7] bg-white px-3 py-1 text-[12px] text-[#4f5664]">
-                      {selectedDifficultyOption.label}
-                    </span>
-                    <span className="rounded-full border border-[#d8dde7] bg-white px-3 py-1 text-[12px] text-[#4f5664]">
-                      {selectedCategory?.name || "기술질문 생략"}
-                    </span>
-                  </div>
-                </div>
+                <div className="space-y-5">
+                  <CategoryCard title="난이도와 문항 수" description="모의면접은 최소 5문항이며, 기술질문은 전체의 40% 비율로 자동 배분한다.">
+                    <div className="rounded-[18px] border border-[#eef1f5] bg-[#fafbfd] p-4">
+                      <p className="text-[12px] font-semibold text-[#6a7383]">난이도</p>
+                      <div className="mt-3 flex items-center gap-3">
+                        <StarRatingInput value={selectedRating} onChange={setSelectedRating} />
+                        <div className="inline-flex items-center gap-2 rounded-full border border-[#f3ddad] bg-[#fff8e8] px-3 py-1 text-[12px] text-[#8a5a00]">
+                          <StarIcons rating={selectedRating} />
+                          <span className="font-medium">{selectedRating} / 5</span>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="mt-4 rounded-[18px] border border-[#eef1f5] bg-[#fafbfd] p-4">
+                      <p className="text-[12px] font-semibold text-[#6a7383]">문항 수</p>
+                      <div className="mt-3 flex items-center gap-3">
+                        <input
+                          type="number"
+                          min={5}
+                          max={20}
+                          value={selectedQuestionCount}
+                          onChange={(event) => setSelectedQuestionCount(Math.max(5, Number(event.target.value) || 5))}
+                          className="w-30 rounded-[14px] border border-[#dfe3eb] px-4 py-3 text-[13px] outline-none focus:border-[#8aa2e8]"
+                        />
+                        <span className="text-[12px] text-[#6a7383]">최소 5문항, 최대 20문항</span>
+                      </div>
+                    </div>
+                  </CategoryCard>
 
-                {pageErrorMessage ? <p className="mt-4 text-[12px] text-[#dc4b4b]">{pageErrorMessage}</p> : null}
-
-                <div className="mt-6 flex justify-end">
-                  <button
-                    type="button"
-                    onClick={handleStartInterview}
-                    disabled={loadingPage || startingInterview}
-                    className="rounded-[14px] bg-[#171b24] px-4 py-2.5 text-[13px] font-semibold text-white disabled:opacity-60"
-                  >
-                    {startingInterview ? "면접 생성 중..." : "면접 시작"}
-                  </button>
+                  <CategoryCard title="선택 요약" description="세션 상단에 그대로 표시될 메타 정보다.">
+                    <div className="flex flex-wrap gap-2">
+                      {selectedJob ? <span className="rounded-full border border-[#d8dde7] bg-white px-3 py-1 text-[12px] text-[#4f5664]">{selectedJob.displayName || selectedJob.name}</span> : null}
+                      <span className="rounded-full border border-[#d8dde7] bg-white px-3 py-1 text-[12px] text-[#4f5664]">
+                        {selectedSkill?.displayName || selectedSkill?.name || "기술 미선택"}
+                      </span>
+                      <span className="rounded-full border border-[#d8dde7] bg-white px-3 py-1 text-[12px] text-[#4f5664]">문항 {selectedQuestionCount}개</span>
+                      {DOCUMENT_TYPES.map((type) => {
+                        const file = selectedFileObjects[type.key];
+                        return (
+                          <span key={type.key} className="inline-flex items-center gap-1.5 rounded-full border border-[#d8dde7] bg-white px-3 py-1 text-[12px] text-[#4f5664]">
+                            <span>{file ? resolveDisplayFileName(file) : `${type.label} 미선택`}</span>
+                            {file?.ocrUsed ? <OcrInfoBadge compact /> : null}
+                          </span>
+                        );
+                      })}
+                    </div>
+                    {pageErrorMessage ? <p className="mt-4 text-[12px] text-[#dc4b4b]">{pageErrorMessage}</p> : null}
+                    <div className="mt-6 flex items-center justify-between gap-3">
+                      {startingInterview ? <InlineSpinner label="면접 세션과 질문을 생성하고 있습니다." /> : <span />}
+                      <button type="button" onClick={handleStartInterview} disabled={loadingPage || startingInterview} className="rounded-[14px] bg-[#171b24] px-4 py-2.5 text-[13px] font-semibold text-white disabled:opacity-60">
+                        {startingInterview ? "면접 생성 중..." : "면접 시작"}
+                      </button>
+                    </div>
+                  </CategoryCard>
                 </div>
-              </section>
+              </div>
             </div>
           </div>
         </main>
       </div>
 
-      {showLogoutModal ? (
-        <LogoutConfirmModal onCancel={() => setShowLogoutModal(false)} onConfirm={handleLogoutConfirm} />
-      ) : null}
+      {showLogoutModal ? <LogoutConfirmModal onCancel={() => setShowLogoutModal(false)} onConfirm={handleLogoutConfirm} /> : null}
       {showPointChargeModal ? (
         <PointChargeModal
           onClose={() => setShowPointChargeModal(false)}
           onCharged={(result) => {
-            const nextPoint = parsePoint(result?.currentPoint);
-            setUserPoint(nextPoint);
+            setUserPoint(parsePoint(result?.currentPoint));
             setShowPointChargeSuccessModal(true);
           }}
         />
       ) : null}
-      {showPointChargeSuccessModal ? (
-        <PointChargeSuccessModal onClose={() => setShowPointChargeSuccessModal(false)} />
-      ) : null}
+      {showPointChargeSuccessModal ? <PointChargeSuccessModal onClose={() => setShowPointChargeSuccessModal(false)} /> : null}
     </div>
   );
 };

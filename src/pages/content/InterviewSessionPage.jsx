@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { FaRegStar, FaStar } from "react-icons/fa6";
 import { ContentTopNav } from "../../components/ContentTopNav";
 import { MobileSidebarDrawer } from "../../components/MobileSidebarDrawer";
 import { OcrInfoBadge } from "../../components/OcrInfoBadge";
@@ -9,6 +10,7 @@ import { PointChargeSuccessModal } from "../../components/PointChargeSuccessModa
 import tempProfileImage from "../../assets/icon/temp.png";
 import { logout } from "../../lib/authApi";
 import { bookmarkInterviewTurn, getInterviewSessionResults, submitInterviewAnswer } from "../../lib/interviewApi";
+import { getQuestionCategoryDisplayName, sanitizeQuestionTag } from "../../lib/categoryPresentation";
 import {
   clearTechInterviewSession,
   loadTechInterviewSession,
@@ -53,6 +55,13 @@ const DocumentMetaChip = ({ label, ocrUsed }) => (
   </span>
 );
 
+const InlineSpinner = ({ label }) => (
+  <div className="inline-flex items-center gap-2 text-[12px] text-[#5e6472]">
+    <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-[#cbd5e1] border-t-[#171b24]" />
+    <span>{label}</span>
+  </div>
+);
+
 const scoreToStars = (score) => {
   const numeric = Number(score);
   if (!Number.isFinite(numeric) || numeric <= 0) return 1;
@@ -64,9 +73,9 @@ const StarRating = ({ score }) => {
   return (
     <div className="flex items-center gap-1">
       {Array.from({ length: 5 }).map((_, index) => (
-        <span key={index} className={`text-[16px] ${index < stars ? "text-[#f4b63d]" : "text-[#d9dde5]"}`}>
-          ★
-        </span>
+        index < stars
+          ? <FaStar key={index} className="text-[16px] text-[#f59e0b]" />
+          : <FaRegStar key={index} className="text-[16px] text-[#d9dde5]" />
       ))}
     </div>
   );
@@ -200,6 +209,12 @@ export const InterviewSessionPage = () => {
   }, [completed, currentQuestion]);
 
   const isMockInterview = sessionMetadata.apiBasePath === "/api/interview/mock";
+  const isLastMockQuestion = Boolean(
+    isMockInterview &&
+    currentQuestion &&
+    Number(sessionMetadata.questionCount || 0) > 0 &&
+    currentQuestion.turnNo >= Number(sessionMetadata.questionCount || 0)
+  );
 
   const selectedDocumentMetas = useMemo(
     () => Object.values(sessionMetadata.selectedDocuments || {}).map(normalizeSelectedDocumentMeta).filter(Boolean),
@@ -274,6 +289,7 @@ export const InterviewSessionPage = () => {
       setPendingResult({
         answeredTurnId: response?.answeredTurnId,
         answeredQuestion: currentQuestion,
+        submittedAnswer: response?.submittedAnswer || answer.trim(),
         evaluation: response?.evaluation || null,
         nextQuestion: response?.nextQuestion || null,
         completed: Boolean(response?.completed),
@@ -417,10 +433,9 @@ export const InterviewSessionPage = () => {
                 {currentQuestion ? (
                   <>
                     <div className="mt-5 flex flex-wrap gap-2">
-                      {currentQuestion.category ? <QuestionMetaChip label={currentQuestion.category} /> : null}
-                      {currentQuestion.difficulty ? <QuestionMetaChip label={currentQuestion.difficulty} /> : null}
-                      {currentQuestion.sourceTag ? <QuestionMetaChip label={currentQuestion.sourceTag} /> : null}
-                      {(currentQuestion.tags || []).map((tag) => (
+                      {currentQuestion.category ? <QuestionMetaChip label={getQuestionCategoryDisplayName(currentQuestion.category)} /> : null}
+                      {currentQuestion.difficulty ? <QuestionMetaChip label={`난이도 ${currentQuestion.difficulty}`} /> : null}
+                      {(currentQuestion.tags || []).map(sanitizeQuestionTag).filter(Boolean).map((tag) => (
                         <QuestionMetaChip key={tag} label={`#${tag}`} />
                       ))}
                     </div>
@@ -446,14 +461,19 @@ export const InterviewSessionPage = () => {
 
                         {submitErrorMessage ? <p className="mt-3 text-[12px] text-[#dc4b4b]">{submitErrorMessage}</p> : null}
 
-                        <div className="mt-4 flex justify-end">
+                        <div className="mt-4 flex items-center justify-between gap-3">
+                          {submitting ? (
+                            <InlineSpinner label={isMockInterview ? (isLastMockQuestion ? "면접 결과를 정리하고 있습니다." : "다음 질문을 준비하고 있습니다.") : "답변을 평가하고 있습니다."} />
+                          ) : (
+                            <span />
+                          )}
                           <button
                             type="button"
                             onClick={handleSubmitAnswer}
                             disabled={submitting}
                             className="rounded-[14px] bg-[#171b24] px-4 py-2.5 text-[13px] font-semibold text-white disabled:opacity-60"
                           >
-                            {submitting ? (isMockInterview ? "다음 문제 준비 중..." : "제출 중...") : isMockInterview ? "다음 문제" : "답변 제출"}
+                            {submitting ? (isMockInterview ? (isLastMockQuestion ? "결과 정리 중..." : "다음 문제 준비 중..." ) : "제출 중...") : isMockInterview ? "다음 문제" : "답변 제출"}
                           </button>
                         </div>
                       </div>
@@ -466,9 +486,12 @@ export const InterviewSessionPage = () => {
                     <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                       <div>
                         <p className="text-[13px] font-medium text-[#7a8190]">AI 피드백</p>
-                        <h2 className="mt-1 text-[24px] font-semibold text-[#171b24]">
-                          점수 {pendingResult.evaluation?.score ?? 0}
-                        </h2>
+                        <div className="mt-1 flex items-center gap-3">
+                          <h2 className="text-[24px] font-semibold text-[#171b24]">
+                            점수 {pendingResult.evaluation?.score ?? 0}
+                          </h2>
+                          <StarRating score={pendingResult.evaluation?.score} />
+                        </div>
                       </div>
                       <button
                         type="button"
@@ -481,6 +504,18 @@ export const InterviewSessionPage = () => {
                     </div>
 
                     <div className="mt-5 grid gap-4 lg:grid-cols-2">
+                      <section className="rounded-[16px] bg-[#f6f8fb] p-4">
+                        <p className="text-[12px] font-semibold text-[#5d6676]">내 답변</p>
+                        <p className="mt-2 whitespace-pre-wrap text-[13px] leading-[1.7] text-[#252b36]">
+                          {pendingResult.submittedAnswer || "-"}
+                        </p>
+                      </section>
+                      <section className="rounded-[16px] bg-[#f6f8fb] p-4">
+                        <p className="text-[12px] font-semibold text-[#5d6676]">모범답안</p>
+                        <p className="mt-2 whitespace-pre-wrap text-[13px] leading-[1.7] text-[#252b36]">
+                          {pendingResult.evaluation?.modelAnswer || "모범답안을 생성하지 못했습니다."}
+                        </p>
+                      </section>
                       <section className="rounded-[16px] bg-[#f6f8fb] p-4">
                         <p className="text-[12px] font-semibold text-[#5d6676]">피드백</p>
                         <p className="mt-2 whitespace-pre-wrap text-[13px] leading-[1.7] text-[#252b36]">
@@ -563,6 +598,12 @@ export const InterviewSessionPage = () => {
                                   <p className="text-[11px] font-semibold text-[#5d6676]">보완 포인트</p>
                                   <p className="mt-1 whitespace-pre-wrap text-[12px] leading-[1.6] text-[#4f5664]">
                                     {turn.evaluation?.bestPractice || "-"}
+                                  </p>
+                                </div>
+                                <div className="mt-3 rounded-[12px] bg-[#f6f8fb] p-3">
+                                  <p className="text-[11px] font-semibold text-[#5d6676]">모범답안</p>
+                                  <p className="mt-1 whitespace-pre-wrap text-[12px] leading-[1.6] text-[#4f5664]">
+                                    {turn.evaluation?.modelAnswer || "-"}
                                   </p>
                                 </div>
                               </section>
