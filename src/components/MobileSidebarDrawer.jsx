@@ -69,9 +69,13 @@ export const MobileSidebarDrawer = ({
 
         <div className="mt-auto flex items-center gap-2 px-4 py-4">
           <img
+            key={profileImageUrl || fallbackProfileImageUrl || "mobile-profile-image"}
             src={profileImageUrl}
             alt="프로필"
             className="h-8 w-8 rounded-full border border-[#d7d7d7] object-cover"
+            onLoad={(event) => {
+              event.currentTarget.dataset.fallbackTried = "false";
+            }}
             onError={(event) => {
               const target = event.currentTarget;
               const alreadyTriedFallback = target.dataset.fallbackTried === "true";

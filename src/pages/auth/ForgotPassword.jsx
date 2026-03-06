@@ -75,7 +75,8 @@ export const ForgotPassword = () => {
             >
               <div className="mb-3">
                 <input
-                  type="text"
+                  type="email"
+                  aria-label="이메일"
                   className={inputClass}
                   placeholder="이메일"
                   value={email}
@@ -86,6 +87,7 @@ export const ForgotPassword = () => {
               <div className="mb-4">
                 <input
                   type="text"
+                  aria-label="이름"
                   className={inputClass}
                   placeholder="이름"
                   value={name}

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ContentTopNav } from "../../components/ContentTopNav";
 import { Sidebar } from "../../components/Sidebar";
@@ -356,6 +356,7 @@ export const FileUploadPage = () => {
   const [showPointChargeSuccessModal, setShowPointChargeSuccessModal] = useState(false);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [deleteConfirmTarget, setDeleteConfirmTarget] = useState(null);
+  const chargedPointFromCallbackRef = useRef(null);
 
   const [savedFiles, setSavedFiles] = useState({ RESUME: null, INTRODUCE: null, PORTFOLIO: null });
   const [pendingFiles, setPendingFiles] = useState({ RESUME: null, INTRODUCE: null, PORTFOLIO: null });
@@ -368,6 +369,7 @@ export const FileUploadPage = () => {
     const charged = consumePointChargeSuccessResult();
     if (!charged) return;
     const nextPoint = parsePoint(charged?.currentPoint);
+    chargedPointFromCallbackRef.current = nextPoint;
     setUserPoint(nextPoint);
     setShowPointChargeSuccessModal(true);
   }, []);
@@ -378,7 +380,12 @@ export const FileUploadPage = () => {
         const profilePayload = await getMyProfile();
         const profile = extractProfile(profilePayload);
         setUserName(profile?.name || "사용자");
-        setUserPoint(parsePoint(profile?.point));
+        if (chargedPointFromCallbackRef.current === null) {
+          setUserPoint(parsePoint(profile?.point));
+        } else {
+          setUserPoint(chargedPointFromCallbackRef.current);
+          chargedPointFromCallbackRef.current = null;
+        }
         const directProfileUrl = normalizeProfileImageUrl(profile?.profileImageUrl || profile?.imageUrl);
         if (directProfileUrl) {
           setProfileImageUrl(directProfileUrl);

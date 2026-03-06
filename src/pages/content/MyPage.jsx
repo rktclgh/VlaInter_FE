@@ -569,9 +569,15 @@ export const MyPage = () => {
     }
   };
 
-  const moveToLoginAfterPasswordChange = () => {
+  const moveToLoginAfterPasswordChange = async () => {
     setShowReLoginGuideModal(false);
-    navigate("/login", { replace: true });
+    try {
+      await logout();
+    } catch {
+      // ignore logout failure and proceed to login screen
+    } finally {
+      navigate("/login", { replace: true });
+    }
   };
 
   const handleRefund = async (chargeId) => {

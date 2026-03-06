@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { confirmPointCharge, getPointChargeProducts, preparePointCharge } from "../lib/paymentApi";
+import { refreshAuthSession } from "../lib/apiClient";
 import { buildMobileRedirectUrl, savePointChargeReturnPath } from "../lib/pointChargeFlow";
 
 const PORTONE_SCRIPT_SRC = "https://cdn.iamport.kr/v1/iamport.js";
@@ -109,6 +110,7 @@ export const PointChargeModal = ({ onClose, onCharged }) => {
   const [loadingProducts, setLoadingProducts] = useState(true);
   const [processing, setProcessing] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
+  const closeButtonRef = useRef(null);
 
   useEffect(() => {
     const loadProducts = async () => {
@@ -135,6 +137,10 @@ export const PointChargeModal = ({ onClose, onCharged }) => {
     };
 
     loadProducts();
+  }, []);
+
+  useEffect(() => {
+    closeButtonRef.current?.focus();
   }, []);
 
   const selectedProduct = useMemo(() => {
@@ -171,6 +177,7 @@ export const PointChargeModal = ({ onClose, onCharged }) => {
       const merchantUid = paymentResult.merchant_uid || prepareData.merchantUid;
       let confirmResult = null;
       let lastError = null;
+      let recoveredUnauthorized = false;
       for (let attempt = 0; attempt < 3; attempt += 1) {
         try {
           confirmResult = await confirmPointCharge({
@@ -182,6 +189,17 @@ export const PointChargeModal = ({ onClose, onCharged }) => {
           lastError = error;
           const message = String(error?.message || "");
           const status = Number(error?.status || 0);
+          if (status === 401) {
+            if (!recoveredUnauthorized) {
+              const refreshed = await refreshAuthSession();
+              if (refreshed) {
+                recoveredUnauthorized = true;
+                continue;
+              }
+            }
+            setErrorMessage("로그인이 만료되었습니다. 다시 로그인한 뒤 결제 상태를 확인해 주세요.");
+            return;
+          }
           const retryable =
             message.includes("결제 정보를 찾을 수 없습니다") ||
             status === 408 ||
@@ -221,14 +239,23 @@ export const PointChargeModal = ({ onClose, onCharged }) => {
     >
       <div
         className="w-full max-w-[92vw] rounded-[18px] border border-[#d9d9d9] bg-white p-5 sm:max-w-130 sm:p-6"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="point-charge-title"
+        aria-describedby="point-charge-description"
         onClick={(event) => event.stopPropagation()}
       >
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h2 className="text-[20px] font-semibold text-[#1f1f1f]">포인트 충전</h2>
-            <p className="mt-1 text-[12px] text-[#6f6f6f]">원하는 충전 상품을 선택하고 결제를 진행해 주세요.</p>
+            <h2 id="point-charge-title" className="text-[20px] font-semibold text-[#1f1f1f]">
+              포인트 충전
+            </h2>
+            <p id="point-charge-description" className="mt-1 text-[12px] text-[#6f6f6f]">
+              원하는 충전 상품을 선택하고 결제를 진행해 주세요.
+            </p>
           </div>
           <button
+            ref={closeButtonRef}
             type="button"
             onClick={() => {
               if (!processing) onClose();
