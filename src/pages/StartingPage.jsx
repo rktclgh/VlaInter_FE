@@ -1,5 +1,7 @@
+import { useEffect } from "react";
 import { TopNav } from "../components/TopNav";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+import { getMyProfile } from "../lib/userApi";
 import icon11st from "../assets/icon/11st.png";
 import iconDaum from "../assets/icon/Daum.png";
 import iconHmail from "../assets/icon/Hmail.png";
@@ -26,6 +28,29 @@ import iconTvn from "../assets/icon/tvn.png";
 import iconYogiyo from "../assets/icon/yogiyo.png";
 
 export const StartingPage = () => {
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    let unmounted = false;
+
+    const redirectIfAuthenticated = async () => {
+      try {
+        await getMyProfile();
+        if (!unmounted) {
+          navigate("/content/interview", { replace: true });
+        }
+      } catch {
+        // ignore: unauthenticated users should stay on the starting page
+      }
+    };
+
+    redirectIfAuthenticated();
+
+    return () => {
+      unmounted = true;
+    };
+  }, [navigate]);
+
   const heroTags = ["이력서 분석하기", "예상질문 50개", "대기업 인재상 Top5", "···"];
 
   const statTagsOne = [
@@ -96,7 +121,11 @@ export const StartingPage = () => {
                 이력서는 문을 열어주고
               </span>
               <br />
-              <span className="font-bold text-black">이야기는 합격을 만들어줍니다.</span>
+              <span className="font-bold text-black">
+                이야기는
+                <br />
+                합격을 만들어줍니다.
+              </span>
             </h1>
 
             <div className="mt-4 flex flex-wrap gap-2">

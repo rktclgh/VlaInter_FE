@@ -3,10 +3,14 @@ import { FaStar } from "react-icons/fa6";
 import { useNavigate } from "react-router-dom";
 import { ContentTopNav } from "../../components/ContentTopNav";
 import { Sidebar } from "../../components/Sidebar";
+import { MobileSidebarDrawer } from "../../components/MobileSidebarDrawer";
+import { PointChargeModal } from "../../components/PointChargeModal";
+import { PointChargeSuccessModal } from "../../components/PointChargeSuccessModal";
 import dropDownIcon from "../../assets/icon/drop_down.png";
 import sendIcon from "../../assets/icon/send.png";
 import tempProfileImage from "../../assets/icon/temp.png";
 import { logout } from "../../lib/authApi";
+import { consumePointChargeSuccessResult } from "../../lib/pointChargeFlow";
 import { getMyFiles, getMyProfile } from "../../lib/userApi";
 
 const resumeOptions = ["백엔드_신입_2026.pdf", "백엔드_3년차_2025.pdf"];
@@ -56,7 +60,7 @@ const extractProfile = (payload) => {
 
 const DropdownField = ({ label, valueNode, open, onToggle, children }) => {
   return (
-    <div className="w-full min-w-[140px]">
+    <div className="w-full min-w-0">
       <p className="mb-1.5 text-[10px] font-normal text-[#b5b5b5]">{label}</p>
 
       <button
@@ -124,7 +128,6 @@ const LogoutConfirmModal = ({ onCancel, onConfirm }) => {
 
 export const InterviewStartPage = () => {
   const navigate = useNavigate();
-  const [activeMobileMenuItem, setActiveMobileMenuItem] = useState("모의면접 시작하기");
   const [selectedResume, setSelectedResume] = useState("");
   const [selectedCoverLetter, setSelectedCoverLetter] = useState("");
   const [selectedPortfolio, setSelectedPortfolio] = useState("");
@@ -135,9 +138,20 @@ export const InterviewStartPage = () => {
   const [userName, setUserName] = useState("사용자");
   const [userPoint, setUserPoint] = useState(0);
   const [profileImageUrl, setProfileImageUrl] = useState(tempProfileImage);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [showPointChargeModal, setShowPointChargeModal] = useState(false);
+  const [showPointChargeSuccessModal, setShowPointChargeSuccessModal] = useState(false);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
 
   const dropdownAreaRef = useRef(null);
+
+  useEffect(() => {
+    const charged = consumePointChargeSuccessResult();
+    if (!charged) return;
+    const nextPoint = parsePoint(charged?.currentPoint);
+    setUserPoint(nextPoint);
+    setShowPointChargeSuccessModal(true);
+  }, []);
 
   useEffect(() => {
     const loadProfileData = async () => {
@@ -245,16 +259,35 @@ export const InterviewStartPage = () => {
   };
 
   const handleSidebarNavigate = (item) => {
+    setIsMobileMenuOpen(false);
     if (item?.path) {
       navigate(item.path);
     }
   };
 
   return (
-    <div className="h-screen overflow-hidden bg-white pt-[54px]">
-      <ContentTopNav point={formatPoint(userPoint)} onClickCharge={() => navigate("/content/point-charge")} />
+    <div className="min-h-screen bg-white pt-[54px]">
+      <ContentTopNav
+        point={formatPoint(userPoint)}
+        onClickCharge={() => setShowPointChargeModal(true)}
+        onOpenMenu={() => setIsMobileMenuOpen(true)}
+      />
 
-      <div className="flex h-full">
+      <MobileSidebarDrawer
+        open={isMobileMenuOpen}
+        activeKey="interview_start"
+        onClose={() => setIsMobileMenuOpen(false)}
+        onNavigate={handleSidebarNavigate}
+        userName={userName}
+        profileImageUrl={profileImageUrl}
+        fallbackProfileImageUrl={tempProfileImage}
+        onLogout={() => {
+          setIsMobileMenuOpen(false);
+          requestLogout();
+        }}
+      />
+
+      <div className="flex min-h-[calc(100vh-54px)]">
         <div className="hidden w-[272px] shrink-0 md:block">
           <Sidebar
             activeKey="interview_start"
@@ -267,143 +300,131 @@ export const InterviewStartPage = () => {
         </div>
 
         <main className="flex min-w-0 flex-1 flex-col">
-          <div className="border-b border-[#f0f0f0] px-4 py-3 md:hidden">
-            <div className="flex gap-2 overflow-x-auto">
-              {[
-                "모의면접 시작하기",
-                "기술면접 연습",
-                "면접 이력 조회",
-                "연습 이력 조회",
-                "내 질문 세트",
-                "저장된 질문",
-              ].map((item) => (
-                <button
-                  key={item}
-                  type="button"
-                  onClick={() => setActiveMobileMenuItem(item)}
-                  className={`shrink-0 rounded-full px-3 py-1 text-[11px] ${
-                    activeMobileMenuItem === item ? "bg-[#ededed] text-black" : "bg-[#f8f8f8] text-[#666]"
-                  }`}
-                >
-                  {item}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="flex-1 overflow-y-auto px-5 pb-6 pt-8 md:px-8 md:pt-12">
+          <div className="flex-1 overflow-y-auto px-4 pb-6 pt-6 sm:px-5 md:px-8 md:pt-10">
             <div className="mx-auto max-w-[980px]" ref={dropdownAreaRef}>
-              <h1 className="text-center text-[52px] font-medium tracking-[0.02em] text-[#1f1f1f]">모의면접 시작하기</h1>
-              <p className="mt-2 text-center text-[24px] text-[#8a8a8a]">사전설정</p>
+              <h1 className="text-center text-[32px] font-medium tracking-[0.01em] text-[#1f1f1f] sm:text-[40px] md:text-[52px]">
+                모의면접 시작하기
+              </h1>
+              <p className="mt-2 text-center text-[18px] text-[#8a8a8a] sm:text-[20px] md:text-[24px]">사전설정</p>
 
-              <section className="mt-10 grid grid-cols-1 gap-4 md:grid-cols-5">
-                <DropdownField
-                  label="이력서"
-                  valueNode={<span>{selectedResume || "-"}</span>}
-                  open={openDropdown === "resume"}
-                  onToggle={() => setOpenDropdown((prev) => (prev === "resume" ? "" : "resume"))}
-                >
-                  {resumeOptions.map((option) => (
-                    <button
-                      key={option}
-                      type="button"
-                      onClick={() => {
-                        setSelectedResume(option);
-                        setOpenDropdown("");
-                      }}
-                      className="mb-1 block w-full rounded-[9px] bg-[#f4f4f4] px-2 py-1.5 text-left text-[11px] text-[#343434] hover:bg-[#ededed]"
-                    >
-                      {option}
-                    </button>
-                  ))}
-                </DropdownField>
-
-                <DropdownField
-                  label="자기소개서"
-                  valueNode={<span>{selectedCoverLetter || "-"}</span>}
-                  open={openDropdown === "cover-letter"}
-                  onToggle={() => setOpenDropdown((prev) => (prev === "cover-letter" ? "" : "cover-letter"))}
-                >
-                  {coverLetterOptions.map((option) => (
-                    <button
-                      key={option}
-                      type="button"
-                      onClick={() => {
-                        setSelectedCoverLetter(option);
-                        setOpenDropdown("");
-                      }}
-                      className="mb-1 block w-full rounded-[9px] bg-[#f4f4f4] px-2 py-1.5 text-left text-[11px] text-[#343434] hover:bg-[#ededed]"
-                    >
-                      {option}
-                    </button>
-                  ))}
-                </DropdownField>
-
-                <DropdownField
-                  label="포트폴리오"
-                  valueNode={<span>{selectedPortfolio || "-"}</span>}
-                  open={openDropdown === "portfolio"}
-                  onToggle={() => setOpenDropdown((prev) => (prev === "portfolio" ? "" : "portfolio"))}
-                >
-                  {portfolioOptions.map((option) => (
-                    <button
-                      key={option}
-                      type="button"
-                      onClick={() => {
-                        setSelectedPortfolio(option);
-                        setOpenDropdown("");
-                      }}
-                      className="mb-1 block w-full rounded-[9px] bg-[#f4f4f4] px-2 py-1.5 text-left text-[11px] text-[#343434] hover:bg-[#ededed]"
-                    >
-                      {option}
-                    </button>
-                  ))}
-                </DropdownField>
-
-                <DropdownField
-                  label="난이도"
-                  valueNode={selectedDifficulty ? renderDifficultyStars(selectedDifficulty) : <span>-</span>}
-                  open={openDropdown === "difficulty"}
-                  onToggle={() => setOpenDropdown((prev) => (prev === "difficulty" ? "" : "difficulty"))}
-                >
-                  {difficultyOptions.map((level) => (
-                    <button
-                      key={level}
-                      type="button"
-                      onClick={() => {
-                        setSelectedDifficulty(level);
-                        setOpenDropdown("");
-                      }}
-                      className="mb-1 flex w-full items-center rounded-[9px] bg-[#f4f4f4] px-2 py-1.5 hover:bg-[#ededed]"
-                    >
-                      {renderDifficultyStars(level)}
-                    </button>
-                  ))}
-                </DropdownField>
-
-                <DropdownField
-                  label="기술질문 범위"
-                  valueNode={<span>{selectedTechLabel}</span>}
-                  open={openDropdown === "tech"}
-                  onToggle={() => setOpenDropdown((prev) => (prev === "tech" ? "" : "tech"))}
-                >
-                  {techOptions.map((tech) => {
-                    const selected = selectedTechRange.includes(tech);
-                    return (
+              <section className="mt-8 grid grid-cols-6 gap-3 sm:grid-cols-2 lg:grid-cols-5">
+                <div className="col-span-2 sm:col-span-1">
+                  <DropdownField
+                    label="이력서"
+                    valueNode={<span>{selectedResume || "-"}</span>}
+                    open={openDropdown === "resume"}
+                    onToggle={() => setOpenDropdown((prev) => (prev === "resume" ? "" : "resume"))}
+                  >
+                    {resumeOptions.map((option) => (
                       <button
-                        key={tech}
+                        key={option}
                         type="button"
-                        onClick={() => toggleTech(tech)}
-                        className={`mb-1 flex w-full items-center justify-between rounded-[9px] px-2 py-1.5 text-left text-[11px] ${
-                          selected ? "bg-[#eeeeee] text-black" : "bg-[#f4f4f4] text-[#343434] hover:bg-[#ededed]"
-                        }`}
+                        onClick={() => {
+                          setSelectedResume(option);
+                          setOpenDropdown("");
+                        }}
+                        className="mb-1 block w-full rounded-[9px] bg-[#f4f4f4] px-2 py-1.5 text-left text-[11px] text-[#343434] hover:bg-[#ededed]"
                       >
-                        <span>{tech}</span>
-                        <span className="text-[10px]">{selected ? "선택" : ""}</span>
+                        {option}
                       </button>
-                    );
-                  })}
-                </DropdownField>
+                    ))}
+                  </DropdownField>
+                </div>
+
+                <div className="col-span-2 sm:col-span-1">
+                  <DropdownField
+                    label="자기소개서"
+                    valueNode={<span>{selectedCoverLetter || "-"}</span>}
+                    open={openDropdown === "cover-letter"}
+                    onToggle={() => setOpenDropdown((prev) => (prev === "cover-letter" ? "" : "cover-letter"))}
+                  >
+                    {coverLetterOptions.map((option) => (
+                      <button
+                        key={option}
+                        type="button"
+                        onClick={() => {
+                          setSelectedCoverLetter(option);
+                          setOpenDropdown("");
+                        }}
+                        className="mb-1 block w-full rounded-[9px] bg-[#f4f4f4] px-2 py-1.5 text-left text-[11px] text-[#343434] hover:bg-[#ededed]"
+                      >
+                        {option}
+                      </button>
+                    ))}
+                  </DropdownField>
+                </div>
+
+                <div className="col-span-2 sm:col-span-1">
+                  <DropdownField
+                    label="포트폴리오"
+                    valueNode={<span>{selectedPortfolio || "-"}</span>}
+                    open={openDropdown === "portfolio"}
+                    onToggle={() => setOpenDropdown((prev) => (prev === "portfolio" ? "" : "portfolio"))}
+                  >
+                    {portfolioOptions.map((option) => (
+                      <button
+                        key={option}
+                        type="button"
+                        onClick={() => {
+                          setSelectedPortfolio(option);
+                          setOpenDropdown("");
+                        }}
+                        className="mb-1 block w-full rounded-[9px] bg-[#f4f4f4] px-2 py-1.5 text-left text-[11px] text-[#343434] hover:bg-[#ededed]"
+                      >
+                        {option}
+                      </button>
+                    ))}
+                  </DropdownField>
+                </div>
+
+                <div className="col-span-3 sm:col-span-1">
+                  <DropdownField
+                    label="난이도"
+                    valueNode={selectedDifficulty ? renderDifficultyStars(selectedDifficulty) : <span>-</span>}
+                    open={openDropdown === "difficulty"}
+                    onToggle={() => setOpenDropdown((prev) => (prev === "difficulty" ? "" : "difficulty"))}
+                  >
+                    {difficultyOptions.map((level) => (
+                      <button
+                        key={level}
+                        type="button"
+                        onClick={() => {
+                          setSelectedDifficulty(level);
+                          setOpenDropdown("");
+                        }}
+                        className="mb-1 flex w-full items-center rounded-[9px] bg-[#f4f4f4] px-2 py-1.5 hover:bg-[#ededed]"
+                      >
+                        {renderDifficultyStars(level)}
+                      </button>
+                    ))}
+                  </DropdownField>
+                </div>
+
+                <div className="col-span-3 sm:col-span-1">
+                  <DropdownField
+                    label="기술질문 범위"
+                    valueNode={<span>{selectedTechLabel}</span>}
+                    open={openDropdown === "tech"}
+                    onToggle={() => setOpenDropdown((prev) => (prev === "tech" ? "" : "tech"))}
+                  >
+                    {techOptions.map((tech) => {
+                      const selected = selectedTechRange.includes(tech);
+                      return (
+                        <button
+                          key={tech}
+                          type="button"
+                          onClick={() => toggleTech(tech)}
+                          className={`mb-1 flex w-full items-center justify-between rounded-[9px] px-2 py-1.5 text-left text-[11px] ${
+                            selected ? "bg-[#eeeeee] text-black" : "bg-[#f4f4f4] text-[#343434] hover:bg-[#ededed]"
+                          }`}
+                        >
+                          <span>{tech}</span>
+                          <span className="text-[10px]">{selected ? "선택" : ""}</span>
+                        </button>
+                      );
+                    })}
+                  </DropdownField>
+                </div>
               </section>
 
               <div className="mt-8 text-center">
@@ -411,7 +432,7 @@ export const InterviewStartPage = () => {
                   <div className="mx-auto inline-block rounded-[24px] bg-[linear-gradient(136deg,#6a84ff_0%,#ff53b3_100%)] p-[1px]">
                     <button
                       type="button"
-                      className="h-[46px] w-[138px] rounded-[23px] bg-white text-[22px] text-[#2f2f2f]"
+                      className="h-[42px] w-[124px] rounded-[21px] bg-white text-[18px] text-[#2f2f2f] sm:h-[46px] sm:w-[138px] sm:text-[22px]"
                     >
                       시작
                     </button>
@@ -419,7 +440,7 @@ export const InterviewStartPage = () => {
                 ) : (
                   <button
                     type="button"
-                    className="h-[48px] w-[140px] rounded-[24px] border border-[#d6d6d6] text-[22px] text-[#a0a0a0]"
+                    className="h-[42px] w-[124px] rounded-[21px] border border-[#d6d6d6] text-[18px] text-[#a0a0a0] sm:h-[48px] sm:w-[140px] sm:text-[22px]"
                   >
                     시작
                   </button>
@@ -435,7 +456,7 @@ export const InterviewStartPage = () => {
                 value={chatInput}
                 onChange={(e) => setChatInput(e.target.value)}
                 placeholder="무엇을 도와드릴까요?"
-                className="h-[40px] w-full rounded-[20px] bg-[#f8f8f8] px-4 text-[12px] text-[#444] placeholder:text-[#aeaeae]"
+                className="h-[38px] w-full rounded-[20px] bg-[#f8f8f8] px-4 text-[11px] text-[#444] placeholder:text-[#aeaeae] sm:h-[40px] sm:text-[12px]"
               />
               <button
                 type="button"
@@ -452,6 +473,19 @@ export const InterviewStartPage = () => {
       {showLogoutModal && (
         <LogoutConfirmModal onCancel={() => setShowLogoutModal(false)} onConfirm={handleLogoutConfirm} />
       )}
+      {showPointChargeModal ? (
+        <PointChargeModal
+          onClose={() => setShowPointChargeModal(false)}
+          onCharged={(result) => {
+            const nextPoint = parsePoint(result?.currentPoint);
+            setUserPoint(nextPoint);
+            setShowPointChargeSuccessModal(true);
+          }}
+        />
+      ) : null}
+      {showPointChargeSuccessModal ? (
+        <PointChargeSuccessModal onClose={() => setShowPointChargeSuccessModal(false)} />
+      ) : null}
     </div>
   );
 };

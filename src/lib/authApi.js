@@ -40,3 +40,10 @@ export async function logout() {
     method: "POST",
   });
 }
+
+export async function sendTemporaryPassword(email, name) {
+  return apiRequest("/api/auth/password/temporary", {
+    method: "POST",
+    body: { email, name },
+  });
+}
