@@ -1,4 +1,4 @@
-import { apiRequest } from "./apiClient";
+import { apiRequest, refreshAuthSession } from "./apiClient";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8080";
 
@@ -19,11 +19,18 @@ export async function uploadMyFile(fileType, file) {
   formData.append("fileType", fileType);
   formData.append("file", file);
 
-  const response = await fetch(`${API_BASE_URL}/api/users/files`, {
+  const doUpload = () => fetch(`${API_BASE_URL}/api/users/files`, {
     method: "POST",
     credentials: "include",
     body: formData,
   });
+  let response = await doUpload();
+  if (response.status === 401) {
+    const refreshed = await refreshAuthSession();
+    if (refreshed) {
+      response = await doUpload();
+    }
+  }
 
   const raw = await response.text();
   let data = null;
@@ -45,5 +52,15 @@ export async function uploadMyFile(fileType, file) {
 export async function deleteMyFile(fileId) {
   return apiRequest(`/api/users/files/${fileId}`, {
     method: "DELETE",
+  });
+}
+
+export async function changeMyPassword(currentPassword, newPassword) {
+  return apiRequest("/api/users/me/password", {
+    method: "PATCH",
+    body: {
+      currentPassword,
+      newPassword,
+    },
   });
 }

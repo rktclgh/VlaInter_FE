@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { TopNav } from "../components/TopNav";
 import { Link, useNavigate } from "react-router-dom";
+import { getMyProfile } from "../lib/userApi";
 import icon11st from "../assets/icon/11st.png";
 import iconDaum from "../assets/icon/Daum.png";
 import iconHmail from "../assets/icon/Hmail.png";
@@ -28,27 +29,18 @@ import iconYogiyo from "../assets/icon/yogiyo.png";
 
 export const StartingPage = () => {
   const navigate = useNavigate();
-  const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || "http://localhost:8080";
 
   useEffect(() => {
-    const controller = new AbortController();
     let unmounted = false;
 
     const redirectIfAuthenticated = async () => {
       try {
-        const response = await fetch(`${apiBaseUrl}/api/users/me`, {
-          method: "GET",
-          credentials: "include",
-          signal: controller.signal,
-        });
-
-        if (!unmounted && response.ok) {
+        await getMyProfile();
+        if (!unmounted) {
           navigate("/content/interview", { replace: true });
         }
-      } catch (error) {
-        if (error.name !== "AbortError") {
-          // ignore: unauthenticated users should stay on the starting page
-        }
+      } catch {
+        // ignore: unauthenticated users should stay on the starting page
       }
     };
 
@@ -56,9 +48,8 @@ export const StartingPage = () => {
 
     return () => {
       unmounted = true;
-      controller.abort();
     };
-  }, [apiBaseUrl, navigate]);
+  }, [navigate]);
 
   const heroTags = ["이력서 분석하기", "예상질문 50개", "대기업 인재상 Top5", "···"];
 

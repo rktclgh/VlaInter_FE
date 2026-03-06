@@ -1,13 +1,15 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ContentTopNav } from "../../components/ContentTopNav";
 import { Sidebar } from "../../components/Sidebar";
 import { MobileSidebarDrawer } from "../../components/MobileSidebarDrawer";
 import { PointChargeModal } from "../../components/PointChargeModal";
+import { PointChargeSuccessModal } from "../../components/PointChargeSuccessModal";
 import dragDropIcon from "../../assets/icon/Drag_Drop.png";
 import plusIcon from "../../assets/icon/plus.png";
 import tempProfileImage from "../../assets/icon/temp.png";
 import { logout } from "../../lib/authApi";
+import { consumePointChargeSuccessResult } from "../../lib/pointChargeFlow";
 import { deleteMyFile, getMyFiles, getMyProfile, uploadMyFile } from "../../lib/userApi";
 
 const DOCUMENT_TYPES = [
@@ -74,7 +76,12 @@ const resolveDisplayFileName = (file, fallback = "") => {
   const rawUrl = rawUrlCandidates.find((value) => typeof value === "string" && value.trim().length > 0);
   if (rawUrl) {
     const lastSegment = rawUrl.split("/").pop() || "";
-    const decoded = decodeURIComponent(lastSegment);
+    let decoded = lastSegment;
+    try {
+      decoded = decodeURIComponent(lastSegment);
+    } catch {
+      decoded = lastSegment;
+    }
     // key 예: uuid-original.pdf 형태일 수 있으므로 UUID prefix 제거
     const withoutUuidPrefix = decoded.replace(/^[0-9a-fA-F-]{16,}-/, "");
     return withoutUuidPrefix || decoded || "파일명 없음";
@@ -346,8 +353,10 @@ export const FileUploadPage = () => {
   const [profileImageUrl, setProfileImageUrl] = useState(tempProfileImage);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [showPointChargeModal, setShowPointChargeModal] = useState(false);
+  const [showPointChargeSuccessModal, setShowPointChargeSuccessModal] = useState(false);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [deleteConfirmTarget, setDeleteConfirmTarget] = useState(null);
+  const chargedPointFromCallbackRef = useRef(null);
 
   const [savedFiles, setSavedFiles] = useState({ RESUME: null, INTRODUCE: null, PORTFOLIO: null });
   const [pendingFiles, setPendingFiles] = useState({ RESUME: null, INTRODUCE: null, PORTFOLIO: null });
@@ -357,12 +366,26 @@ export const FileUploadPage = () => {
   const [savingType, setSavingType] = useState("");
 
   useEffect(() => {
+    const charged = consumePointChargeSuccessResult();
+    if (!charged) return;
+    const nextPoint = parsePoint(charged?.currentPoint);
+    chargedPointFromCallbackRef.current = nextPoint;
+    setUserPoint(nextPoint);
+    setShowPointChargeSuccessModal(true);
+  }, []);
+
+  useEffect(() => {
     const loadData = async () => {
       try {
         const profilePayload = await getMyProfile();
         const profile = extractProfile(profilePayload);
         setUserName(profile?.name || "사용자");
-        setUserPoint(parsePoint(profile?.point));
+        if (chargedPointFromCallbackRef.current === null) {
+          setUserPoint(parsePoint(profile?.point));
+        } else {
+          setUserPoint(chargedPointFromCallbackRef.current);
+          chargedPointFromCallbackRef.current = null;
+        }
         const directProfileUrl = normalizeProfileImageUrl(profile?.profileImageUrl || profile?.imageUrl);
         if (directProfileUrl) {
           setProfileImageUrl(directProfileUrl);
@@ -611,7 +634,19 @@ export const FileUploadPage = () => {
       {deleteConfirmTarget ? (
         <FileDeleteConfirmModal onCancel={() => setDeleteConfirmTarget(null)} onConfirm={confirmDelete} />
       ) : null}
-      {showPointChargeModal ? <PointChargeModal onClose={() => setShowPointChargeModal(false)} /> : null}
+      {showPointChargeModal ? (
+        <PointChargeModal
+          onClose={() => setShowPointChargeModal(false)}
+          onCharged={(result) => {
+            const nextPoint = parsePoint(result?.currentPoint);
+            setUserPoint(nextPoint);
+            setShowPointChargeSuccessModal(true);
+          }}
+        />
+      ) : null}
+      {showPointChargeSuccessModal ? (
+        <PointChargeSuccessModal onClose={() => setShowPointChargeSuccessModal(false)} />
+      ) : null}
     </div>
   );
 };

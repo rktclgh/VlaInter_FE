@@ -38,11 +38,18 @@ export const Sidebar = ({
 
       <div className="mt-auto flex items-center gap-2 px-4 py-4">
         <img
+          key={profileImageUrl || fallbackProfileImageUrl || "sidebar-profile-image"}
           src={profileImageUrl}
           alt="프로필"
           className="h-8 w-8 rounded-full border border-[#d7d7d7] object-cover"
+          onLoad={(event) => {
+            event.currentTarget.dataset.fallbackTried = "false";
+          }}
           onError={(event) => {
-            if (fallbackProfileImageUrl) {
+            const target = event.currentTarget;
+            const alreadyTriedFallback = target.dataset.fallbackTried === "true";
+            if (!alreadyTriedFallback && fallbackProfileImageUrl && target.src !== fallbackProfileImageUrl) {
+              target.dataset.fallbackTried = "true";
               event.currentTarget.src = fallbackProfileImageUrl;
             }
           }}
