@@ -156,7 +156,8 @@ export const PointChargeModal = ({ onClose, onCharged }) => {
       const prepareData = normalizePrepareData(preparePayload);
       const imp = await loadPortoneScript();
       if (!prepareData.customerCode || !prepareData.merchantUid || prepareData.amount <= 0) {
-        throw new Error("결제 설정(customerCode)이 누락되었습니다.");
+        setErrorMessage("결제 설정(customerCode)이 누락되었습니다.");
+        return;
       }
 
       imp.init(prepareData.customerCode);
@@ -188,14 +189,15 @@ export const PointChargeModal = ({ onClose, onCharged }) => {
             status >= 500 ||
             [502, 503, 504].includes(status);
           if (!retryable || attempt === 2) {
-            throw error;
+            break;
           }
           await sleep(700);
         }
       }
 
-      if (!confirmResult && lastError) {
-        throw lastError;
+      if (!confirmResult) {
+        setErrorMessage(lastError?.message || "결제 확인에 실패했습니다.");
+        return;
       }
 
       if (typeof onCharged === "function") {
@@ -212,13 +214,13 @@ export const PointChargeModal = ({ onClose, onCharged }) => {
 
   return (
     <div
-      className="fixed inset-0 z-[80] flex items-center justify-center bg-black/45 px-4"
+      className="fixed inset-0 z-80 flex items-center justify-center bg-black/45 px-4"
       onClick={() => {
         if (!processing) onClose();
       }}
     >
       <div
-        className="w-full max-w-[520px] rounded-[18px] border border-[#d9d9d9] bg-white p-5 sm:p-6"
+        className="w-full max-w-[92vw] rounded-[18px] border border-[#d9d9d9] bg-white p-5 sm:max-w-130 sm:p-6"
         onClick={(event) => event.stopPropagation()}
       >
         <div className="flex items-start justify-between gap-4">
@@ -243,7 +245,10 @@ export const PointChargeModal = ({ onClose, onCharged }) => {
         <div className="mt-5 grid gap-2.5 sm:grid-cols-2">
           {loadingProducts
             ? Array.from({ length: 4 }).map((_, idx) => (
-                <div key={idx} className="h-[74px] animate-pulse rounded-[12px] border border-[#e8e8e8] bg-[#f7f7f7]" />
+                <div
+                  key={idx}
+                  className="h-[14vw] min-h-16 max-h-18.5 animate-pulse rounded-xl border border-[#e8e8e8] bg-[#f7f7f7] sm:h-18.5"
+                />
               ))
             : products.map((product) => {
                 const selected = selectedProductId === product.productId;
@@ -253,7 +258,7 @@ export const PointChargeModal = ({ onClose, onCharged }) => {
                     key={product.productId}
                     type="button"
                     onClick={() => setSelectedProductId(product.productId)}
-                    className={`rounded-[12px] border px-3 py-3 text-left transition-colors ${
+                    className={`rounded-xl border px-3 py-3 text-left transition-colors ${
                       selected ? "border-[#1f1f1f] bg-[#f7f7f7]" : "border-[#e1e1e1] bg-white hover:bg-[#fafafa]"
                     }`}
                   >
@@ -273,7 +278,9 @@ export const PointChargeModal = ({ onClose, onCharged }) => {
         <div className="mt-5 flex justify-end gap-2">
           <button
             type="button"
-            onClick={onClose}
+            onClick={() => {
+              if (!processing) onClose();
+            }}
             disabled={processing}
             className="rounded-[10px] border border-[#d6d6d6] px-4 py-2 text-[12px] text-[#666] disabled:cursor-not-allowed disabled:opacity-60"
           >

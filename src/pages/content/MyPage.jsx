@@ -590,7 +590,9 @@ export const MyPage = () => {
 
   const pointSummaryText = useMemo(() => formatPoint(userPoint), [userPoint]);
   const sidebarActiveKey = useMemo(() => {
+    if (location.pathname.startsWith("/content/files")) return "file_upload";
     if (location.pathname.startsWith("/content/point-charge")) return "mypage";
+    if (location.pathname.startsWith("/content/mypage")) return "mypage";
     return "mypage";
   }, [location.pathname]);
 
