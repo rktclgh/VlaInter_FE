@@ -15,8 +15,10 @@ import {
 } from "../../lib/paymentApi";
 import {
   changeMyPassword,
+  deleteMyFile,
   getMyFiles,
   getMyProfile,
+  getMyProfileImageUrl,
   uploadMyFile,
 } from "../../lib/userApi";
 
@@ -49,12 +51,7 @@ const parsePoint = (rawValue) => {
   return 0;
 };
 
-const normalizeProfileImageUrl = (rawUrl) => {
-  if (!rawUrl || typeof rawUrl !== "string") return "";
-  const trimmed = rawUrl.trim();
-  if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) return trimmed;
-  return "";
-};
+const extractFileId = (file) => file?.fileId ?? file?.file_id ?? null;
 
 const extractProfile = (payload) => {
   if (!payload || typeof payload !== "object") return {};
@@ -346,7 +343,6 @@ export const MyPage = () => {
   const [profileUploading, setProfileUploading] = useState(false);
   const [profileUploadErrorMessage, setProfileUploadErrorMessage] = useState("");
   const profileImageInputRef = useRef(null);
-  const profilePreviewObjectUrlRef = useRef("");
 
   const [activeHistoryTab, setActiveHistoryTab] = useState("payment");
   const [refundingChargeId, setRefundingChargeId] = useState(null);
@@ -372,14 +368,6 @@ export const MyPage = () => {
   });
   const [ledgerLoading, setLedgerLoading] = useState(true);
   const [ledgerErrorMessage, setLedgerErrorMessage] = useState("");
-
-  useEffect(() => {
-    return () => {
-      if (profilePreviewObjectUrlRef.current) {
-        URL.revokeObjectURL(profilePreviewObjectUrlRef.current);
-      }
-    };
-  }, []);
 
   useEffect(() => {
     const charged = consumePointChargeSuccessResult();
@@ -432,24 +420,9 @@ export const MyPage = () => {
         setUserName(profile?.name || "사용자");
         setUserEmail(profile?.email || "-");
         setUserPoint(parsePoint(profile?.point));
-
-        const directProfileUrl = normalizeProfileImageUrl(profile?.profileImageUrl || profile?.imageUrl);
-        if (directProfileUrl) {
-          setProfileImageUrl(directProfileUrl);
-        }
+        setProfileImageUrl(getMyProfileImageUrl());
       } catch {
         navigate("/login", { replace: true });
-        return;
-      }
-
-      try {
-        const filesPayload = await getMyFiles();
-        const files = extractFileList(filesPayload);
-        const profileImageFile = files.find((file) => file?.fileType === "PROFILE_IMAGE");
-        const url = normalizeProfileImageUrl(profileImageFile?.fileUrl);
-        setProfileImageUrl((prev) => (url ? url : prev || tempProfileImage));
-      } catch {
-        setProfileImageUrl((prev) => prev || tempProfileImage);
       }
     };
 
@@ -514,23 +487,27 @@ export const MyPage = () => {
     setProfileUploadErrorMessage("");
 
     try {
-      const uploaded = await uploadMyFile("PROFILE_IMAGE", file);
-      const remoteUrl = normalizeProfileImageUrl(uploaded?.fileUrl || uploaded?.url);
-      if (remoteUrl) {
-        if (profilePreviewObjectUrlRef.current) {
-          URL.revokeObjectURL(profilePreviewObjectUrlRef.current);
-          profilePreviewObjectUrlRef.current = "";
-        }
-        setProfileImageUrl(remoteUrl);
-        return;
+      let existingProfileFileIds;
+      try {
+        const filesPayload = await getMyFiles();
+        existingProfileFileIds = extractFileList(filesPayload)
+          .filter((savedFile) => savedFile?.fileType === "PROFILE_IMAGE")
+          .map((savedFile) => extractFileId(savedFile))
+          .filter((fileId) => fileId !== null && fileId !== undefined);
+      } catch {
+        existingProfileFileIds = [];
       }
 
-      const previewUrl = URL.createObjectURL(file);
-      if (profilePreviewObjectUrlRef.current) {
-        URL.revokeObjectURL(profilePreviewObjectUrlRef.current);
+      const uploaded = await uploadMyFile("PROFILE_IMAGE", file);
+      const uploadedFileId = extractFileId(uploaded);
+
+      const staleProfileFileIds = existingProfileFileIds.filter(
+        (fileId) => String(fileId) !== String(uploadedFileId ?? "")
+      );
+      if (staleProfileFileIds.length > 0) {
+        await Promise.allSettled(staleProfileFileIds.map((fileId) => deleteMyFile(fileId)));
       }
-      profilePreviewObjectUrlRef.current = previewUrl;
-      setProfileImageUrl(previewUrl);
+      setProfileImageUrl(getMyProfileImageUrl());
     } catch (error) {
       setProfileUploadErrorMessage(error?.message || "프로필 사진 업로드에 실패했습니다.");
     } finally {
@@ -651,7 +628,15 @@ export const MyPage = () => {
                       className="relative"
                       aria-label="프로필 사진 변경"
                     >
-                      <img src={profileImageUrl} alt="프로필" className="h-16 w-16 rounded-full border border-[#dddddd] object-cover sm:h-20 sm:w-20" />
+                      <img
+                        src={profileImageUrl}
+                        alt="프로필"
+                        className="h-16 w-16 rounded-full border border-[#dddddd] object-cover sm:h-20 sm:w-20"
+                        onError={(event) => {
+                          event.currentTarget.onerror = null;
+                          event.currentTarget.src = tempProfileImage;
+                        }}
+                      />
                       <span className="absolute bottom-[-2px] right-[-2px] inline-flex h-7 w-7 items-center justify-center rounded-full border border-[#d5d8de] bg-white text-[#5f6670] shadow-[0_2px_5px_rgba(0,0,0,0.16)]">
                         <svg viewBox="0 0 24 24" aria-hidden="true" className="h-4 w-4 fill-current">
                           <path d="M7.5 5.5a2 2 0 0 1 1.8-1.1h5.4a2 2 0 0 1 1.8 1.1l.7 1.3h1.3a2.5 2.5 0 0 1 2.5 2.5v7.2a2.5 2.5 0 0 1-2.5 2.5H5.5A2.5 2.5 0 0 1 3 16.5V9.3a2.5 2.5 0 0 1 2.5-2.5h1.3l.7-1.3zm4.5 3.3a4.2 4.2 0 1 0 0 8.4 4.2 4.2 0 0 0 0-8.4zm0 1.8a2.4 2.4 0 1 1 0 4.8 2.4 2.4 0 0 1 0-4.8z" />

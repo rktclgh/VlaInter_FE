@@ -11,7 +11,7 @@ import sendIcon from "../../assets/icon/send.png";
 import tempProfileImage from "../../assets/icon/temp.png";
 import { logout } from "../../lib/authApi";
 import { consumePointChargeSuccessResult } from "../../lib/pointChargeFlow";
-import { getMyFiles, getMyProfile } from "../../lib/userApi";
+import { getMyProfile, getMyProfileImageUrl } from "../../lib/userApi";
 
 const resumeOptions = ["백엔드_신입_2026.pdf", "백엔드_3년차_2025.pdf"];
 const coverLetterOptions = ["네이버_자소서_v2.pdf", "카카오_자소서_v1.pdf"];
@@ -32,22 +32,6 @@ const parsePoint = (rawValue) => {
     return Number.isFinite(parsed) ? parsed : 0;
   }
   return 0;
-};
-
-const normalizeProfileImageUrl = (rawUrl) => {
-  if (!rawUrl || typeof rawUrl !== "string") return "";
-  const trimmed = rawUrl.trim();
-  if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) return trimmed;
-  return "";
-};
-
-const extractFileList = (payload) => {
-  if (Array.isArray(payload)) return payload;
-  if (Array.isArray(payload?.files)) return payload.files;
-  if (Array.isArray(payload?.data)) return payload.data;
-  if (Array.isArray(payload?.content)) return payload.content;
-  if (Array.isArray(payload?.items)) return payload.items;
-  return [];
 };
 
 const extractProfile = (payload) => {
@@ -160,24 +144,9 @@ export const InterviewStartPage = () => {
         const profile = extractProfile(profilePayload);
         setUserName(profile?.name || "사용자");
         setUserPoint(parsePoint(profile?.point));
-        const directProfileUrl = normalizeProfileImageUrl(profile?.profileImageUrl || profile?.imageUrl);
-        if (directProfileUrl) {
-          setProfileImageUrl(directProfileUrl);
-        }
+        setProfileImageUrl(getMyProfileImageUrl());
       } catch {
         navigate("/login", { replace: true });
-      }
-
-      try {
-        const filesPayload = await getMyFiles();
-        const files = extractFileList(filesPayload);
-        const profileImageFile = files
-          ? files.find((file) => file?.fileType === "PROFILE_IMAGE")
-          : null;
-        const url = normalizeProfileImageUrl(profileImageFile?.fileUrl);
-        setProfileImageUrl((prev) => (url ? url : prev || tempProfileImage));
-      } catch {
-        setProfileImageUrl((prev) => prev || tempProfileImage);
       }
     };
 

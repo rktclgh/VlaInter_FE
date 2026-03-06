@@ -2,6 +2,13 @@ import { apiRequest, refreshAuthSession } from "./apiClient";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8080";
 
+export function getMyProfileImageUrl(cacheBust = true) {
+  const baseUrl = `${API_BASE_URL}/api/users/files/me/profile-image`;
+  if (!cacheBust) return baseUrl;
+  const separator = baseUrl.includes("?") ? "&" : "?";
+  return `${baseUrl}${separator}v=${Date.now()}`;
+}
+
 export async function getMyProfile() {
   return apiRequest("/api/users/me", {
     method: "GET",

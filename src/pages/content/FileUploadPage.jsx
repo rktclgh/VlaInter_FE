@@ -10,13 +10,19 @@ import plusIcon from "../../assets/icon/plus.png";
 import tempProfileImage from "../../assets/icon/temp.png";
 import { logout } from "../../lib/authApi";
 import { consumePointChargeSuccessResult } from "../../lib/pointChargeFlow";
-import { deleteMyFile, getMyFiles, getMyProfile, uploadMyFile } from "../../lib/userApi";
+import { deleteMyFile, getMyFiles, getMyProfile, getMyProfileImageUrl, uploadMyFile } from "../../lib/userApi";
 
 const DOCUMENT_TYPES = [
   { key: "RESUME", title: "이력서" },
   { key: "INTRODUCE", title: "자기소개서" },
   { key: "PORTFOLIO", title: "포트폴리오" },
 ];
+const DOCUMENT_TYPE_KEYS = DOCUMENT_TYPES.map((item) => item.key);
+const createEmptyFilesByType = () =>
+  DOCUMENT_TYPE_KEYS.reduce((acc, key) => {
+    acc[key] = [];
+    return acc;
+  }, {});
 
 const formatPoint = (value) => {
   const safeNumber = Number.isFinite(Number(value)) ? Math.max(0, Number(value)) : 0;
@@ -33,11 +39,18 @@ const parsePoint = (rawValue) => {
   return 0;
 };
 
-const normalizeProfileImageUrl = (rawUrl) => {
-  if (!rawUrl || typeof rawUrl !== "string") return "";
-  const trimmed = rawUrl.trim();
-  if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) return trimmed;
-  return "";
+const toTimestamp = (rawDateTime) => {
+  const time = new Date(rawDateTime || "").getTime();
+  if (Number.isNaN(time)) return 0;
+  return time;
+};
+
+const sortByLatestFile = (a, b) => {
+  const timeDiff = toTimestamp(b?.createdAt ?? b?.created_at) - toTimestamp(a?.createdAt ?? a?.created_at);
+  if (timeDiff !== 0) return timeDiff;
+  const idA = Number(a?.fileId ?? a?.file_id ?? 0);
+  const idB = Number(b?.fileId ?? b?.file_id ?? 0);
+  return idB - idA;
 };
 
 const extractFileList = (payload) => {
@@ -76,7 +89,7 @@ const resolveDisplayFileName = (file, fallback = "") => {
   const rawUrl = rawUrlCandidates.find((value) => typeof value === "string" && value.trim().length > 0);
   if (rawUrl) {
     const lastSegment = rawUrl.split("/").pop() || "";
-    let decoded = lastSegment;
+    let decoded;
     try {
       decoded = decodeURIComponent(lastSegment);
     } catch {
@@ -226,7 +239,7 @@ const FileRow = ({ fileName, uploadedDate, sizeLabel, showPdfBadge = true, actio
 const UploadDropZone = ({
   dragActive,
   pendingFile,
-  savedFile,
+  savedFiles,
   error,
   loading,
   onDragEnter,
@@ -296,24 +309,35 @@ const UploadDropZone = ({
     );
   }
 
-  if (savedFile) {
+  if (savedFiles.length > 0) {
     return (
       <div>
-        <div className="rounded-[14px] border border-[#dedede] bg-white px-4 py-4">
-          <FileRow
-            fileName={resolveDisplayFileName(savedFile)}
-            uploadedDate={formatDate(savedFile.createdAt ?? savedFile.created_at)}
-            sizeLabel="PDF"
-            actionNode={
-              <button
-                type="button"
-                onClick={onDeleteSaved}
-                className="rounded-full bg-[#ff4a4a] px-2 py-1 text-[10px] font-semibold text-white"
-              >
-                삭제
-              </button>
-            }
-          />
+        <div className="space-y-2 rounded-[14px] border border-[#dedede] bg-white px-4 py-4">
+          {savedFiles.map((file) => (
+            <FileRow
+              key={file?.fileId || `${file?.fileName}-${file?.createdAt}`}
+              fileName={resolveDisplayFileName(file)}
+              uploadedDate={formatDate(file?.createdAt ?? file?.created_at)}
+              sizeLabel="PDF"
+              actionNode={
+                <button
+                  type="button"
+                  onClick={() => onDeleteSaved(file?.fileId)}
+                  className="rounded-full bg-[#ff4a4a] px-2 py-1 text-[10px] font-semibold text-white"
+                >
+                  삭제
+                </button>
+              }
+            />
+          ))}
+        </div>
+
+        <div
+          className={`overflow-hidden transition-all duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${
+            isExpanded ? "mt-2 max-h-[230px] translate-y-0 opacity-100" : "max-h-0 -translate-y-1 opacity-0"
+          }`}
+        >
+          <div className={isExpanded ? "pointer-events-auto" : "pointer-events-none"}>{renderDropArea()}</div>
         </div>
 
         <div className="mt-3 flex justify-center">
@@ -329,14 +353,6 @@ const UploadDropZone = ({
               className={`h-[11px] w-[11px] transition-transform duration-300 ${isExpanded ? "rotate-45" : "rotate-0"}`}
             />
           </button>
-        </div>
-
-        <div
-          className={`overflow-hidden transition-all duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${
-            isExpanded ? "mt-2 max-h-[230px] translate-y-0 opacity-100" : "max-h-0 -translate-y-1 opacity-0"
-          }`}
-        >
-          <div className={isExpanded ? "pointer-events-auto" : "pointer-events-none"}>{renderDropArea()}</div>
         </div>
       </div>
     );
@@ -358,7 +374,7 @@ export const FileUploadPage = () => {
   const [deleteConfirmTarget, setDeleteConfirmTarget] = useState(null);
   const chargedPointFromCallbackRef = useRef(null);
 
-  const [savedFiles, setSavedFiles] = useState({ RESUME: null, INTRODUCE: null, PORTFOLIO: null });
+  const [savedFilesByType, setSavedFilesByType] = useState(createEmptyFilesByType);
   const [pendingFiles, setPendingFiles] = useState({ RESUME: null, INTRODUCE: null, PORTFOLIO: null });
   const [expandedUploadByType, setExpandedUploadByType] = useState({ RESUME: false, INTRODUCE: false, PORTFOLIO: false });
   const [errors, setErrors] = useState({ RESUME: "", INTRODUCE: "", PORTFOLIO: "" });
@@ -386,10 +402,7 @@ export const FileUploadPage = () => {
           setUserPoint(chargedPointFromCallbackRef.current);
           chargedPointFromCallbackRef.current = null;
         }
-        const directProfileUrl = normalizeProfileImageUrl(profile?.profileImageUrl || profile?.imageUrl);
-        if (directProfileUrl) {
-          setProfileImageUrl(directProfileUrl);
-        }
+        setProfileImageUrl(getMyProfileImageUrl());
       } catch {
         navigate("/login", { replace: true });
         return;
@@ -398,18 +411,19 @@ export const FileUploadPage = () => {
       try {
         const filesPayload = await getMyFiles();
         const files = extractFileList(filesPayload).map((file) => normalizeFileRecord(file));
+        const nextFilesByType = createEmptyFilesByType();
 
-        const nextSaved = { RESUME: null, INTRODUCE: null, PORTFOLIO: null };
         for (const file of files) {
-          if (nextSaved[file?.fileType] === null && nextSaved[file?.fileType] !== undefined) {
-            nextSaved[file.fileType] = file;
-          }
+          const type = file?.fileType;
+          if (!DOCUMENT_TYPE_KEYS.includes(type)) continue;
+          nextFilesByType[type].push(file);
         }
-        setSavedFiles(nextSaved);
 
-        const profileImageFile = files.find((file) => file?.fileType === "PROFILE_IMAGE");
-        const url = normalizeProfileImageUrl(profileImageFile?.fileUrl);
-        setProfileImageUrl((prev) => (url ? url : prev || tempProfileImage));
+        for (const key of DOCUMENT_TYPE_KEYS) {
+          nextFilesByType[key].sort(sortByLatestFile);
+        }
+
+        setSavedFilesByType(nextFilesByType);
       } catch {
         setProfileImageUrl((prev) => prev || tempProfileImage);
       }
@@ -502,7 +516,13 @@ export const FileUploadPage = () => {
     try {
       const uploaded = await uploadMyFile(type, file);
       const normalizedUploaded = normalizeFileRecord(uploaded, file.name);
-      setSavedFiles((prev) => ({ ...prev, [type]: normalizedUploaded }));
+      setSavedFilesByType((prev) => {
+        const nextList = [...(prev[type] || []), normalizedUploaded].sort(sortByLatestFile);
+        return {
+          ...prev,
+          [type]: nextList,
+        };
+      });
       setPendingFiles((prev) => ({ ...prev, [type]: null }));
     } catch (error) {
       setTypeError(type, error?.message || "파일 저장 중 오류가 발생했습니다.");
@@ -511,17 +531,18 @@ export const FileUploadPage = () => {
     }
   };
 
-  const deleteSaved = async (type) => {
-    const target = savedFiles[type];
+  const deleteSaved = async (type, fileId) => {
+    const target = (savedFilesByType[type] || []).find((file) => String(file?.fileId) === String(fileId));
     if (!target?.fileId) {
-      setSavedFiles((prev) => ({ ...prev, [type]: null }));
       return;
     }
 
     try {
       await deleteMyFile(target.fileId);
-      setSavedFiles((prev) => ({ ...prev, [type]: null }));
-      setExpandedUploadByType((prev) => ({ ...prev, [type]: false }));
+      setSavedFilesByType((prev) => {
+        const nextList = (prev[type] || []).filter((file) => file?.fileId !== target.fileId);
+        return { ...prev, [type]: nextList };
+      });
     } catch (error) {
       setTypeError(type, error?.message || "파일 삭제 중 오류가 발생했습니다.");
     }
@@ -531,8 +552,8 @@ export const FileUploadPage = () => {
     setDeleteConfirmTarget({ type, mode: "pending" });
   };
 
-  const requestDeleteSaved = (type) => {
-    setDeleteConfirmTarget({ type, mode: "saved" });
+  const requestDeleteSaved = (type, fileId) => {
+    setDeleteConfirmTarget({ type, mode: "saved", fileId });
   };
 
   const confirmDelete = async () => {
@@ -541,14 +562,14 @@ export const FileUploadPage = () => {
       return;
     }
 
-    const { type, mode } = deleteConfirmTarget;
+    const { type, mode, fileId } = deleteConfirmTarget;
     setDeleteConfirmTarget(null);
 
     if (mode === "pending") {
       removePending(type);
       return;
     }
-    await deleteSaved(type);
+    await deleteSaved(type, fileId);
   };
 
   const hasAnyPending = useMemo(() => Object.values(pendingFiles).some(Boolean), [pendingFiles]);
@@ -606,7 +627,7 @@ export const FileUploadPage = () => {
                     <UploadDropZone
                       dragActive={dragActiveType === item.key}
                       pendingFile={pendingFiles[item.key]}
-                      savedFile={savedFiles[item.key]}
+                      savedFiles={savedFilesByType[item.key] || []}
                       error={errors[item.key]}
                       loading={savingType === item.key}
                       onDragEnter={dragHandlers.onDragEnter}
@@ -616,7 +637,7 @@ export const FileUploadPage = () => {
                       onFileInput={(event) => handleFileInput(item.key, event)}
                       onDeletePending={() => requestDeletePending(item.key)}
                       onSavePending={() => savePending(item.key)}
-                      onDeleteSaved={() => requestDeleteSaved(item.key)}
+                      onDeleteSaved={(fileId) => requestDeleteSaved(item.key, fileId)}
                       isExpanded={expandedUploadByType[item.key]}
                       onToggleExpanded={() => toggleExpandedUploader(item.key)}
                       inputId={`file-input-${item.key}`}
