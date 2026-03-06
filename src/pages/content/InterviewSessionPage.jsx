@@ -1,13 +1,14 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ContentTopNav } from "../../components/ContentTopNav";
 import { MobileSidebarDrawer } from "../../components/MobileSidebarDrawer";
+import { OcrInfoBadge } from "../../components/OcrInfoBadge";
 import { Sidebar } from "../../components/Sidebar";
 import { PointChargeModal } from "../../components/PointChargeModal";
 import { PointChargeSuccessModal } from "../../components/PointChargeSuccessModal";
 import tempProfileImage from "../../assets/icon/temp.png";
 import { logout } from "../../lib/authApi";
-import { bookmarkInterviewTurn, submitInterviewAnswer } from "../../lib/interviewApi";
+import { bookmarkInterviewTurn, getInterviewSessionResults, submitInterviewAnswer } from "../../lib/interviewApi";
 import {
   clearTechInterviewSession,
   loadTechInterviewSession,
@@ -44,6 +45,50 @@ const QuestionMetaChip = ({ label }) => (
     {label}
   </span>
 );
+
+const DocumentMetaChip = ({ label, ocrUsed }) => (
+  <span className="inline-flex items-center gap-1.5 rounded-full border border-[#d9dde5] bg-[#f7f8fb] px-2.5 py-1 text-[11px] text-[#505866]">
+    <span>{label}</span>
+    {ocrUsed ? <OcrInfoBadge compact /> : null}
+  </span>
+);
+
+const scoreToStars = (score) => {
+  const numeric = Number(score);
+  if (!Number.isFinite(numeric) || numeric <= 0) return 1;
+  return Math.max(1, Math.min(5, Math.round(numeric / 20)));
+};
+
+const StarRating = ({ score }) => {
+  const stars = scoreToStars(score);
+  return (
+    <div className="flex items-center gap-1">
+      {Array.from({ length: 5 }).map((_, index) => (
+        <span key={index} className={`text-[16px] ${index < stars ? "text-[#f4b63d]" : "text-[#d9dde5]"}`}>
+          ★
+        </span>
+      ))}
+    </div>
+  );
+};
+
+const normalizeSelectedDocumentMeta = (value) => {
+  if (!value) return null;
+  if (typeof value === "string") {
+    const label = value.trim();
+    return label ? { label, ocrUsed: false } : null;
+  }
+  if (typeof value === "object") {
+    const rawLabel = value.label || value.fileName || value.name || "";
+    const label = typeof rawLabel === "string" ? rawLabel.trim() : "";
+    if (!label) return null;
+    return {
+      label,
+      ocrUsed: Boolean(value.ocrUsed),
+    };
+  }
+  return null;
+};
 
 const LogoutConfirmModal = ({ onCancel, onConfirm }) => {
   return (
@@ -96,6 +141,8 @@ export const InterviewSessionPage = () => {
   const [submitting, setSubmitting] = useState(false);
   const [bookmarking, setBookmarking] = useState(false);
   const [sessionMetadata, setSessionMetadata] = useState({});
+  const [sessionResults, setSessionResults] = useState(null);
+  const [loadingResults, setLoadingResults] = useState(false);
 
   useEffect(() => {
     const charged = consumePointChargeSuccessResult();
@@ -152,6 +199,31 @@ export const InterviewSessionPage = () => {
     return `질문 ${currentQuestion.turnNo}`;
   }, [completed, currentQuestion]);
 
+  const isMockInterview = sessionMetadata.apiBasePath === "/api/interview/mock";
+
+  const selectedDocumentMetas = useMemo(
+    () => Object.values(sessionMetadata.selectedDocuments || {}).map(normalizeSelectedDocumentMeta).filter(Boolean),
+    [sessionMetadata.selectedDocuments]
+  );
+
+  const loadSessionResults = useCallback(async () => {
+    if (!sessionId) return;
+    setLoadingResults(true);
+    try {
+      const result = await getInterviewSessionResults(sessionMetadata.apiBasePath || "/api/interview/tech", sessionId);
+      setSessionResults(result);
+    } catch (error) {
+      setPageErrorMessage(error?.message || "면접 결과를 불러오지 못했습니다.");
+    } finally {
+      setLoadingResults(false);
+    }
+  }, [sessionId, sessionMetadata.apiBasePath]);
+
+  useEffect(() => {
+    if (!completed || !isMockInterview || sessionResults) return;
+    void loadSessionResults();
+  }, [completed, isMockInterview, loadSessionResults, sessionResults]);
+
   const handleSidebarNavigate = (item) => {
     setIsMobileMenuOpen(false);
     if (item?.path) {
@@ -185,6 +257,20 @@ export const InterviewSessionPage = () => {
     setSubmitErrorMessage("");
     try {
       const response = await submitInterviewAnswer(sessionMetadata.apiBasePath || "/api/interview/tech", sessionId, answer.trim());
+      if (isMockInterview) {
+        setAnswer("");
+        setPendingResult(null);
+        if (response?.completed) {
+          setCompleted(true);
+          setCurrentQuestion(null);
+          await loadSessionResults();
+        } else {
+          setCompleted(false);
+          setCurrentQuestion(response?.nextQuestion || null);
+        }
+        return;
+      }
+
       setPendingResult({
         answeredTurnId: response?.answeredTurnId,
         answeredQuestion: currentQuestion,
@@ -217,19 +303,29 @@ export const InterviewSessionPage = () => {
     setCompleted(false);
   };
 
-  const handleBookmark = async () => {
-    if (!pendingResult?.answeredTurnId || pendingResult.bookmarked) {
+  const handleBookmark = async (turnId = pendingResult?.answeredTurnId) => {
+    if (!turnId) {
       return;
     }
+    const resultTurn = sessionResults?.turns?.find((item) => item.turnId === turnId);
+    if (resultTurn?.bookmarked || pendingResult?.bookmarked) return;
 
     setBookmarking(true);
     setPageErrorMessage("");
     try {
       await bookmarkInterviewTurn(
         sessionMetadata.apiBasePath || "/api/interview/tech",
-        pendingResult.answeredTurnId
+        turnId
       );
-      setPendingResult((prev) => (prev ? { ...prev, bookmarked: true } : prev));
+      setPendingResult((prev) => (prev?.answeredTurnId === turnId ? { ...prev, bookmarked: true } : prev));
+      setSessionResults((prev) =>
+        prev
+          ? {
+              ...prev,
+              turns: prev.turns.map((item) => (item.turnId === turnId ? { ...item, bookmarked: true } : item)),
+            }
+          : prev
+      );
     } catch (error) {
       setPageErrorMessage(error?.message || "질문 저장에 실패했습니다.");
     } finally {
@@ -278,10 +374,14 @@ export const InterviewSessionPage = () => {
         <main className="flex min-w-0 flex-1 flex-col">
           <div className="border-b border-[#eceff4] bg-white/95 px-4 py-3 backdrop-blur sm:px-5 md:px-8">
             <div className="mx-auto flex w-full max-w-[980px] flex-wrap gap-2">
-              {(sessionMetadata.selectedDocuments?.resume || sessionMetadata.selectedDocuments?.introduce || sessionMetadata.selectedDocuments?.portfolio)
-                ? Object.values(sessionMetadata.selectedDocuments || {})
-                    .filter(Boolean)
-                    .map((label) => <QuestionMetaChip key={label} label={label} />)
+              {selectedDocumentMetas.length > 0
+                ? selectedDocumentMetas.map((item) => (
+                    <DocumentMetaChip
+                      key={`${item.label}-${item.ocrUsed ? "ocr" : "plain"}`}
+                      label={item.label}
+                      ocrUsed={item.ocrUsed}
+                    />
+                  ))
                 : <QuestionMetaChip label="문서 미선택" />}
               {sessionMetadata.difficultyLabel ? <QuestionMetaChip label={`난이도 ${sessionMetadata.difficultyLabel}`} /> : null}
               {sessionMetadata.categoryName ? <QuestionMetaChip label={sessionMetadata.categoryName} /> : null}
@@ -292,10 +392,14 @@ export const InterviewSessionPage = () => {
               <div className="rounded-[24px] border border-[#e4e7ee] bg-[linear-gradient(180deg,#ffffff_0%,#f7f9fc_100%)] p-5 sm:p-6">
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                   <div>
-                    <p className="text-[12px] font-semibold tracking-[0.08em] text-[#7a8190]">TECH INTERVIEW</p>
+                    <p className="text-[12px] font-semibold tracking-[0.08em] text-[#7a8190]">
+                      {isMockInterview ? "MOCK INTERVIEW" : "TECH INTERVIEW"}
+                    </p>
                     <h1 className="mt-2 text-[28px] font-semibold text-[#161a22] sm:text-[34px]">{currentQuestionTitle}</h1>
                     <p className="mt-2 text-[13px] leading-[1.6] text-[#5e6472]">
-                      답변 제출 후 피드백과 모범 답안을 바로 확인할 수 있다.
+                      {isMockInterview
+                        ? "모의면접 중에는 다음 문제에 집중하고, 종료 후 질문·답변·평가를 한 번에 확인한다."
+                        : "답변 제출 후 피드백과 모범 답안을 바로 확인할 수 있다."}
                     </p>
                   </div>
                   <button
@@ -349,7 +453,7 @@ export const InterviewSessionPage = () => {
                             disabled={submitting}
                             className="rounded-[14px] bg-[#171b24] px-4 py-2.5 text-[13px] font-semibold text-white disabled:opacity-60"
                           >
-                            {submitting ? "제출 중..." : "답변 제출"}
+                            {submitting ? (isMockInterview ? "다음 문제 준비 중..." : "제출 중...") : isMockInterview ? "다음 문제" : "답변 제출"}
                           </button>
                         </div>
                       </div>
@@ -357,7 +461,7 @@ export const InterviewSessionPage = () => {
                   </>
                 ) : null}
 
-                {pendingResult ? (
+                {pendingResult && !isMockInterview ? (
                   <div className="mt-5 rounded-[18px] border border-[#dfe3eb] bg-white px-5 py-6">
                     <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                       <div>
@@ -403,7 +507,74 @@ export const InterviewSessionPage = () => {
                   </div>
                 ) : null}
 
-                {completed && !pendingResult ? (
+                {completed && isMockInterview ? (
+                  <div className="mt-5 rounded-[18px] border border-[#dfe3eb] bg-white px-5 py-6">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <p className="text-[16px] font-medium text-[#171b24]">면접 결과</p>
+                        <p className="mt-1 text-[13px] leading-[1.7] text-[#5e6472]">
+                          질문, 답변, 평가를 한 번에 확인하고 필요한 항목만 저장할 수 있다.
+                        </p>
+                      </div>
+                    </div>
+
+                    {loadingResults ? (
+                      <p className="mt-5 text-[13px] text-[#5e6472]">평가 결과를 정리하고 있습니다...</p>
+                    ) : (
+                      <div className="mt-5 grid gap-4">
+                        {(sessionResults?.turns || []).map((turn) => (
+                          <article key={turn.turnId} className="rounded-[18px] border border-[#e4e7ee] bg-[#fbfcfe] p-5">
+                            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                              <div>
+                                <p className="text-[12px] font-semibold tracking-[0.08em] text-[#7a8190]">QUESTION {turn.turnNo}</p>
+                                <p className="mt-2 whitespace-pre-wrap text-[16px] leading-[1.7] text-[#171b24]">
+                                  {turn.questionText}
+                                </p>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => handleBookmark(turn.turnId)}
+                                disabled={bookmarking || turn.bookmarked}
+                                className="rounded-[12px] border border-[#d8dde7] px-3 py-2 text-[12px] text-[#4f5664] disabled:opacity-60"
+                              >
+                                {turn.bookmarked ? "저장 완료" : bookmarking ? "저장 중..." : "질문 저장"}
+                              </button>
+                            </div>
+
+                            <div className="mt-4 grid gap-4 lg:grid-cols-[1.3fr_1fr]">
+                              <section className="rounded-[16px] bg-white p-4">
+                                <p className="text-[12px] font-semibold text-[#5d6676]">내 답변</p>
+                                <p className="mt-2 whitespace-pre-wrap text-[13px] leading-[1.7] text-[#252b36]">
+                                  {turn.answerText || "-"}
+                                </p>
+                              </section>
+                              <section className="rounded-[16px] bg-white p-4">
+                                <p className="text-[12px] font-semibold text-[#5d6676]">평가</p>
+                                <div className="mt-2 flex items-center gap-3">
+                                  <StarRating score={turn.evaluation?.score} />
+                                  <span className="text-[12px] text-[#6b7280]">
+                                    {turn.evaluation?.score ? `${turn.evaluation.score}점` : "평가 대기"}
+                                  </span>
+                                </div>
+                                <p className="mt-3 whitespace-pre-wrap text-[13px] leading-[1.7] text-[#252b36]">
+                                  {turn.evaluation?.feedback || "-"}
+                                </p>
+                                <div className="mt-3 rounded-[12px] bg-[#f6f8fb] p-3">
+                                  <p className="text-[11px] font-semibold text-[#5d6676]">보완 포인트</p>
+                                  <p className="mt-1 whitespace-pre-wrap text-[12px] leading-[1.6] text-[#4f5664]">
+                                    {turn.evaluation?.bestPractice || "-"}
+                                  </p>
+                                </div>
+                              </section>
+                            </div>
+                          </article>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ) : null}
+
+                {completed && !pendingResult && !isMockInterview ? (
                   <div className="mt-5 rounded-[18px] border border-[#dfe3eb] bg-white px-5 py-6">
                     <p className="text-[16px] font-medium text-[#171b24]">면접이 종료되었습니다.</p>
                     <p className="mt-2 text-[13px] leading-[1.7] text-[#5e6472]">

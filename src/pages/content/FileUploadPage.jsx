@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { ContentTopNav } from "../../components/ContentTopNav";
 import { Sidebar } from "../../components/Sidebar";
 import { MobileSidebarDrawer } from "../../components/MobileSidebarDrawer";
+import { OcrInfoBadge } from "../../components/OcrInfoBadge";
 import { PointChargeModal } from "../../components/PointChargeModal";
 import { PointChargeSuccessModal } from "../../components/PointChargeSuccessModal";
 import dragDropIcon from "../../assets/icon/Drag_Drop.png";
@@ -154,8 +155,12 @@ const formatDate = (iso) => {
   return date.toISOString().slice(0, 10).replace(/-/g, ".");
 };
 
-const formatIngestionStatus = (rawStatus, ingested) => {
-  if (ingested || rawStatus === "READY") return "AI 분석 완료";
+const formatIngestionStatus = (rawStatus, ingested, extractionMethod, ocrUsed) => {
+  if (ingested || rawStatus === "READY") {
+    if (ocrUsed || extractionMethod === "OCR_TESSERACT") return "AI 분석 완료 · OCR fallback 적용";
+    if (extractionMethod === "PDFBOX") return "AI 분석 완료 · 텍스트 추출";
+    return "AI 분석 완료";
+  }
   if (rawStatus === "PROCESSING" || rawStatus === "QUEUED") return "AI 분석 중";
   if (rawStatus === "FAILED") return "AI 분석 실패";
   return "AI 분석 전";
@@ -224,7 +229,15 @@ const FileDeleteConfirmModal = ({ onCancel, onConfirm }) => {
   );
 };
 
-const FileRow = ({ fileName, uploadedDate, sizeLabel, statusLabel = "", showPdfBadge = true, actionNode = null }) => {
+const FileRow = ({
+  fileName,
+  uploadedDate,
+  sizeLabel,
+  statusLabel = "",
+  showPdfBadge = true,
+  actionNode = null,
+  ocrUsed = false,
+}) => {
   return (
     <div className="flex flex-col gap-3 rounded-[12px] border border-[#dddddd] bg-[#f7f7f7] px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
       <div className="flex min-w-0 items-center gap-3">
@@ -234,7 +247,10 @@ const FileRow = ({ fileName, uploadedDate, sizeLabel, statusLabel = "", showPdfB
           </div>
         ) : null}
         <div className="min-w-0">
-          <p className="truncate text-[13px] font-medium text-[#2b2b2b]">{fileName}</p>
+          <div className="flex min-w-0 items-center gap-2">
+            <p className="truncate text-[13px] font-medium text-[#2b2b2b]">{fileName}</p>
+            {ocrUsed ? <OcrInfoBadge compact /> : null}
+          </div>
           <p className="mt-0.5 text-[10px] text-[#9d9d9d]">업로드 날짜: {uploadedDate}</p>
           <p className="text-[10px] text-[#9d9d9d]">{sizeLabel}</p>
           {statusLabel ? <p className="mt-1 text-[11px] font-medium text-[#4f6ddf]">{statusLabel}</p> : null}
@@ -330,7 +346,13 @@ const UploadDropZone = ({
               fileName={resolveDisplayFileName(file)}
               uploadedDate={formatDate(file?.createdAt ?? file?.created_at)}
               sizeLabel="PDF"
-              statusLabel={formatIngestionStatus(file?.ingestionStatus, file?.ingested)}
+              ocrUsed={Boolean(file?.ocrUsed)}
+              statusLabel={formatIngestionStatus(
+                file?.ingestionStatus,
+                file?.ingested,
+                file?.extractionMethod,
+                file?.ocrUsed
+              )}
               actionNode={
                 <div className="flex items-center gap-2">
                   {file?.ingested ? (
@@ -595,6 +617,8 @@ export const FileUploadPage = () => {
                 ...file,
                 ingestionStatus: result?.status || "READY",
                 ingested: result?.status === "READY",
+                extractionMethod: result?.extractionMethod || null,
+                ocrUsed: Boolean(result?.ocrUsed),
               }
             : file
         ),

@@ -3,8 +3,8 @@ export const MAIN_MENU_ITEMS = [
   { key: "tech_practice", label: "기술면접 연습", path: null },
   { key: "interview_history", label: "면접 이력 조회", path: null },
   { key: "practice_history", label: "연습 이력 조회", path: null },
-  { key: "question_set", label: "내 질문 세트", path: null },
-  { key: "saved_question", label: "저장된 질문", path: null },
+  { key: "question_set", label: "내 질문 세트", path: "/content/question-sets" },
+  { key: "saved_question", label: "저장된 질문", path: "/content/saved-questions" },
 ];
 
 export const MY_MENU_ITEMS = [

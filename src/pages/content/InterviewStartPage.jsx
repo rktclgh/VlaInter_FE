@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ContentTopNav } from "../../components/ContentTopNav";
 import { MobileSidebarDrawer } from "../../components/MobileSidebarDrawer";
+import { OcrInfoBadge } from "../../components/OcrInfoBadge";
 import { Sidebar } from "../../components/Sidebar";
 import { PointChargeModal } from "../../components/PointChargeModal";
 import { PointChargeSuccessModal } from "../../components/PointChargeSuccessModal";
@@ -78,6 +79,25 @@ const formatCategoryLabel = (category) => {
   const depth = Number(category?.depth || 0);
   const prefix = depth > 0 ? `${"  ".repeat(depth)}- ` : "";
   return `${prefix}${category?.name || "-"}`;
+};
+
+const renderDocumentLabel = (file) => {
+  if (!file) return <span>미선택</span>;
+  return (
+    <span className="flex min-w-0 items-center gap-2">
+      <span className="truncate">{resolveDisplayFileName(file)}</span>
+      {file?.ocrUsed ? <OcrInfoBadge compact /> : null}
+    </span>
+  );
+};
+
+const buildSelectedDocumentMeta = (file) => {
+  if (!file) return null;
+  return {
+    fileId: file?.fileId || file?.file_id || null,
+    label: resolveDisplayFileName(file),
+    ocrUsed: Boolean(file?.ocrUsed),
+  };
 };
 
 const DropdownField = ({ label, valueNode, open, onToggle, children }) => {
@@ -299,6 +319,10 @@ export const InterviewStartPage = () => {
         questionCount: selectedQuestionCount,
       });
 
+      if (!response?.sessionId || !response?.currentQuestion) {
+        throw new Error("면접 세션은 생성되었지만 첫 질문을 불러오지 못했습니다.");
+      }
+
       saveTechInterviewSession({
         sessionId: response?.sessionId,
         currentQuestion: response?.currentQuestion || null,
@@ -319,15 +343,9 @@ export const InterviewStartPage = () => {
         metadata: {
           apiBasePath: "/api/interview/mock",
           selectedDocuments: {
-            resume: selectedFileObjects.RESUME
-              ? resolveDisplayFileName(selectedFileObjects.RESUME)
-              : null,
-            introduce: selectedFileObjects.INTRODUCE
-              ? resolveDisplayFileName(selectedFileObjects.INTRODUCE)
-              : null,
-            portfolio: selectedFileObjects.PORTFOLIO
-              ? resolveDisplayFileName(selectedFileObjects.PORTFOLIO)
-              : null,
+            resume: buildSelectedDocumentMeta(selectedFileObjects.RESUME),
+            introduce: buildSelectedDocumentMeta(selectedFileObjects.INTRODUCE),
+            portfolio: buildSelectedDocumentMeta(selectedFileObjects.PORTFOLIO),
           },
           difficulty: selectedDifficulty,
           difficultyLabel: selectedDifficultyOption.label,
@@ -338,7 +356,12 @@ export const InterviewStartPage = () => {
 
       navigate("/content/interview/session");
     } catch (error) {
-      setPageErrorMessage(error?.message || "면접 시작에 실패했습니다.");
+      setPageErrorMessage(
+        error?.message ||
+          (error?.status === 500
+            ? "질문 생성 중 서버 오류가 발생했습니다. 잠시 후 다시 시도해 주세요."
+            : "면접 시작에 실패했습니다.")
+      );
     } finally {
       setStartingInterview(false);
     }
@@ -407,7 +430,7 @@ export const InterviewStartPage = () => {
                       <DropdownField
                         key={documentType.key}
                         label={documentType.label}
-                        valueNode={selectedFile ? resolveDisplayFileName(selectedFile) : `${documentType.label} 미선택`}
+                        valueNode={selectedFile ? renderDocumentLabel(selectedFile) : `${documentType.label} 미선택`}
                         open={openDropdown === documentType.key}
                         onToggle={() =>
                           setOpenDropdown((prev) => (prev === documentType.key ? "" : documentType.key))
@@ -435,7 +458,10 @@ export const InterviewStartPage = () => {
                               }}
                               className="mb-1 block w-full rounded-[9px] bg-[#f4f4f4] px-2 py-1.5 text-left text-[11px] text-[#343434] hover:bg-[#ededed]"
                             >
-                              {resolveDisplayFileName(file)}
+                              <span className="flex min-w-0 items-center gap-2">
+                                <span className="truncate">{resolveDisplayFileName(file)}</span>
+                                {file?.ocrUsed ? <OcrInfoBadge compact /> : null}
+                              </span>
                             </button>
                           );
                         })}
