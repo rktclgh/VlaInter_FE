@@ -14,10 +14,12 @@ import {
   getAdminInterviewSets,
   getAdminMemberDetail,
   getAdminMembers,
+  deleteAdminInterviewSet,
   hardDeleteAdminMember,
   moveAdminInterviewCategory,
   promoteAdminInterviewSet,
   softDeleteAdminMember,
+  updateAdminInterviewSet,
   updateAdminInterviewCategory,
 } from "../../lib/adminApi";
 import { getInterviewSetQuestions } from "../../lib/interviewApi";
@@ -92,6 +94,15 @@ export const AdminConsolePage = () => {
   const [selectedSetId, setSelectedSetId] = useState(null);
   const [selectedSetQuestions, setSelectedSetQuestions] = useState([]);
   const [loadingSetQuestions, setLoadingSetQuestions] = useState(false);
+  const [setKeyword, setSetKeyword] = useState("");
+  const [savingSet, setSavingSet] = useState(false);
+  const [deletingSetId, setDeletingSetId] = useState(null);
+  const [setForm, setSetForm] = useState({
+    title: "",
+    description: "",
+    visibility: "PRIVATE",
+    status: "ACTIVE",
+  });
 
   const [categories, setCategories] = useState([]);
   const [loadingCategories, setLoadingCategories] = useState(false);
@@ -113,6 +124,10 @@ export const AdminConsolePage = () => {
     isLeaf: true,
   });
   const [selectedCategoryParentId, setSelectedCategoryParentId] = useState("");
+  const [categoryDepth0Filter, setCategoryDepth0Filter] = useState("");
+  const [categoryDepth1Filter, setCategoryDepth1Filter] = useState("");
+  const [categoryDepth2Filter, setCategoryDepth2Filter] = useState("");
+  const [newCategoryDepth, setNewCategoryDepth] = useState("0");
 
   const loadMembers = useCallback(async (targetPage = 0) => {
     setLoadingMembers(true);
@@ -136,10 +151,10 @@ export const AdminConsolePage = () => {
     }
   }, [memberSize]);
 
-  const loadSets = useCallback(async () => {
+  const loadSets = useCallback(async (keyword = "") => {
     setLoadingSets(true);
     try {
-      const payload = await getAdminInterviewSets();
+      const payload = await getAdminInterviewSets({ keyword });
       const nextSets = Array.isArray(payload) ? payload : [];
       setSets(nextSets);
       setSelectedSetId((prev) => {
@@ -297,6 +312,24 @@ export const AdminConsolePage = () => {
     [selectedSetId, sets]
   );
 
+  useEffect(() => {
+    if (!selectedSet) {
+      setSetForm({
+        title: "",
+        description: "",
+        visibility: "PRIVATE",
+        status: "ACTIVE",
+      });
+      return;
+    }
+    setSetForm({
+      title: selectedSet.title || "",
+      description: selectedSet.description || "",
+      visibility: selectedSet.visibility || "PRIVATE",
+      status: selectedSet.status || "ACTIVE",
+    });
+  }, [selectedSet]);
+
   const sortedCategories = useMemo(() => {
     return [...categories].sort((left, right) => {
       const depthCompare = toInt(left.depth) - toInt(right.depth);
@@ -306,6 +339,52 @@ export const AdminConsolePage = () => {
       return String(left.name || "").localeCompare(String(right.name || ""), "ko");
     });
   }, [categories]);
+
+  const categoryById = useMemo(
+    () => new Map(sortedCategories.map((category) => [String(category.categoryId), category])),
+    [sortedCategories]
+  );
+  const depth0Categories = useMemo(() => sortedCategories.filter((item) => Number(item.depth) === 0), [sortedCategories]);
+  const depth1Categories = useMemo(() => sortedCategories.filter((item) => Number(item.depth) === 1), [sortedCategories]);
+  const depth2Categories = useMemo(() => sortedCategories.filter((item) => Number(item.depth) === 2), [sortedCategories]);
+
+  const filteredCategoryList = useMemo(() => {
+    return sortedCategories.filter((category) => {
+      if (categoryDepth0Filter) {
+        if (Number(category.depth) === 0 && String(category.categoryId) !== categoryDepth0Filter) return false;
+        if (Number(category.depth) > 0) {
+          const depth0Id = Number(category.depth) === 1
+            ? String(category.parentId || "")
+            : String(categoryById.get(String(category.parentId || ""))?.parentId || "");
+          if (depth0Id !== categoryDepth0Filter) return false;
+        }
+      }
+      if (categoryDepth1Filter) {
+        if (Number(category.depth) === 1 && String(category.categoryId) !== categoryDepth1Filter) return false;
+        if (Number(category.depth) === 2 && String(category.parentId || "") !== categoryDepth1Filter) return false;
+      }
+      return !categoryDepth2Filter || String(category.categoryId) === categoryDepth2Filter;
+    });
+  }, [categoryById, categoryDepth0Filter, categoryDepth1Filter, categoryDepth2Filter, sortedCategories]);
+
+  const newCategoryParentOptions = useMemo(() => {
+    if (newCategoryDepth === "1") return depth0Categories;
+    if (newCategoryDepth === "2") return depth1Categories;
+    return [];
+  }, [depth0Categories, depth1Categories, newCategoryDepth]);
+
+  const selectedCategory = useMemo(
+    () => sortedCategories.find((item) => item.categoryId === selectedCategoryId) || null,
+    [selectedCategoryId, sortedCategories]
+  );
+
+  const selectedCategoryParentOptions = useMemo(() => {
+    if (!selectedCategory) return [];
+    const depth = Number(selectedCategory.depth);
+    if (depth === 1) return depth0Categories;
+    if (depth === 2) return depth1Categories;
+    return [];
+  }, [depth0Categories, depth1Categories, selectedCategory]);
 
   const handleSidebarNavigate = (item) => {
     setIsMobileMenuOpen(false);
@@ -402,7 +481,7 @@ export const AdminConsolePage = () => {
     setPageErrorMessage("");
     try {
       await promoteAdminInterviewSet(setId);
-      await loadSets();
+      await loadSets(setKeyword);
     } catch (error) {
       setPageErrorMessage(error?.message || "질문 세트 승격에 실패했습니다.");
     } finally {
@@ -410,10 +489,57 @@ export const AdminConsolePage = () => {
     }
   };
 
+  const handleSearchSets = async () => {
+    await loadSets(setKeyword);
+  };
+
+  const handleSaveSet = async () => {
+    if (!selectedSetId) return;
+    const normalizedTitle = setForm.title.trim();
+    if (!normalizedTitle) {
+      setPageErrorMessage("질문 세트 제목은 비어 있을 수 없습니다.");
+      return;
+    }
+    setSavingSet(true);
+    setPageErrorMessage("");
+    try {
+      await updateAdminInterviewSet(selectedSetId, {
+        title: normalizedTitle,
+        description: setForm.description.trim() || null,
+        visibility: setForm.visibility,
+        status: setForm.status,
+      });
+      await loadSets(setKeyword);
+    } catch (error) {
+      setPageErrorMessage(error?.message || "질문 세트 수정에 실패했습니다.");
+    } finally {
+      setSavingSet(false);
+    }
+  };
+
+  const handleDeleteSet = async (setId) => {
+    const confirmed = window.confirm("해당 질문 세트를 삭제하시겠습니까? 삭제 후 복구할 수 없습니다.");
+    if (!confirmed) return;
+    setDeletingSetId(setId);
+    setPageErrorMessage("");
+    try {
+      await deleteAdminInterviewSet(setId);
+      await loadSets(setKeyword);
+    } catch (error) {
+      setPageErrorMessage(error?.message || "질문 세트 삭제에 실패했습니다.");
+    } finally {
+      setDeletingSetId(null);
+    }
+  };
+
   const handleCreateCategory = async () => {
     const normalizedName = newCategoryForm.name.trim();
     if (!normalizedName) {
       setPageErrorMessage("카테고리 이름을 입력해 주세요.");
+      return;
+    }
+    if (newCategoryDepth !== "0" && !newCategoryForm.parentId) {
+      setPageErrorMessage(`${newCategoryDepth === "1" ? "직무" : "기술"} 카테고리는 상위 카테고리를 선택해야 합니다.`);
       return;
     }
 
@@ -432,6 +558,7 @@ export const AdminConsolePage = () => {
         description: "",
         sortOrder: "0",
       });
+      setNewCategoryDepth("0");
       await loadCategories();
     } catch (error) {
       setPageErrorMessage(error?.message || "카테고리 생성에 실패했습니다.");
@@ -446,6 +573,27 @@ export const AdminConsolePage = () => {
     if (!normalizedName) {
       setPageErrorMessage("카테고리 이름을 입력해 주세요.");
       return;
+    }
+    if (selectedCategory) {
+      const depth = Number(selectedCategory.depth);
+      if (depth === 0 && categoryForm.parentId) {
+        setPageErrorMessage("계열(depth 0)은 부모를 가질 수 없습니다.");
+        return;
+      }
+      if (depth === 1) {
+        const parent = categoryById.get(String(categoryForm.parentId || ""));
+        if (!parent || Number(parent.depth) !== 0) {
+          setPageErrorMessage("직무(depth 1)는 계열(depth 0)로만 이동할 수 있습니다.");
+          return;
+        }
+      }
+      if (depth === 2) {
+        const parent = categoryById.get(String(categoryForm.parentId || ""));
+        if (!parent || Number(parent.depth) !== 1) {
+          setPageErrorMessage("기술(depth 2)은 직무(depth 1)로만 이동할 수 있습니다.");
+          return;
+        }
+      }
     }
 
     setSavingCategory(true);
@@ -673,6 +821,27 @@ export const AdminConsolePage = () => {
                   <h2 className="text-[16px] font-semibold text-[#1f2937]">질문 세트 목록</h2>
                   {loadingSets ? <InlineSpinner label="불러오는 중" /> : null}
                 </div>
+                <div className="mt-3 flex gap-2">
+                  <input
+                    value={setKeyword}
+                    onChange={(event) => setSetKeyword(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") {
+                        event.preventDefault();
+                        void handleSearchSets();
+                      }
+                    }}
+                    placeholder="세트명 / owner 이름 / owner ID 검색"
+                    className="w-full rounded-[12px] border border-[#d9dde5] px-3 py-2 text-[12px] outline-none focus:border-[#9aa9cd]"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => void handleSearchSets()}
+                    className="rounded-[10px] border border-[#d9dde5] px-3 py-2 text-[12px] text-[#4f5664]"
+                  >
+                    검색
+                  </button>
+                </div>
                 <div className="mt-3 space-y-2">
                   {sets.map((set) => {
                     const selected = set.setId === selectedSetId;
@@ -683,24 +852,51 @@ export const AdminConsolePage = () => {
                         className={`cursor-pointer rounded-[14px] border px-3 py-3 ${selected ? "border-[#9eb1dd] bg-[#f5f8ff]" : "border-[#edf1f6] hover:bg-[#fafbfd]"}`}
                       >
                         <div className="flex items-start justify-between gap-3">
-                          <div>
-                            <p className="text-[13px] font-semibold text-[#1f2937]">{set.title}</p>
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <p className="truncate text-[13px] font-semibold text-[#1f2937]">{set.title}</p>
+                              {set.certified ? (
+                                <span className="rounded-full bg-[#e7f4ff] px-2 py-0.5 text-[10px] font-semibold text-[#0b69b7]">공인</span>
+                              ) : (
+                                <span className="rounded-full bg-[#e8f7ef] px-2 py-0.5 text-[10px] font-semibold text-[#18784a]">사용자 생성</span>
+                              )}
+                              {set.aiGenerated ? (
+                                <span className="rounded-full bg-[#f3ecff] px-2 py-0.5 text-[10px] font-semibold text-[#6d3bb6]">AI</span>
+                              ) : null}
+                            </div>
                             <p className="mt-1 text-[12px] text-[#6b7280]">{set.jobName || "-"} / {set.skillName || "-"}</p>
-                            <p className="mt-1 text-[11px] text-[#8b95a7]">
-                              owner={set.ownerType} · visibility={set.visibility} · questions={set.questionCount}
-                            </p>
+                            <p className="mt-1 text-[11px] text-[#8b95a7]">owner #{set.ownerUserId || "-"} · {set.ownerName || "-"}</p>
+                            <p className="mt-1 text-[11px] text-[#8b95a7]">visibility={set.visibility} · status={set.status}</p>
                           </div>
-                          <button
-                            type="button"
-                            disabled={set.isPromoted || promotingSetId === set.setId}
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              void handlePromoteSet(set.setId);
-                            }}
-                            className="rounded-[10px] border border-[#d9dde5] px-3 py-1 text-[11px] text-[#334155] disabled:cursor-not-allowed disabled:opacity-50"
-                          >
-                            {set.isPromoted ? "승격됨" : promotingSetId === set.setId ? "승격 중..." : "공용 승격"}
-                          </button>
+                          <div className="flex shrink-0 flex-col items-end gap-2">
+                            <span className="rounded-full border border-[#d9dde5] bg-white px-2 py-0.5 text-[10px] font-semibold text-[#334155]">
+                              {set.questionCount}
+                            </span>
+                            <div className="flex gap-1">
+                              <button
+                                type="button"
+                                disabled={set.isPromoted || promotingSetId === set.setId}
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  void handlePromoteSet(set.setId);
+                                }}
+                                className="rounded-[10px] border border-[#d9dde5] px-2 py-1 text-[10px] text-[#334155] disabled:cursor-not-allowed disabled:opacity-50"
+                              >
+                                {set.isPromoted ? "승격됨" : promotingSetId === set.setId ? "승격 중..." : "승격"}
+                              </button>
+                              <button
+                                type="button"
+                                disabled={deletingSetId === set.setId}
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  void handleDeleteSet(set.setId);
+                                }}
+                                className="rounded-[10px] border border-[#ef9a9a] px-2 py-1 text-[10px] text-[#c62828] disabled:opacity-50"
+                              >
+                                {deletingSetId === set.setId ? "삭제 중..." : "삭제"}
+                              </button>
+                            </div>
+                          </div>
                         </div>
                       </div>
                     );
@@ -712,12 +908,56 @@ export const AdminConsolePage = () => {
               </article>
 
               <article className="rounded-[20px] border border-[#dfe4ef] bg-white p-4 shadow-[0_12px_28px_rgba(15,23,42,0.04)]">
-                <h2 className="text-[16px] font-semibold text-[#1f2937]">선택 세트 문항</h2>
+                <h2 className="text-[16px] font-semibold text-[#1f2937]">선택 세트 상세</h2>
                 {selectedSet ? (
                   <p className="mt-1 text-[12px] text-[#6b7280]">{selectedSet.title}</p>
                 ) : (
                   <p className="mt-1 text-[12px] text-[#6b7280]">세트를 선택해 주세요.</p>
                 )}
+                {selectedSet ? (
+                  <div className="mt-3 grid gap-2 text-[12px]">
+                    <input
+                      value={setForm.title}
+                      onChange={(event) => setSetForm((prev) => ({ ...prev, title: event.target.value }))}
+                      className="w-full rounded-[12px] border border-[#d9dde5] px-3 py-2 outline-none focus:border-[#9aa9cd]"
+                      placeholder="세트 제목"
+                    />
+                    <textarea
+                      value={setForm.description}
+                      onChange={(event) => setSetForm((prev) => ({ ...prev, description: event.target.value }))}
+                      className="min-h-[72px] w-full rounded-[12px] border border-[#d9dde5] px-3 py-2 outline-none focus:border-[#9aa9cd]"
+                      placeholder="설명"
+                    />
+                    <div className="grid grid-cols-2 gap-2">
+                      <select
+                        value={setForm.visibility}
+                        onChange={(event) => setSetForm((prev) => ({ ...prev, visibility: event.target.value }))}
+                        className="w-full rounded-[12px] border border-[#d9dde5] px-3 py-2 outline-none focus:border-[#9aa9cd]"
+                      >
+                        <option value="PRIVATE">PRIVATE</option>
+                        <option value="GLOBAL">GLOBAL</option>
+                      </select>
+                      <select
+                        value={setForm.status}
+                        onChange={(event) => setSetForm((prev) => ({ ...prev, status: event.target.value }))}
+                        className="w-full rounded-[12px] border border-[#d9dde5] px-3 py-2 outline-none focus:border-[#9aa9cd]"
+                      >
+                        <option value="ACTIVE">ACTIVE</option>
+                        <option value="ARCHIVED">ARCHIVED</option>
+                      </select>
+                    </div>
+                    <div className="flex justify-end">
+                      <button
+                        type="button"
+                        disabled={savingSet}
+                        onClick={() => void handleSaveSet()}
+                        className="rounded-[10px] border border-[#171b24] bg-[#171b24] px-3 py-1.5 text-[11px] text-white disabled:opacity-60"
+                      >
+                        {savingSet ? "저장 중..." : "세트 저장"}
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
                 {loadingSetQuestions ? (
                   <div className="mt-4">
                     <InlineSpinner label="문항을 불러오는 중입니다." />
@@ -749,8 +989,57 @@ export const AdminConsolePage = () => {
                   <h2 className="text-[16px] font-semibold text-[#1f2937]">카테고리 목록</h2>
                   {loadingCategories ? <InlineSpinner label="불러오는 중" /> : null}
                 </div>
+                <div className="mt-3 grid gap-2 md:grid-cols-3">
+                  <select
+                    value={categoryDepth0Filter}
+                    onChange={(event) => {
+                      setCategoryDepth0Filter(event.target.value);
+                      setCategoryDepth1Filter("");
+                      setCategoryDepth2Filter("");
+                    }}
+                    className="w-full rounded-[12px] border border-[#d9dde5] px-3 py-2 text-[12px] outline-none focus:border-[#9aa9cd]"
+                  >
+                    <option value="">계열(전체)</option>
+                    {depth0Categories.map((category) => (
+                      <option key={category.categoryId} value={String(category.categoryId)}>
+                        {category.name}
+                      </option>
+                    ))}
+                  </select>
+                  <select
+                    value={categoryDepth1Filter}
+                    onChange={(event) => {
+                      setCategoryDepth1Filter(event.target.value);
+                      setCategoryDepth2Filter("");
+                    }}
+                    className="w-full rounded-[12px] border border-[#d9dde5] px-3 py-2 text-[12px] outline-none focus:border-[#9aa9cd]"
+                  >
+                    <option value="">직무(전체)</option>
+                    {depth1Categories
+                      .filter((category) => !categoryDepth0Filter || String(category.parentId || "") === categoryDepth0Filter)
+                      .map((category) => (
+                        <option key={category.categoryId} value={String(category.categoryId)}>
+                          {category.name}
+                        </option>
+                      ))}
+                  </select>
+                  <select
+                    value={categoryDepth2Filter}
+                    onChange={(event) => setCategoryDepth2Filter(event.target.value)}
+                    className="w-full rounded-[12px] border border-[#d9dde5] px-3 py-2 text-[12px] outline-none focus:border-[#9aa9cd]"
+                  >
+                    <option value="">기술(전체)</option>
+                    {depth2Categories
+                      .filter((category) => !categoryDepth1Filter || String(category.parentId || "") === categoryDepth1Filter)
+                      .map((category) => (
+                        <option key={category.categoryId} value={String(category.categoryId)}>
+                          {category.name}
+                        </option>
+                      ))}
+                  </select>
+                </div>
                 <div className="mt-3 space-y-2">
-                  {sortedCategories.map((category) => {
+                  {filteredCategoryList.map((category) => {
                     const selected = category.categoryId === selectedCategoryId;
                     const indent = Math.max(0, toInt(category.depth) - 1) * 14;
                     return (
@@ -763,12 +1052,12 @@ export const AdminConsolePage = () => {
                           {category.name}
                         </p>
                         <p className="mt-1 text-[11px] text-[#7b8699]">
-                          id={category.categoryId} · depth={category.depth} · active={String(category.isActive)} · leaf={String(category.isLeaf)}
+                          id={category.categoryId} · {category.depthLabel || `depth=${category.depth}`} · active={String(category.isActive)} · leaf={String(category.isLeaf)}
                         </p>
                       </div>
                     );
                   })}
-                  {!loadingCategories && sortedCategories.length === 0 ? (
+                  {!loadingCategories && filteredCategoryList.length === 0 ? (
                     <p className="text-[12px] text-[#6b7280]">등록된 카테고리가 없습니다.</p>
                   ) : null}
                 </div>
@@ -779,12 +1068,25 @@ export const AdminConsolePage = () => {
                   <h2 className="text-[15px] font-semibold text-[#1f2937]">카테고리 신규 생성</h2>
                   <div className="mt-3 grid gap-3 text-[13px]">
                     <select
-                      value={newCategoryForm.parentId}
-                      onChange={(event) => setNewCategoryForm((prev) => ({ ...prev, parentId: event.target.value }))}
+                      value={newCategoryDepth}
+                      onChange={(event) => {
+                        setNewCategoryDepth(event.target.value);
+                        setNewCategoryForm((prev) => ({ ...prev, parentId: "" }));
+                      }}
                       className="w-full rounded-[12px] border border-[#d9dde5] px-3 py-2 outline-none focus:border-[#9aa9cd]"
                     >
-                      <option value="">상위 카테고리 없음(루트)</option>
-                      {sortedCategories.map((category) => (
+                      <option value="0">계열(depth 0)</option>
+                      <option value="1">직무(depth 1)</option>
+                      <option value="2">기술(depth 2)</option>
+                    </select>
+                    <select
+                      value={newCategoryForm.parentId}
+                      onChange={(event) => setNewCategoryForm((prev) => ({ ...prev, parentId: event.target.value }))}
+                      disabled={newCategoryDepth === "0"}
+                      className="w-full rounded-[12px] border border-[#d9dde5] px-3 py-2 outline-none focus:border-[#9aa9cd]"
+                    >
+                      <option value="">{newCategoryDepth === "0" ? "상위 카테고리 없음(루트)" : "상위 카테고리 선택"}</option>
+                      {newCategoryParentOptions.map((category) => (
                         <option key={category.categoryId} value={String(category.categoryId)}>
                           {category.name}
                         </option>
@@ -823,13 +1125,19 @@ export const AdminConsolePage = () => {
                   <h2 className="text-[15px] font-semibold text-[#1f2937]">카테고리 수정/이동</h2>
                   {selectedCategoryId ? (
                     <div className="mt-3 grid gap-3 text-[13px]">
+                      <p className="rounded-[10px] border border-[#e5e7eb] bg-[#f8fafc] px-3 py-2 text-[12px] text-[#4b5563]">
+                        현재 depth: {selectedCategory?.depthLabel || selectedCategory?.depth}
+                      </p>
                       <select
                         value={categoryForm.parentId}
                         onChange={(event) => setCategoryForm((prev) => ({ ...prev, parentId: event.target.value }))}
+                        disabled={Number(selectedCategory?.depth) === 0}
                         className="w-full rounded-[12px] border border-[#d9dde5] px-3 py-2 outline-none focus:border-[#9aa9cd]"
                       >
-                        <option value="">상위 카테고리 없음(루트)</option>
-                        {sortedCategories
+                        <option value="">
+                          {Number(selectedCategory?.depth) === 0 ? "상위 카테고리 없음(루트)" : "상위 카테고리 선택"}
+                        </option>
+                        {selectedCategoryParentOptions
                           .filter((category) => category.categoryId !== selectedCategoryId)
                           .map((category) => (
                             <option key={category.categoryId} value={String(category.categoryId)}>

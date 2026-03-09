@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { extractProfile } from "../lib/profileUtils";
 import { getMyProfile } from "../lib/userApi";
-import { getMainMenuItems, MY_MENU_ITEMS } from "./sidebarMenuItems";
+import { getMainMenuSections, MY_MENU_ITEMS } from "./sidebarMenuItems";
 
 const FINAL_PROFILE_FALLBACK =
   "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==";
@@ -41,7 +41,7 @@ export const Sidebar = ({
     };
   }, [isAdmin]);
 
-  const mainMenuItems = useMemo(() => getMainMenuItems({ isAdmin: resolvedIsAdmin }), [resolvedIsAdmin]);
+  const mainMenuSections = useMemo(() => getMainMenuSections({ isAdmin: resolvedIsAdmin }), [resolvedIsAdmin]);
 
   const renderMenuButton = (item) => {
     const active = item.key === activeKey;
@@ -60,14 +60,17 @@ export const Sidebar = ({
   };
 
   return (
-    <aside className="sticky top-0 flex h-[calc(100vh-54px)] w-full flex-col border-r border-[#e8e8e8] bg-[#f8f8f8]">
+    <aside className="fixed left-0 top-[54px] z-20 flex h-[calc(100vh-54px)] w-[272px] flex-col border-r border-[#e8e8e8] bg-[#f8f8f8]">
       <div className="flex-1 overflow-y-auto px-4 pb-4 pt-6">
-        <div>
-          <p className="mb-2 text-[12px] font-medium text-[#b1b1b1]">Main</p>
-          <div className="space-y-1.5">{mainMenuItems.map(renderMenuButton)}</div>
-        </div>
+        {mainMenuSections.map((section) => (
+          <div key={section.title} className="pt-0 first:pt-0">
+            <p className="mb-2 text-[12px] font-medium text-[#b1b1b1]">{section.title}</p>
+            <div className="space-y-1.5">{section.items.map(renderMenuButton)}</div>
+            <div className="h-4" />
+          </div>
+        ))}
 
-        <div className="pt-6">
+        <div className="pt-2">
           <p className="mb-2 text-[12px] font-medium text-[#b1b1b1]">My</p>
           <div className="space-y-1">{MY_MENU_ITEMS.map(renderMenuButton)}</div>
         </div>

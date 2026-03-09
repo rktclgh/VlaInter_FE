@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { extractProfile } from "../lib/profileUtils";
 import { getMyProfile } from "../lib/userApi";
-import { getMainMenuItems, MY_MENU_ITEMS } from "./sidebarMenuItems";
+import { getMainMenuSections, MY_MENU_ITEMS } from "./sidebarMenuItems";
 
 export const MobileSidebarDrawer = ({
   open,
@@ -40,7 +40,7 @@ export const MobileSidebarDrawer = ({
     };
   }, [isAdmin]);
 
-  const mainMenuItems = useMemo(() => getMainMenuItems({ isAdmin: resolvedIsAdmin }), [resolvedIsAdmin]);
+  const mainMenuSections = useMemo(() => getMainMenuSections({ isAdmin: resolvedIsAdmin }), [resolvedIsAdmin]);
 
   const renderMenuButton = (item) => {
     const active = item.key === activeKey;
@@ -89,17 +89,21 @@ export const MobileSidebarDrawer = ({
           </button>
         </div>
 
-        <div className="px-4 pt-5">
-          <p className="mb-2 text-[12px] font-medium text-[#b1b1b1]">Main</p>
-          <div className="space-y-1.5">{mainMenuItems.map(renderMenuButton)}</div>
+        <div className="flex-1 overflow-y-auto px-4 pt-5">
+          {mainMenuSections.map((section) => (
+            <div key={section.title} className="pb-4">
+              <p className="mb-2 text-[12px] font-medium text-[#b1b1b1]">{section.title}</p>
+              <div className="space-y-1.5">{section.items.map(renderMenuButton)}</div>
+            </div>
+          ))}
+
+          <div className="pt-2">
+            <p className="mb-2 text-[12px] font-medium text-[#b1b1b1]">My</p>
+            <div className="space-y-1">{MY_MENU_ITEMS.map(renderMenuButton)}</div>
+          </div>
         </div>
 
-        <div className="px-4 pt-5">
-          <p className="mb-2 text-[12px] font-medium text-[#b1b1b1]">My</p>
-          <div className="space-y-1">{MY_MENU_ITEMS.map(renderMenuButton)}</div>
-        </div>
-
-        <div className="mt-auto flex items-center gap-2 px-4 py-4">
+        <div className="flex items-center gap-2 border-t border-[#e8e8e8] px-4 py-4">
           <img
             key={profileImageUrl || fallbackProfileImageUrl || "mobile-profile-image"}
             src={profileImageUrl}

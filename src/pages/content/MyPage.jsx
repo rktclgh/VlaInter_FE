@@ -720,15 +720,16 @@ export const MyPage = () => {
                     type="password"
                     value={geminiApiKeyInput}
                     onChange={(event) => setGeminiApiKeyInput(event.target.value)}
-                    placeholder="Gemini API 키 입력"
-                    className="h-[40px] w-full rounded-[10px] border border-[#d8d8d8] px-3 text-[13px] text-[#202020] outline-none focus:border-[#9a9a9a]"
+                    disabled={hasGeminiApiKey || geminiApiKeySubmitting}
+                    placeholder={hasGeminiApiKey ? "API 키가 등록되어 있습니다." : "Gemini API 키 입력"}
+                    className="h-[40px] w-full rounded-[10px] border border-[#d8d8d8] px-3 text-[13px] text-[#202020] outline-none focus:border-[#9a9a9a] disabled:bg-[#f3f5f8] disabled:text-[#7a7a7a]"
                   />
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 sm:shrink-0">
                     <button
                       type="button"
                       onClick={submitGeminiApiKey}
-                      disabled={geminiApiKeySubmitting}
-                      className="rounded-[10px] border border-[#1f1f1f] bg-[#1f1f1f] px-4 py-2 text-[12px] text-white disabled:opacity-60"
+                      disabled={hasGeminiApiKey || geminiApiKeySubmitting}
+                      className="min-w-[88px] whitespace-nowrap rounded-[10px] border border-[#1f1f1f] bg-[#1f1f1f] px-3 py-2 text-[11px] text-white disabled:opacity-60 sm:text-[12px]"
                     >
                       {geminiApiKeySubmitting ? "저장 중..." : "저장"}
                     </button>
@@ -737,7 +738,7 @@ export const MyPage = () => {
                         type="button"
                         onClick={removeGeminiApiKey}
                         disabled={geminiApiKeySubmitting}
-                        className="rounded-[10px] border border-[#d6d6d6] px-4 py-2 text-[12px] text-[#555] disabled:opacity-60"
+                        className="min-w-[88px] whitespace-nowrap rounded-[10px] border border-[#d6d6d6] px-3 py-2 text-[11px] text-[#555] disabled:opacity-60 sm:text-[12px]"
                       >
                         키 제거
                       </button>

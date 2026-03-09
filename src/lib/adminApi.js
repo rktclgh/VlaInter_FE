@@ -46,8 +46,13 @@ export async function hardDeleteAdminMember(memberId) {
   });
 }
 
-export async function getAdminInterviewSets() {
-  return apiRequest("/api/admin/interview/sets", {
+export async function getAdminInterviewSets({ keyword = "" } = {}) {
+  const search = new URLSearchParams();
+  if (String(keyword || "").trim()) {
+    search.set("keyword", String(keyword).trim());
+  }
+  const suffix = search.toString() ? `?${search.toString()}` : "";
+  return apiRequest(`/api/admin/interview/sets${suffix}`, {
     method: "GET",
   });
 }
@@ -55,6 +60,19 @@ export async function getAdminInterviewSets() {
 export async function promoteAdminInterviewSet(setId) {
   return apiRequest(`/api/admin/interview/sets/${encodeURIComponent(setId)}/promote`, {
     method: "POST",
+  });
+}
+
+export async function updateAdminInterviewSet(setId, payload) {
+  return apiRequest(`/api/admin/interview/sets/${encodeURIComponent(setId)}`, {
+    method: "PATCH",
+    body: payload,
+  });
+}
+
+export async function deleteAdminInterviewSet(setId) {
+  return apiRequest(`/api/admin/interview/sets/${encodeURIComponent(setId)}`, {
+    method: "DELETE",
   });
 }
 

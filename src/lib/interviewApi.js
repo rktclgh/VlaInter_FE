@@ -12,6 +12,18 @@ export async function getInterviewSets() {
   });
 }
 
+export async function getMyInterviewSets() {
+  return apiRequest("/api/interview/sets/my", {
+    method: "GET",
+  });
+}
+
+export async function getGlobalInterviewSets() {
+  return apiRequest("/api/interview/sets/global", {
+    method: "GET",
+  });
+}
+
 export async function createInterviewSet(payload) {
   return apiRequest("/api/interview/sets", {
     method: "POST",
@@ -23,6 +35,19 @@ export async function addQuestionToInterviewSet(setId, payload) {
   return apiRequest(`/api/interview/sets/${encodeURIComponent(setId)}/questions`, {
     method: "POST",
     body: payload,
+  });
+}
+
+export async function updateInterviewSet(setId, payload) {
+  return apiRequest(`/api/interview/sets/${encodeURIComponent(setId)}`, {
+    method: "PATCH",
+    body: payload,
+  });
+}
+
+export async function deleteInterviewSet(setId) {
+  return apiRequest(`/api/interview/sets/${encodeURIComponent(setId)}`, {
+    method: "DELETE",
   });
 }
 
@@ -131,6 +156,13 @@ export async function bookmarkInterviewTurn(apiBasePath, turnId, note = null) {
 export async function getSavedInterviewQuestions() {
   return apiRequest("/api/interview/tech/saved-questions", {
     method: "GET",
+  });
+}
+
+export async function saveInterviewQuestion(questionId, note = null) {
+  return apiRequest(`/api/interview/tech/questions/${encodeURIComponent(questionId)}/save`, {
+    method: "POST",
+    body: note ? { note } : {},
   });
 }
 

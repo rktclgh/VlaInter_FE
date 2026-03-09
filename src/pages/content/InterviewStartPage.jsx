@@ -12,7 +12,7 @@ import tempProfileImage from "../../assets/icon/temp.png";
 import { logout } from "../../lib/authApi";
 import { searchCategoryByText } from "../../lib/categoryPresentation";
 import { ratingToDifficulty } from "../../lib/difficultyRating";
-import { createInterviewCatalogJob, createInterviewCatalogSkill, getInterviewCatalogJobs, getInterviewCatalogSkills, getReadyMockDocuments, startMockInterview } from "../../lib/interviewApi";
+import { createInterviewCategory, createInterviewCatalogJob, createInterviewCatalogSkill, getInterviewCatalogJobs, getInterviewCatalogSkills, getInterviewCategories, getReadyMockDocuments, startMockInterview } from "../../lib/interviewApi";
 import { saveTechInterviewSession } from "../../lib/interviewSessionFlow";
 import { consumePointChargeSuccessResult } from "../../lib/pointChargeFlow";
 import { extractProfile, formatPoint, parsePoint } from "../../lib/profileUtils";
@@ -50,13 +50,13 @@ const buildSelectedDocumentMeta = (file, type) => {
   };
 };
 const LogoutConfirmModal = ({ onCancel, onConfirm }) => (
-  <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/35 px-4">
+  <div className="fixed inset-0 z-70 flex items-center justify-center bg-black/35 px-4">
     <div
       role="dialog"
       aria-modal="true"
       aria-labelledby="interview-start-logout-title"
       aria-describedby="interview-start-logout-description"
-      className="w-full max-w-[420px] rounded-2xl border border-[#d9d9d9] bg-white p-5"
+      className="w-full max-w-105 rounded-2xl border border-[#d9d9d9] bg-white p-5"
     >
       <p id="interview-start-logout-title" className="text-[15px] font-medium text-[#252525]">
         정말 로그아웃 하시겠습니까?
@@ -80,11 +80,32 @@ const InlineSpinner = ({ label }) => (
 );
 
 const BlockingLoadingOverlay = ({ title, description }) => (
-  <div className="fixed inset-0 z-[120] flex items-center justify-center bg-[#0f172a]/55 px-4">
-    <div className="w-full max-w-[420px] rounded-2xl border border-white/25 bg-white/95 p-5 text-center shadow-[0_18px_48px_rgba(15,23,42,0.28)]">
+  <div className="fixed inset-0 z-120 flex items-center justify-center bg-[#0f172a]/55 px-4">
+    <div className="w-full max-w-105 rounded-2xl border border-white/25 bg-white/95 p-5 text-center shadow-[0_18px_48px_rgba(15,23,42,0.28)]">
       <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-full border-2 border-[#cbd5e1] border-t-[#171b24] animate-spin" />
       <p className="mt-4 text-[16px] font-semibold text-[#111827]">{title}</p>
       <p className="mt-2 text-[13px] leading-[1.6] text-[#4b5563]">{description}</p>
+    </div>
+  </div>
+);
+
+const InterviewPrerequisiteGuideModal = ({ onClose, onMoveToUpload }) => (
+  <div className="fixed inset-0 z-120 flex items-center justify-center bg-black/55 px-4">
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="interview-prereq-title"
+      aria-describedby="interview-prereq-description"
+      className="w-full max-w-115 rounded-2xl border border-[#d9d9d9] bg-white p-5 shadow-[0_18px_48px_rgba(15,23,42,0.22)]"
+    >
+      <p id="interview-prereq-title" className="text-[16px] font-semibold text-[#1f2937]">면접 시작 전 필수 준비가 필요합니다</p>
+      <p id="interview-prereq-description" className="mt-2 text-[13px] leading-[1.7] text-[#4f5664]">
+        이력서/자기소개서 업로드와 AI 분석이 완료되어야 면접을 시작하실 수 있습니다.
+      </p>
+      <div className="mt-5 flex justify-end gap-2">
+        <button type="button" onClick={onClose} className="rounded-[10px] border border-[#d6d6d6] px-3 py-1.5 text-[12px] text-[#666]">닫기</button>
+        <button type="button" onClick={onMoveToUpload} className="rounded-[10px] border border-[#171b24] bg-[#171b24] px-3 py-1.5 text-[12px] text-white">이력서 및 자기소개서 업로드 페이지로 이동</button>
+      </div>
     </div>
   </div>
 );
@@ -120,9 +141,12 @@ export const InterviewStartPage = () => {
   const [showLogoutModal, setShowLogoutModal] = useState(false);
 
   const [jobItems, setJobItems] = useState([]);
+  const [categoryTree, setCategoryTree] = useState([]);
   const [skillItems, setSkillItems] = useState([]);
   const [filesByType, setFilesByType] = useState({ RESUME: [], INTRODUCE: [], PORTFOLIO: [] });
   const [selectedFiles, setSelectedFiles] = useState({ RESUME: "", INTRODUCE: "", PORTFOLIO: "" });
+  const [branchFilter, setBranchFilter] = useState("");
+  const [branchQuery, setBranchQuery] = useState("");
   const [jobFilter, setJobFilter] = useState("");
   const [jobQuery, setJobQuery] = useState("");
   const [skillQuery, setSkillQuery] = useState("");
@@ -134,6 +158,7 @@ export const InterviewStartPage = () => {
   const [creatingCategory, setCreatingCategory] = useState(false);
   const [pageErrorMessage, setPageErrorMessage] = useState("");
   const [showGeminiOverloadModal, setShowGeminiOverloadModal] = useState(false);
+  const [showPrereqGuideModal, setShowPrereqGuideModal] = useState(false);
 
   useEffect(() => {
     const charged = consumePointChargeSuccessResult();
@@ -156,12 +181,17 @@ export const InterviewStartPage = () => {
     }
 
     try {
-      const [jobsPayload, filesPayload] = await Promise.all([getInterviewCatalogJobs(), getReadyMockDocuments()]);
+      const [jobsPayload, filesPayload, categoriesPayload] = await Promise.all([
+        getInterviewCatalogJobs(),
+        getReadyMockDocuments(),
+        getInterviewCategories(),
+      ]);
       const nextJobs = (Array.isArray(jobsPayload) ? jobsPayload : []).map((job) => ({
         categoryId: Number(job?.jobId),
         name: String(job?.name || "").trim(),
         displayName: String(job?.name || "").trim(),
       })).filter((job) => Number.isFinite(job.categoryId) && job.name);
+      const nextCategoryTree = Array.isArray(categoriesPayload) ? categoriesPayload : [];
       const rawFiles = extractFileList(filesPayload);
       const nextFilesByType = { RESUME: [], INTRODUCE: [], PORTFOLIO: [] };
 
@@ -182,6 +212,7 @@ export const InterviewStartPage = () => {
       const defaultJob = matchedJob?.categoryId ? String(matchedJob.categoryId) : nextJobs[0]?.categoryId ? String(nextJobs[0].categoryId) : "";
 
       setJobItems(nextJobs);
+      setCategoryTree(nextCategoryTree);
       setSkillItems([]);
       setFilesByType(nextFilesByType);
       setSelectedFiles({
@@ -202,9 +233,34 @@ export const InterviewStartPage = () => {
   }, [loadPageData]);
 
   const jobs = useMemo(() => jobItems, [jobItems]);
+  const branchItems = useMemo(
+    () => (categoryTree || []).filter((item) => Number(item.depth) === 0).sort((a, b) => String(a.name || "").localeCompare(String(b.name || ""), "ko")),
+    [categoryTree]
+  );
+  const visibleBranches = useMemo(() => (
+    branchItems.filter((branch) => searchCategoryByText(branch, branchQuery))
+  ), [branchItems, branchQuery]);
+  const jobNameToBranchId = useMemo(() => {
+    const mapping = new Map();
+    (categoryTree || [])
+      .filter((item) => Number(item.depth) === 1)
+      .forEach((jobCategory) => {
+        const key = String(jobCategory.name || "").trim().toLowerCase();
+        if (!key) return;
+        const branchId = String(jobCategory.parentId || "");
+        if (!branchId) return;
+        mapping.set(key, branchId);
+      });
+    return mapping;
+  }, [categoryTree]);
   const visibleJobs = useMemo(() => {
-    return jobs.filter((job) => searchCategoryByText(job, jobQuery));
-  }, [jobQuery, jobs]);
+    return jobs.filter((job) => {
+      if (!searchCategoryByText(job, jobQuery)) return false;
+      if (!branchFilter) return true;
+      const jobKey = String(job.displayName || job.name || "").trim().toLowerCase();
+      return jobNameToBranchId.get(jobKey) === branchFilter;
+    });
+  }, [branchFilter, jobQuery, jobNameToBranchId, jobs]);
   const visibleSkills = useMemo(() => {
     const keyword = skillQuery.trim().toLowerCase();
     return skillItems
@@ -216,12 +272,20 @@ export const InterviewStartPage = () => {
   }, [skillItems, skillQuery]);
 
   useEffect(() => {
+    if (!jobFilter) return;
+    if (visibleJobs.some((job) => String(job.categoryId) === String(jobFilter))) return;
+    setJobFilter("");
+    setSelectedCategoryId("");
+  }, [jobFilter, visibleJobs]);
+
+  useEffect(() => {
     if (selectedCategoryId && !visibleSkills.some((item) => String(item.categoryId) === String(selectedCategoryId))) {
       setSelectedCategoryId("");
     }
   }, [selectedCategoryId, visibleSkills]);
 
   const canCreateJob = Boolean(jobQuery.trim() && !visibleJobs.some((job) => (job.displayName || job.name || "").trim().toLowerCase() === jobQuery.trim().toLowerCase()));
+  const canCreateBranch = Boolean(branchQuery.trim() && !branchItems.some((branch) => (branch.name || "").trim().toLowerCase() === branchQuery.trim().toLowerCase()));
   const canCreateSkill = Boolean(jobFilter && skillQuery.trim() && !visibleSkills.some((skill) => skill.label.trim().toLowerCase() === skillQuery.trim().toLowerCase()));
 
   const selectedSkill = useMemo(() => skillItems.find((item) => String(item.categoryId) === String(selectedCategoryId)) || null, [skillItems, selectedCategoryId]);
@@ -302,6 +366,31 @@ export const InterviewStartPage = () => {
     }
   };
 
+  const handleCreateBranch = async () => {
+    if (!branchQuery.trim()) return;
+    setCreatingCategory(true);
+    setPageErrorMessage("");
+    try {
+      const created = await createInterviewCategory({
+        parentId: null,
+        name: branchQuery.trim(),
+      });
+      const displayName = (created?.name || branchQuery.trim()).trim();
+      const refreshed = await getInterviewCategories();
+      const nextCategoryTree = Array.isArray(refreshed) ? refreshed : [];
+      setCategoryTree(nextCategoryTree);
+      const matched = nextCategoryTree.find(
+        (item) => Number(item?.depth) === 0 && String(item?.name || "").trim().toLowerCase() === displayName.toLowerCase()
+      ) || nextCategoryTree.find((item) => Number(item?.depth) === 0) || null;
+      setBranchFilter(matched?.categoryId ? String(matched.categoryId) : "");
+      setBranchQuery(displayName);
+    } catch (error) {
+      setPageErrorMessage(error?.message || "계열 생성에 실패했습니다.");
+    } finally {
+      setCreatingCategory(false);
+    }
+  };
+
   const handleCreateSkill = async () => {
     if (!jobFilter || !skillQuery.trim()) return;
     setCreatingCategory(true);
@@ -343,7 +432,8 @@ export const InterviewStartPage = () => {
       .map((value) => Number(value));
 
     if (selectedDocumentIds.length === 0) {
-      setPageErrorMessage("AI 분석이 완료된 문서를 1개 이상 선택해 주세요.");
+      setShowPrereqGuideModal(true);
+      setPageErrorMessage("");
       return;
     }
     const resolvedJobName = (selectedJob?.displayName || selectedJob?.name || jobQuery.trim()).trim();
@@ -437,7 +527,7 @@ export const InterviewStartPage = () => {
       />
 
       <div className="flex min-h-[calc(100vh-54px)]">
-        <div className="hidden w-[272px] shrink-0 md:block">
+        <div className="hidden w-68 shrink-0 md:block">
           <Sidebar
             activeKey="interview_start"
             onNavigate={handleSidebarNavigate}
@@ -453,7 +543,7 @@ export const InterviewStartPage = () => {
 
         <main className="flex min-w-0 flex-1 flex-col">
           <div className="flex-1 overflow-y-auto px-4 pb-6 pt-6 sm:px-5 md:px-8 md:pt-10">
-            <div className="mx-auto w-full max-w-[1280px] space-y-5">
+            <div className="mx-auto w-full max-w-7xl space-y-5">
               <section className="rounded-3xl border border-[#e4e7ee] bg-[linear-gradient(180deg,#ffffff_0%,#f7f9fc_100%)] p-5 sm:p-6">
                 <p className="text-[12px] font-semibold tracking-[0.08em] text-[#7a8190]">MOCK INTERVIEW</p>
                 <h1 className="mt-2 text-[30px] font-semibold tracking-[-0.02em] text-[#161a22] sm:text-[42px]">
@@ -461,13 +551,45 @@ export const InterviewStartPage = () => {
                   <br />
                   실전처럼 면접을 시작합니다
                 </h1>
-                <p className="mt-3 max-w-[720px] text-[14px] leading-[1.7] text-[#5e6472] sm:text-[15px]">
+                <p className="mt-3 max-w-180 text-[14px] leading-[1.7] text-[#5e6472] sm:text-[15px]">
                   분석 완료된 서류만 선택하실 수 있습니다. 직무와 기술 카테고리를 함께 선택하시면 문서 질문과 기술 질문을 섞어 면접을 생성합니다.
                 </p>
               </section>
 
               <div className="grid grid-cols-1 gap-5 xl:grid-cols-[1.15fr_0.85fr]">
                 <div className="space-y-5">
+                  <CategoryCard title="계열 선택" description="최상위 루트(계열)를 먼저 선택하면 직무/기술 후보를 더 빠르게 좁힐 수 있습니다.">
+                    <div className="grid gap-3 md:grid-cols-[1fr_auto]">
+                      <input
+                        value={branchQuery}
+                        onChange={(event) => setBranchQuery(event.target.value)}
+                        placeholder="계열 검색 또는 새 계열 입력"
+                        className="rounded-[14px] border border-[#dfe3eb] px-4 py-3 text-[13px] outline-none focus:border-[#8aa2e8]"
+                      />
+                      {canCreateBranch ? (
+                        <button type="button" disabled={creatingCategory} onClick={handleCreateBranch} className="rounded-[14px] border border-[#171b24] px-4 py-3 text-[13px] font-semibold text-[#171b24] disabled:opacity-60">
+                          {creatingCategory ? "생성 중..." : "계열 추가"}
+                        </button>
+                      ) : <div />}
+                    </div>
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      <FilterChip
+                        label="전체 계열"
+                        active={!branchFilter}
+                        onClick={() => setBranchFilter("")}
+                      />
+                      {visibleBranches.map((branch) => (
+                        <FilterChip
+                          key={branch.categoryId}
+                          label={branch.name}
+                          active={branchFilter === String(branch.categoryId)}
+                          onClick={() => setBranchFilter(String(branch.categoryId))}
+                        />
+                      ))}
+                      {!visibleBranches.length && !loadingPage ? <span className="text-[12px] text-[#7a8190]">표시할 계열이 없습니다.</span> : null}
+                    </div>
+                  </CategoryCard>
+
                   <CategoryCard title="직무 선택" description="직무는 한글 기준으로 선택하시고, 없으면 바로 추가해 주세요.">
                     <div className="grid gap-3 md:grid-cols-[1fr_auto]">
                       <input
@@ -561,6 +683,20 @@ export const InterviewStartPage = () => {
                         );
                       })}
                     </div>
+                    <div className="mt-4 rounded-[14px] border border-[#e6eaf2] bg-[#fbfcfe] px-4 py-3">
+                      <p className="text-[12px] leading-[1.7] text-[#5e6472]">
+                        면접 시작 전, 이력서/자기소개서 업로드 및 AI 분석 완료가 반드시 선행되어야 합니다.
+                      </p>
+                      <div className="mt-2 flex justify-end">
+                        <button
+                          type="button"
+                          onClick={() => navigate("/content/files")}
+                          className="rounded-[10px] border border-[#171b24] px-3 py-1.5 text-[12px] font-semibold text-[#171b24]"
+                        >
+                          이력서 및 자기소개서 업로드 페이지로 이동
+                        </button>
+                      </div>
+                    </div>
                   </CategoryCard>
                 </div>
 
@@ -585,7 +721,7 @@ export const InterviewStartPage = () => {
                           max={20}
                           value={selectedQuestionCount}
                           onChange={(event) => setSelectedQuestionCount(Math.max(5, Number(event.target.value) || 5))}
-                          className="w-[120px] rounded-[14px] border border-[#dfe3eb] px-4 py-3 text-[13px] outline-none focus:border-[#8aa2e8]"
+                          className="w-30 rounded-[14px] border border-[#dfe3eb] px-4 py-3 text-[13px] outline-none focus:border-[#8aa2e8]"
                         />
                         <span className="text-[12px] text-[#6a7383]">최소 5문항, 최대 20문항</span>
                       </div>
@@ -642,6 +778,15 @@ export const InterviewStartPage = () => {
       ) : null}
       {showPointChargeSuccessModal ? <PointChargeSuccessModal onClose={() => setShowPointChargeSuccessModal(false)} /> : null}
       {showGeminiOverloadModal ? <GeminiOverloadModal onClose={() => setShowGeminiOverloadModal(false)} /> : null}
+      {showPrereqGuideModal ? (
+        <InterviewPrerequisiteGuideModal
+          onClose={() => setShowPrereqGuideModal(false)}
+          onMoveToUpload={() => {
+            setShowPrereqGuideModal(false);
+            navigate("/content/files");
+          }}
+        />
+      ) : null}
     </div>
   );
 };
