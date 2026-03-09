@@ -216,6 +216,7 @@ export const QuestionSetsPage = () => {
   const [modalErrorMessage, setModalErrorMessage] = useState("");
   const [showAllCategories, setShowAllCategories] = useState(false);
   const [startingSetId, setStartingSetId] = useState(null);
+  const [isStartingSetLaunch, setIsStartingSetLaunch] = useState(false);
 
   const loadPage = async () => {
     const [setList, categoryList] = await Promise.all([getInterviewSets(), getInterviewCategories()]);
@@ -392,7 +393,8 @@ export const QuestionSetsPage = () => {
   };
 
   const handleStartSetPractice = async (item) => {
-    if (!item?.setId) return;
+    if (!item?.setId || isStartingSetLaunch) return;
+    setIsStartingSetLaunch(true);
     setStartingSetId(item.setId);
     setPageErrorMessage("");
     try {
@@ -420,6 +422,7 @@ export const QuestionSetsPage = () => {
       setPageErrorMessage(error?.message || "질문 세트 연습 시작에 실패했습니다.");
     } finally {
       setStartingSetId(null);
+      setIsStartingSetLaunch(false);
     }
   };
 
@@ -468,7 +471,19 @@ export const QuestionSetsPage = () => {
               {loading ? <p className="text-[13px] text-[#5e6472]">질문 카드를 불러오는 중...</p> : null}
               {!loading && pagedCards.length === 0 ? <p className="text-[13px] text-[#5e6472]">조건에 맞는 질문 카드가 없습니다.</p> : null}
               {pagedCards.map((item) => (
-                <button key={`${item.setId}-${item.questionId}`} type="button" onClick={() => setSelectedQuestion(item)} className="rounded-[22px] border border-[#e4e7ee] bg-white p-5 text-left shadow-[0_12px_32px_rgba(15,23,42,0.04)] transition hover:border-[#cfd6e4] hover:shadow-[0_18px_36px_rgba(15,23,42,0.08)]">
+                <div
+                  key={`${item.setId}-${item.questionId}`}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => setSelectedQuestion(item)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      setSelectedQuestion(item);
+                    }
+                  }}
+                  className="rounded-[22px] border border-[#e4e7ee] bg-white p-5 text-left shadow-[0_12px_32px_rgba(15,23,42,0.04)] transition hover:border-[#cfd6e4] hover:shadow-[0_18px_36px_rgba(15,23,42,0.08)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#171b24]/35"
+                >
                   <div className="flex flex-wrap gap-2">
                     <span className="rounded-full bg-[#eef2f8] px-3 py-1 text-[11px] text-[#556070]">{item.jobName}</span>
                     <span className="rounded-full bg-[#f4f6fb] px-3 py-1 text-[11px] text-[#556070]">{item.categoryName}</span>
@@ -485,13 +500,13 @@ export const QuestionSetsPage = () => {
                         event.stopPropagation();
                         handleStartSetPractice(item);
                       }}
-                      disabled={startingSetId === item.setId}
+                      disabled={isStartingSetLaunch || startingSetId === item.setId}
                       className="rounded-[10px] border border-[#171b24] px-3 py-1.5 text-[11px] font-semibold text-[#171b24] disabled:opacity-60"
                     >
                       {startingSetId === item.setId ? "연습 준비 중..." : "이 세트로 연습"}
                     </button>
                   </div>
-                </button>
+                </div>
               ))}
             </section>
 

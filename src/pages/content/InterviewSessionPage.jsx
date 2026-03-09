@@ -327,7 +327,7 @@ export const InterviewSessionPage = () => {
   };
 
   const handleBookmark = async (rawTurnId = pendingResult?.answeredTurnId) => {
-    const turnId = resolveTurnId(rawTurnId) ?? resolveTurnId(pendingResult?.answeredTurnId);
+    const turnId = resolveTurnId(rawTurnId);
     if (!turnId) {
       setPageErrorMessage("저장할 질문 정보를 찾지 못했습니다. 다시 시도해 주세요.");
       return;

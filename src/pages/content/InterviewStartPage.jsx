@@ -65,8 +65,19 @@ const buildSelectedDocumentMeta = (file, type) => {
 };
 const LogoutConfirmModal = ({ onCancel, onConfirm }) => (
   <div className="fixed inset-0 z-70 flex items-center justify-center bg-black/35 px-4">
-    <div className="w-full max-w-105 rounded-2xl border border-[#d9d9d9] bg-white p-5">
-      <p className="text-[15px] font-medium text-[#252525]">정말 로그아웃 하시겠습니까?<br />종료하지 않은 면접 내용은 저장되지 않습니다.</p>
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="interview-start-logout-title"
+      aria-describedby="interview-start-logout-description"
+      className="w-full max-w-105 rounded-2xl border border-[#d9d9d9] bg-white p-5"
+    >
+      <p id="interview-start-logout-title" className="text-[15px] font-medium text-[#252525]">
+        정말 로그아웃 하시겠습니까?
+      </p>
+      <p id="interview-start-logout-description" className="mt-1 text-[13px] text-[#4f5664]">
+        종료하지 않은 면접 내용은 저장되지 않습니다.
+      </p>
       <div className="mt-4 flex justify-end gap-2">
         <button type="button" onClick={onCancel} className="rounded-[10px] border border-[#d6d6d6] px-3 py-1.5 text-[12px] text-[#666]">취소</button>
         <button type="button" onClick={onConfirm} className="rounded-[10px] border border-[#1f1f1f] bg-[#1f1f1f] px-3 py-1.5 text-[12px] text-white">로그아웃</button>
@@ -83,7 +94,7 @@ const InlineSpinner = ({ label }) => (
 );
 
 const BlockingLoadingOverlay = ({ title, description }) => (
-  <div className="fixed inset-0 z-[120] flex items-center justify-center bg-[#0f172a]/55 px-4">
+  <div className="fixed inset-0 z-120 flex items-center justify-center bg-[#0f172a]/55 px-4">
     <div className="w-full max-w-[420px] rounded-2xl border border-white/25 bg-white/95 p-5 text-center shadow-[0_18px_48px_rgba(15,23,42,0.28)]">
       <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-full border-2 border-[#cbd5e1] border-t-[#171b24] animate-spin" />
       <p className="mt-4 text-[16px] font-semibold text-[#111827]">{title}</p>

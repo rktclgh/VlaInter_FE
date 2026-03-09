@@ -78,8 +78,6 @@
 
   p,
   span,
-  a,
-  button,
   li {
     overflow-wrap: anywhere;
     word-break: keep-all;
@@ -93,6 +91,13 @@
     background: transparent;
     border: 0;
     outline: none;
+  }
+
+  :root {
+    --marquee-start: 0px;
+    --marquee-distance: 0px;
+    --marquee-duration: 14s;
+    --marquee-delay: 0s;
   }
 }
 

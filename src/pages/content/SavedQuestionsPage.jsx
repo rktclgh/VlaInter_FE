@@ -33,7 +33,11 @@ const formatDate = (value) => {
 };
 const normalizeDateInput = (value) => {
   const date = new Date(value || "");
-  return Number.isNaN(date.getTime()) ? "" : date.toISOString().slice(0, 10);
+  if (Number.isNaN(date.getTime())) return "";
+  const year = String(date.getFullYear());
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 };
 
 const LogoutConfirmModal = ({ onCancel, onConfirm }) => (
@@ -143,11 +147,12 @@ export const SavedQuestionsPage = () => {
   const filteredItems = useMemo(() => {
     const keyword = query.trim().toLowerCase();
     return enrichedItems.filter((item) => {
+      const createdDateKey = normalizeDateInput(item.createdAt);
       if (jobFilter && String(categoryMap.get(item.categoryId)?.parentId || "") !== jobFilter) return false;
       if (selectedCategoryId && String(item.categoryId || "") !== selectedCategoryId) return false;
       if (selectedRating && item.difficulty !== ratingToDifficulty(selectedRating)) return false;
-      if (dateFrom && normalizeDateInput(item.createdAt) < dateFrom) return false;
-      if (dateTo && normalizeDateInput(item.createdAt) > dateTo) return false;
+      if (dateFrom && createdDateKey < dateFrom) return false;
+      if (dateTo && createdDateKey > dateTo) return false;
       if (!keyword) return true;
       return [item.questionText, item.categoryName, item.modelAnswer, item.canonicalAnswer, item.bestPractice, item.feedback, item.answerText, ...(item.tags || [])].filter(Boolean).join(" ").toLowerCase().includes(keyword);
     });
@@ -158,7 +163,14 @@ export const SavedQuestionsPage = () => {
   }, [query, jobFilter, categoryQuery, selectedCategoryId, selectedRating, dateFrom, dateTo]);
 
   const totalPages = Math.max(1, Math.ceil(filteredItems.length / PAGE_SIZE));
-  const pagedItems = filteredItems.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const currentPage = Math.max(1, Math.min(page, totalPages));
+  const pagedItems = filteredItems.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+
+  useEffect(() => {
+    if (page > totalPages) {
+      setPage(totalPages);
+    }
+  }, [page, totalPages]);
 
   const handleSidebarNavigate = (item) => {
     setIsMobileMenuOpen(false);
@@ -247,7 +259,7 @@ export const SavedQuestionsPage = () => {
 
             <div className="mt-5 flex items-center justify-center gap-2">
               <button type="button" disabled={page <= 1} onClick={() => setPage((prev) => Math.max(1, prev - 1))} className="rounded-[12px] border border-[#d8dde7] px-3 py-2 text-[12px] text-[#4f5664] disabled:opacity-50">이전</button>
-              <span className="text-[12px] text-[#5e6472]">{page} / {totalPages}</span>
+              <span className="text-[12px] text-[#5e6472]">{currentPage} / {totalPages}</span>
               <button type="button" disabled={page >= totalPages} onClick={() => setPage((prev) => Math.min(totalPages, prev + 1))} className="rounded-[12px] border border-[#d8dde7] px-3 py-2 text-[12px] text-[#4f5664] disabled:opacity-50">다음</button>
             </div>
 

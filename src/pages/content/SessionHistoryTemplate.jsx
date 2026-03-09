@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ContentTopNav } from "../../components/ContentTopNav";
 import { DifficultyStars, StarIcons } from "../../components/DifficultyStars";
@@ -52,8 +52,15 @@ const scoreToStars = (score) => {
 
 const LogoutConfirmModal = ({ onCancel, onConfirm }) => (
   <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/35 px-4">
-    <div className="w-full max-w-[420px] rounded-[16px] border border-[#d9d9d9] bg-white p-5">
-      <p className="text-[15px] font-medium text-[#252525]">정말 로그아웃 하시겠습니까?<br />현재 페이지의 진행 중 작업은 유지되지 않습니다.</p>
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="session-history-logout-title"
+      className="w-full max-w-[420px] rounded-[16px] border border-[#d9d9d9] bg-white p-5"
+    >
+      <p id="session-history-logout-title" className="text-[15px] font-medium text-[#252525]">
+        정말 로그아웃 하시겠습니까?<br />현재 페이지의 진행 중 작업은 유지되지 않습니다.
+      </p>
       <div className="mt-4 flex justify-end gap-2">
         <button type="button" onClick={onCancel} className="rounded-[10px] border border-[#d6d6d6] px-3 py-1.5 text-[12px] text-[#666]">취소</button>
         <button type="button" onClick={onConfirm} className="rounded-[10px] border border-[#1f1f1f] bg-[#1f1f1f] px-3 py-1.5 text-[12px] text-white">로그아웃</button>
@@ -143,6 +150,7 @@ export const SessionHistoryTemplate = ({ title, description, apiBasePath, active
   const [selectedSessionId, setSelectedSessionId] = useState(null);
   const [selectedResults, setSelectedResults] = useState(null);
   const [bookmarkingTurnIds, setBookmarkingTurnIds] = useState([]);
+  const bookmarkingTurnIdsRef = useRef([]);
 
   useEffect(() => {
     const charged = consumePointChargeSuccessResult();
@@ -185,6 +193,7 @@ export const SessionHistoryTemplate = ({ title, description, apiBasePath, active
     if (!selectedSessionId) return;
     const loadResults = async () => {
       setLoadingResult(true);
+      bookmarkingTurnIdsRef.current = [];
       setBookmarkingTurnIds([]);
       try {
         const result = await getInterviewSessionResults(apiBasePath, selectedSessionId);
@@ -202,11 +211,12 @@ export const SessionHistoryTemplate = ({ title, description, apiBasePath, active
 
   const handleBookmarkTurn = useCallback(async (turnId) => {
     if (!turnId) return;
-    if (bookmarkingTurnIds.includes(turnId)) return;
+    if (bookmarkingTurnIdsRef.current.includes(turnId)) return;
     const target = selectedResults?.turns?.find((item) => item.turnId === turnId);
     if (target?.bookmarked) return;
 
-    setBookmarkingTurnIds((prev) => [...prev, turnId]);
+    bookmarkingTurnIdsRef.current = [...bookmarkingTurnIdsRef.current, turnId];
+    setBookmarkingTurnIds((prev) => (prev.includes(turnId) ? prev : [...prev, turnId]));
     setPageErrorMessage("");
     try {
       await bookmarkInterviewTurn(apiBasePath, turnId);
@@ -221,9 +231,13 @@ export const SessionHistoryTemplate = ({ title, description, apiBasePath, active
     } catch (error) {
       setPageErrorMessage(error?.message || "질문 저장에 실패했습니다.");
     } finally {
-      setBookmarkingTurnIds((prev) => prev.filter((id) => id !== turnId));
+      setBookmarkingTurnIds((prev) => {
+        const next = prev.filter((id) => id !== turnId);
+        bookmarkingTurnIdsRef.current = next;
+        return next;
+      });
     }
-  }, [apiBasePath, bookmarkingTurnIds, selectedResults]);
+  }, [apiBasePath, selectedResults]);
 
   const handleSidebarNavigate = (item) => {
     setIsMobileMenuOpen(false);

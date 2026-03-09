@@ -47,8 +47,8 @@ export const QuestionAnswerDetailModal = ({ item, onClose }) => {
           <div className="flex flex-wrap gap-2">
             {categoryLabel ? <span className="rounded-full bg-[#f4f6fb] px-3 py-1 text-[11px] text-[#556070]">{categoryLabel}</span> : null}
             {item.difficulty ? <DifficultyStars difficulty={item.difficulty} compact /> : null}
-            {tags.map((tag) => (
-              <span key={`${item.questionId || item.savedQuestionId || item.setId}-${tag}`} className="rounded-full bg-[#fff7ed] px-3 py-1 text-[11px] text-[#9a5b11]">
+            {tags.map((tag, index) => (
+              <span key={`${tag}-${index}`} className="rounded-full bg-[#fff7ed] px-3 py-1 text-[11px] text-[#9a5b11]">
                 #{tag}
               </span>
             ))}

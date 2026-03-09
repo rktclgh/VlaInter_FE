@@ -631,22 +631,7 @@ export const FileUploadPage = () => {
     setAnalyzingFileId(String(target.fileId));
     setTypeError(type, "");
     try {
-      const result = await ingestMockDocument(target.fileId);
-      const nextStatus = result?.status || "QUEUED";
-      setSavedFilesByType((prev) => ({
-        ...prev,
-        [type]: (prev[type] || []).map((file) =>
-          String(file?.fileId) === String(target.fileId)
-            ? {
-                ...file,
-                ingestionStatus: nextStatus,
-                ingested: nextStatus === "READY",
-                extractionMethod: result?.extractionMethod || null,
-                ocrUsed: Boolean(result?.ocrUsed),
-              }
-            : file
-        ),
-      }));
+      await ingestMockDocument(target.fileId);
       void loadSavedFiles();
     } catch (error) {
       setTypeError(type, error?.message || "AI 분석 요청 중 오류가 발생했습니다.");
