@@ -13,7 +13,7 @@ import {
   getPointPaymentHistory,
   refundPointPayment,
 } from "../../lib/paymentApi";
-import { getMyFiles, getMyProfile } from "../../lib/userApi";
+import { getMyProfile, getMyProfileImageUrl } from "../../lib/userApi";
 
 const PAGE_SIZE = 10;
 
@@ -44,28 +44,12 @@ const parsePoint = (rawValue) => {
   return 0;
 };
 
-const normalizeProfileImageUrl = (rawUrl) => {
-  if (!rawUrl || typeof rawUrl !== "string") return "";
-  const trimmed = rawUrl.trim();
-  if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) return trimmed;
-  return "";
-};
-
 const extractProfile = (payload) => {
   if (!payload || typeof payload !== "object") return {};
   if (payload.data && typeof payload.data === "object" && !Array.isArray(payload.data)) return payload.data;
   if (payload.result && typeof payload.result === "object" && !Array.isArray(payload.result)) return payload.result;
   if (payload.user && typeof payload.user === "object" && !Array.isArray(payload.user)) return payload.user;
   return payload;
-};
-
-const extractFileList = (payload) => {
-  if (Array.isArray(payload)) return payload;
-  if (Array.isArray(payload?.files)) return payload.files;
-  if (Array.isArray(payload?.data)) return payload.data;
-  if (Array.isArray(payload?.content)) return payload.content;
-  if (Array.isArray(payload?.items)) return payload.items;
-  return [];
 };
 
 const toObject = (payload) => {
@@ -277,26 +261,12 @@ export const PointChargePage = () => {
         const profilePayload = await getMyProfile();
         const profile = extractProfile(profilePayload);
         setUserName(profile?.name || "사용자");
-        setUserPoint(parsePoint(profile?.point));
-        const directProfileUrl = normalizeProfileImageUrl(profile?.profileImageUrl || profile?.imageUrl);
-        if (directProfileUrl) {
-          setProfileImageUrl(directProfileUrl);
-        }
-      } catch {
-        navigate("/login", { replace: true });
-        return;
-      }
-
-      try {
-        const filesPayload = await getMyFiles();
-        const files = extractFileList(filesPayload);
-        const profileImageFile = files.find((file) => file?.fileType === "PROFILE_IMAGE");
-        const url = normalizeProfileImageUrl(profileImageFile?.fileUrl);
-        setProfileImageUrl((prev) => (url ? url : prev || tempProfileImage));
-      } catch {
-        setProfileImageUrl((prev) => prev || tempProfileImage);
-      }
-    };
+      setUserPoint(parsePoint(profile?.point));
+      setProfileImageUrl(getMyProfileImageUrl());
+    } catch {
+      navigate("/login", { replace: true });
+    }
+  };
 
     loadProfile();
   }, [navigate]);
@@ -345,7 +315,7 @@ export const PointChargePage = () => {
   const pointSummaryText = useMemo(() => formatPoint(userPoint), [userPoint]);
 
   return (
-    <div className="min-h-screen bg-white pt-[54px]">
+    <div className="min-h-screen overflow-x-hidden bg-white pt-[54px]">
       <ContentTopNav
         point={pointSummaryText}
         onClickCharge={() => setShowPointChargeModal(true)}

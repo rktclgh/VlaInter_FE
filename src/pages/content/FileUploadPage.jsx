@@ -1,43 +1,44 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ContentTopNav } from "../../components/ContentTopNav";
 import { Sidebar } from "../../components/Sidebar";
 import { MobileSidebarDrawer } from "../../components/MobileSidebarDrawer";
+import { OcrInfoBadge } from "../../components/OcrInfoBadge";
 import { PointChargeModal } from "../../components/PointChargeModal";
 import { PointChargeSuccessModal } from "../../components/PointChargeSuccessModal";
 import dragDropIcon from "../../assets/icon/Drag_Drop.png";
 import plusIcon from "../../assets/icon/plus.png";
 import tempProfileImage from "../../assets/icon/temp.png";
 import { logout } from "../../lib/authApi";
+import { ingestMockDocument } from "../../lib/interviewApi";
 import { consumePointChargeSuccessResult } from "../../lib/pointChargeFlow";
-import { deleteMyFile, getMyFiles, getMyProfile, uploadMyFile } from "../../lib/userApi";
+import { extractProfile, formatPoint, parsePoint } from "../../lib/profileUtils";
+import { deleteMyFile, getMyFiles, getMyProfile, getMyProfileImageUrl, uploadMyFile } from "../../lib/userApi";
 
 const DOCUMENT_TYPES = [
   { key: "RESUME", title: "이력서" },
   { key: "INTRODUCE", title: "자기소개서" },
   { key: "PORTFOLIO", title: "포트폴리오" },
 ];
+const DOCUMENT_TYPE_KEYS = DOCUMENT_TYPES.map((item) => item.key);
+const createEmptyFilesByType = () =>
+  DOCUMENT_TYPE_KEYS.reduce((acc, key) => {
+    acc[key] = [];
+    return acc;
+  }, {});
 
-const formatPoint = (value) => {
-  const safeNumber = Number.isFinite(Number(value)) ? Math.max(0, Number(value)) : 0;
-  return `${new Intl.NumberFormat("ko-KR").format(safeNumber)}P`;
+const toTimestamp = (rawDateTime) => {
+  const time = new Date(rawDateTime || "").getTime();
+  if (Number.isNaN(time)) return 0;
+  return time;
 };
 
-const parsePoint = (rawValue) => {
-  if (typeof rawValue === "number") return rawValue;
-  if (typeof rawValue === "string") {
-    const normalized = rawValue.replace(/,/g, "").trim();
-    const parsed = Number(normalized);
-    return Number.isFinite(parsed) ? parsed : 0;
-  }
-  return 0;
-};
-
-const normalizeProfileImageUrl = (rawUrl) => {
-  if (!rawUrl || typeof rawUrl !== "string") return "";
-  const trimmed = rawUrl.trim();
-  if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) return trimmed;
-  return "";
+const sortByLatestFile = (a, b) => {
+  const timeDiff = toTimestamp(b?.createdAt ?? b?.created_at) - toTimestamp(a?.createdAt ?? a?.created_at);
+  if (timeDiff !== 0) return timeDiff;
+  const idA = Number(a?.fileId ?? a?.file_id ?? 0);
+  const idB = Number(b?.fileId ?? b?.file_id ?? 0);
+  return idB - idA;
 };
 
 const extractFileList = (payload) => {
@@ -76,7 +77,7 @@ const resolveDisplayFileName = (file, fallback = "") => {
   const rawUrl = rawUrlCandidates.find((value) => typeof value === "string" && value.trim().length > 0);
   if (rawUrl) {
     const lastSegment = rawUrl.split("/").pop() || "";
-    let decoded = lastSegment;
+    let decoded;
     try {
       decoded = decodeURIComponent(lastSegment);
     } catch {
@@ -112,14 +113,6 @@ const normalizeFileRecord = (file, fallbackName = "") => {
   };
 };
 
-const extractProfile = (payload) => {
-  if (!payload || typeof payload !== "object") return {};
-  if (payload.data && typeof payload.data === "object" && !Array.isArray(payload.data)) return payload.data;
-  if (payload.result && typeof payload.result === "object" && !Array.isArray(payload.result)) return payload.result;
-  if (payload.user && typeof payload.user === "object" && !Array.isArray(payload.user)) return payload.user;
-  return payload;
-};
-
 const isPdfFile = (file) => {
   const lowerName = (file?.name || "").toLowerCase();
   const extensionValid = lowerName.endsWith(".pdf");
@@ -139,6 +132,19 @@ const formatDate = (iso) => {
   if (Number.isNaN(date.getTime())) return "-";
   return date.toISOString().slice(0, 10).replace(/-/g, ".");
 };
+
+const formatIngestionStatus = (rawStatus, ingested, extractionMethod, ocrUsed) => {
+  if (ingested || rawStatus === "READY") {
+    if (ocrUsed || extractionMethod === "OCR_TESSERACT") return "AI 분석 완료 · OCR fallback 적용";
+    if (extractionMethod === "PDFBOX") return "AI 분석 완료 · 텍스트 추출";
+    return "AI 분석 완료";
+  }
+  if (rawStatus === "PROCESSING" || rawStatus === "QUEUED") return "AI 분석 중";
+  if (rawStatus === "FAILED") return "AI 분석 실패";
+  return "AI 분석 전";
+};
+
+const isIngestionRunning = (status) => status === "QUEUED" || status === "PROCESSING";
 
 const LogoutConfirmModal = ({ onCancel, onConfirm }) => {
   return (
@@ -203,7 +209,15 @@ const FileDeleteConfirmModal = ({ onCancel, onConfirm }) => {
   );
 };
 
-const FileRow = ({ fileName, uploadedDate, sizeLabel, showPdfBadge = true, actionNode = null }) => {
+const FileRow = ({
+  fileName,
+  uploadedDate,
+  sizeLabel,
+  statusLabel = "",
+  showPdfBadge = true,
+  actionNode = null,
+  ocrUsed = false,
+}) => {
   return (
     <div className="flex flex-col gap-3 rounded-[12px] border border-[#dddddd] bg-[#f7f7f7] px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
       <div className="flex min-w-0 items-center gap-3">
@@ -213,9 +227,13 @@ const FileRow = ({ fileName, uploadedDate, sizeLabel, showPdfBadge = true, actio
           </div>
         ) : null}
         <div className="min-w-0">
-          <p className="truncate text-[13px] font-medium text-[#2b2b2b]">{fileName}</p>
+          <div className="flex min-w-0 items-center gap-2">
+            <p className="truncate text-[13px] font-medium text-[#2b2b2b]">{fileName}</p>
+            {ocrUsed ? <OcrInfoBadge compact /> : null}
+          </div>
           <p className="mt-0.5 text-[10px] text-[#9d9d9d]">업로드 날짜: {uploadedDate}</p>
           <p className="text-[10px] text-[#9d9d9d]">{sizeLabel}</p>
+          {statusLabel ? <p className="mt-1 text-[11px] font-medium text-[#4f6ddf]">{statusLabel}</p> : null}
         </div>
       </div>
       <div className="self-end sm:self-auto">{actionNode}</div>
@@ -226,7 +244,7 @@ const FileRow = ({ fileName, uploadedDate, sizeLabel, showPdfBadge = true, actio
 const UploadDropZone = ({
   dragActive,
   pendingFile,
-  savedFile,
+  savedFiles,
   error,
   loading,
   onDragEnter,
@@ -237,6 +255,8 @@ const UploadDropZone = ({
   onDeletePending,
   onSavePending,
   onDeleteSaved,
+  onAnalyzeSaved,
+  analyzingFileId,
   isExpanded,
   onToggleExpanded,
   inputId,
@@ -296,24 +316,60 @@ const UploadDropZone = ({
     );
   }
 
-  if (savedFile) {
+  if (savedFiles.length > 0) {
     return (
       <div>
-        <div className="rounded-[14px] border border-[#dedede] bg-white px-4 py-4">
-          <FileRow
-            fileName={resolveDisplayFileName(savedFile)}
-            uploadedDate={formatDate(savedFile.createdAt ?? savedFile.created_at)}
-            sizeLabel="PDF"
-            actionNode={
-              <button
-                type="button"
-                onClick={onDeleteSaved}
-                className="rounded-full bg-[#ff4a4a] px-2 py-1 text-[10px] font-semibold text-white"
-              >
-                삭제
-              </button>
-            }
-          />
+        <div className="space-y-2 rounded-[14px] border border-[#dedede] bg-white px-4 py-4">
+          {savedFiles.map((file) => (
+            <FileRow
+              key={file?.fileId || `${file?.fileName}-${file?.createdAt}`}
+              fileName={resolveDisplayFileName(file)}
+              uploadedDate={formatDate(file?.createdAt ?? file?.created_at)}
+              sizeLabel="PDF"
+              ocrUsed={Boolean(file?.ocrUsed)}
+              statusLabel={formatIngestionStatus(
+                file?.ingestionStatus,
+                file?.ingested,
+                file?.extractionMethod,
+                file?.ocrUsed
+              )}
+              actionNode={
+                <div className="flex items-center gap-2">
+                  {file?.ingested ? (
+                    <span className="rounded-full bg-[#e9f5ee] px-2 py-1 text-[10px] font-semibold text-[#2f7a4d]">
+                      READY
+                    </span>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => onAnalyzeSaved(file?.fileId)}
+                      disabled={analyzingFileId === String(file?.fileId) || isIngestionRunning(file?.ingestionStatus)}
+                      className="rounded-full border border-[#5d6ef8] px-2 py-1 text-[10px] font-semibold text-[#5d6ef8] disabled:opacity-60"
+                    >
+                      {analyzingFileId === String(file?.fileId) || isIngestionRunning(file?.ingestionStatus)
+                        ? "분석 중..."
+                        : "AI 분석"}
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => onDeleteSaved(file?.fileId)}
+                    className="rounded-full bg-[#ff4a4a] px-2 py-1 text-[10px] font-semibold text-white"
+                  >
+                    삭제
+                  </button>
+                </div>
+              }
+            />
+          ))}
+        </div>
+
+        <div
+          className={`overflow-hidden transition-all duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${
+            isExpanded ? "mt-2 max-h-[230px] translate-y-0 opacity-100" : "max-h-0 -translate-y-1 opacity-0"
+          }`}
+        >
+          <div className={isExpanded ? "pointer-events-auto" : "pointer-events-none"}>{renderDropArea()}</div>
         </div>
 
         <div className="mt-3 flex justify-center">
@@ -329,14 +385,6 @@ const UploadDropZone = ({
               className={`h-[11px] w-[11px] transition-transform duration-300 ${isExpanded ? "rotate-45" : "rotate-0"}`}
             />
           </button>
-        </div>
-
-        <div
-          className={`overflow-hidden transition-all duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${
-            isExpanded ? "mt-2 max-h-[230px] translate-y-0 opacity-100" : "max-h-0 -translate-y-1 opacity-0"
-          }`}
-        >
-          <div className={isExpanded ? "pointer-events-auto" : "pointer-events-none"}>{renderDropArea()}</div>
         </div>
       </div>
     );
@@ -358,12 +406,32 @@ export const FileUploadPage = () => {
   const [deleteConfirmTarget, setDeleteConfirmTarget] = useState(null);
   const chargedPointFromCallbackRef = useRef(null);
 
-  const [savedFiles, setSavedFiles] = useState({ RESUME: null, INTRODUCE: null, PORTFOLIO: null });
+  const [savedFilesByType, setSavedFilesByType] = useState(createEmptyFilesByType);
   const [pendingFiles, setPendingFiles] = useState({ RESUME: null, INTRODUCE: null, PORTFOLIO: null });
   const [expandedUploadByType, setExpandedUploadByType] = useState({ RESUME: false, INTRODUCE: false, PORTFOLIO: false });
   const [errors, setErrors] = useState({ RESUME: "", INTRODUCE: "", PORTFOLIO: "" });
   const [dragActiveType, setDragActiveType] = useState("");
   const [savingType, setSavingType] = useState("");
+  const [analyzingFileId, setAnalyzingFileId] = useState("");
+
+  const loadSavedFiles = useCallback(async () => {
+    const filesPayload = await getMyFiles();
+    const files = extractFileList(filesPayload).map((file) => normalizeFileRecord(file));
+    const nextFilesByType = createEmptyFilesByType();
+
+    for (const file of files) {
+      const type = file?.fileType;
+      if (!DOCUMENT_TYPE_KEYS.includes(type)) continue;
+      nextFilesByType[type].push(file);
+    }
+
+    for (const key of DOCUMENT_TYPE_KEYS) {
+      nextFilesByType[key].sort(sortByLatestFile);
+    }
+
+    setSavedFilesByType(nextFilesByType);
+    return nextFilesByType;
+  }, []);
 
   useEffect(() => {
     const charged = consumePointChargeSuccessResult();
@@ -386,37 +454,43 @@ export const FileUploadPage = () => {
           setUserPoint(chargedPointFromCallbackRef.current);
           chargedPointFromCallbackRef.current = null;
         }
-        const directProfileUrl = normalizeProfileImageUrl(profile?.profileImageUrl || profile?.imageUrl);
-        if (directProfileUrl) {
-          setProfileImageUrl(directProfileUrl);
-        }
+        setProfileImageUrl(getMyProfileImageUrl());
       } catch {
         navigate("/login", { replace: true });
         return;
       }
 
       try {
-        const filesPayload = await getMyFiles();
-        const files = extractFileList(filesPayload).map((file) => normalizeFileRecord(file));
-
-        const nextSaved = { RESUME: null, INTRODUCE: null, PORTFOLIO: null };
-        for (const file of files) {
-          if (nextSaved[file?.fileType] === null && nextSaved[file?.fileType] !== undefined) {
-            nextSaved[file.fileType] = file;
-          }
-        }
-        setSavedFiles(nextSaved);
-
-        const profileImageFile = files.find((file) => file?.fileType === "PROFILE_IMAGE");
-        const url = normalizeProfileImageUrl(profileImageFile?.fileUrl);
-        setProfileImageUrl((prev) => (url ? url : prev || tempProfileImage));
+        await loadSavedFiles();
       } catch {
         setProfileImageUrl((prev) => prev || tempProfileImage);
       }
     };
 
     loadData();
-  }, [navigate]);
+  }, [loadSavedFiles, navigate]);
+
+  const hasOngoingIngestion = useMemo(
+    () =>
+      Object.values(savedFilesByType).some((files) =>
+        (files || []).some((file) => isIngestionRunning(file?.ingestionStatus))
+      ),
+    [savedFilesByType]
+  );
+
+  useEffect(() => {
+    if (!hasOngoingIngestion) return undefined;
+    const timer = window.setInterval(() => {
+      void (async () => {
+        try {
+          await loadSavedFiles();
+        } catch (error) {
+          console.error("ingestion polling failed", error);
+        }
+      })();
+    }, 4000);
+    return () => window.clearInterval(timer);
+  }, [hasOngoingIngestion, loadSavedFiles]);
 
   const onSelectSidebar = (item) => {
     setIsMobileMenuOpen(false);
@@ -502,7 +576,13 @@ export const FileUploadPage = () => {
     try {
       const uploaded = await uploadMyFile(type, file);
       const normalizedUploaded = normalizeFileRecord(uploaded, file.name);
-      setSavedFiles((prev) => ({ ...prev, [type]: normalizedUploaded }));
+      setSavedFilesByType((prev) => {
+        const nextList = [...(prev[type] || []), normalizedUploaded].sort(sortByLatestFile);
+        return {
+          ...prev,
+          [type]: nextList,
+        };
+      });
       setPendingFiles((prev) => ({ ...prev, [type]: null }));
     } catch (error) {
       setTypeError(type, error?.message || "파일 저장 중 오류가 발생했습니다.");
@@ -511,19 +591,36 @@ export const FileUploadPage = () => {
     }
   };
 
-  const deleteSaved = async (type) => {
-    const target = savedFiles[type];
+  const deleteSaved = async (type, fileId) => {
+    const target = (savedFilesByType[type] || []).find((file) => String(file?.fileId) === String(fileId));
     if (!target?.fileId) {
-      setSavedFiles((prev) => ({ ...prev, [type]: null }));
       return;
     }
 
     try {
       await deleteMyFile(target.fileId);
-      setSavedFiles((prev) => ({ ...prev, [type]: null }));
-      setExpandedUploadByType((prev) => ({ ...prev, [type]: false }));
+      setSavedFilesByType((prev) => {
+        const nextList = (prev[type] || []).filter((file) => file?.fileId !== target.fileId);
+        return { ...prev, [type]: nextList };
+      });
     } catch (error) {
       setTypeError(type, error?.message || "파일 삭제 중 오류가 발생했습니다.");
+    }
+  };
+
+  const analyzeSaved = async (type, fileId) => {
+    const target = (savedFilesByType[type] || []).find((file) => String(file?.fileId) === String(fileId));
+    if (!target?.fileId) return;
+
+    setAnalyzingFileId(String(target.fileId));
+    setTypeError(type, "");
+    try {
+      await ingestMockDocument(target.fileId);
+      void loadSavedFiles();
+    } catch (error) {
+      setTypeError(type, error?.message || "AI 분석 요청 중 오류가 발생했습니다.");
+    } finally {
+      setAnalyzingFileId("");
     }
   };
 
@@ -531,8 +628,8 @@ export const FileUploadPage = () => {
     setDeleteConfirmTarget({ type, mode: "pending" });
   };
 
-  const requestDeleteSaved = (type) => {
-    setDeleteConfirmTarget({ type, mode: "saved" });
+  const requestDeleteSaved = (type, fileId) => {
+    setDeleteConfirmTarget({ type, mode: "saved", fileId });
   };
 
   const confirmDelete = async () => {
@@ -541,20 +638,20 @@ export const FileUploadPage = () => {
       return;
     }
 
-    const { type, mode } = deleteConfirmTarget;
+    const { type, mode, fileId } = deleteConfirmTarget;
     setDeleteConfirmTarget(null);
 
     if (mode === "pending") {
       removePending(type);
       return;
     }
-    await deleteSaved(type);
+    await deleteSaved(type, fileId);
   };
 
   const hasAnyPending = useMemo(() => Object.values(pendingFiles).some(Boolean), [pendingFiles]);
 
   return (
-    <div className="min-h-screen bg-white pt-[54px]">
+    <div className="min-h-screen overflow-x-hidden bg-white pt-[54px]">
       <ContentTopNav
         point={formatPoint(userPoint)}
         onClickCharge={() => setShowPointChargeModal(true)}
@@ -606,7 +703,7 @@ export const FileUploadPage = () => {
                     <UploadDropZone
                       dragActive={dragActiveType === item.key}
                       pendingFile={pendingFiles[item.key]}
-                      savedFile={savedFiles[item.key]}
+                      savedFiles={savedFilesByType[item.key] || []}
                       error={errors[item.key]}
                       loading={savingType === item.key}
                       onDragEnter={dragHandlers.onDragEnter}
@@ -616,7 +713,9 @@ export const FileUploadPage = () => {
                       onFileInput={(event) => handleFileInput(item.key, event)}
                       onDeletePending={() => requestDeletePending(item.key)}
                       onSavePending={() => savePending(item.key)}
-                      onDeleteSaved={() => requestDeleteSaved(item.key)}
+                      onDeleteSaved={(fileId) => requestDeleteSaved(item.key, fileId)}
+                      onAnalyzeSaved={(fileId) => analyzeSaved(item.key, fileId)}
+                      analyzingFileId={analyzingFileId}
                       isExpanded={expandedUploadByType[item.key]}
                       onToggleExpanded={() => toggleExpandedUploader(item.key)}
                       inputId={`file-input-${item.key}`}

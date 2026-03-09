@@ -84,7 +84,7 @@ export const PointChargeCallbackPage = () => {
   }, [navigate, returnPath]);
 
   return (
-    <div className="min-h-screen bg-[#f7f7f7] px-4 py-12">
+    <div className="min-h-screen overflow-x-hidden bg-[#f7f7f7] px-4 py-12">
       <div className="mx-auto w-full max-w-[420px] rounded-[16px] border border-[#dedede] bg-white p-6">
         <h1 className="text-[20px] font-semibold text-[#1f1f1f]">포인트 결제</h1>
         <p className="mt-3 text-[13px] leading-[1.6] text-[#555]">{message}</p>

@@ -15,8 +15,12 @@ import {
 } from "../../lib/paymentApi";
 import {
   changeMyPassword,
+  clearMyGeminiApiKey,
+  deleteMyFile,
   getMyFiles,
   getMyProfile,
+  getMyProfileImageUrl,
+  updateMyGeminiApiKey,
   uploadMyFile,
 } from "../../lib/userApi";
 
@@ -49,12 +53,7 @@ const parsePoint = (rawValue) => {
   return 0;
 };
 
-const normalizeProfileImageUrl = (rawUrl) => {
-  if (!rawUrl || typeof rawUrl !== "string") return "";
-  const trimmed = rawUrl.trim();
-  if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) return trimmed;
-  return "";
-};
+const extractFileId = (file) => file?.fileId ?? file?.file_id ?? null;
 
 const extractProfile = (payload) => {
   if (!payload || typeof payload !== "object") return {};
@@ -345,8 +344,12 @@ export const MyPage = () => {
 
   const [profileUploading, setProfileUploading] = useState(false);
   const [profileUploadErrorMessage, setProfileUploadErrorMessage] = useState("");
+  const [hasGeminiApiKey, setHasGeminiApiKey] = useState(false);
+  const [geminiApiKeyInput, setGeminiApiKeyInput] = useState("");
+  const [geminiApiKeySubmitting, setGeminiApiKeySubmitting] = useState(false);
+  const [geminiApiKeyMessage, setGeminiApiKeyMessage] = useState("");
+  const [geminiApiKeyErrorMessage, setGeminiApiKeyErrorMessage] = useState("");
   const profileImageInputRef = useRef(null);
-  const profilePreviewObjectUrlRef = useRef("");
 
   const [activeHistoryTab, setActiveHistoryTab] = useState("payment");
   const [refundingChargeId, setRefundingChargeId] = useState(null);
@@ -372,14 +375,6 @@ export const MyPage = () => {
   });
   const [ledgerLoading, setLedgerLoading] = useState(true);
   const [ledgerErrorMessage, setLedgerErrorMessage] = useState("");
-
-  useEffect(() => {
-    return () => {
-      if (profilePreviewObjectUrlRef.current) {
-        URL.revokeObjectURL(profilePreviewObjectUrlRef.current);
-      }
-    };
-  }, []);
 
   useEffect(() => {
     const charged = consumePointChargeSuccessResult();
@@ -432,24 +427,10 @@ export const MyPage = () => {
         setUserName(profile?.name || "사용자");
         setUserEmail(profile?.email || "-");
         setUserPoint(parsePoint(profile?.point));
-
-        const directProfileUrl = normalizeProfileImageUrl(profile?.profileImageUrl || profile?.imageUrl);
-        if (directProfileUrl) {
-          setProfileImageUrl(directProfileUrl);
-        }
+        setHasGeminiApiKey(Boolean(profile?.hasGeminiApiKey));
+        setProfileImageUrl(getMyProfileImageUrl());
       } catch {
         navigate("/login", { replace: true });
-        return;
-      }
-
-      try {
-        const filesPayload = await getMyFiles();
-        const files = extractFileList(filesPayload);
-        const profileImageFile = files.find((file) => file?.fileType === "PROFILE_IMAGE");
-        const url = normalizeProfileImageUrl(profileImageFile?.fileUrl);
-        setProfileImageUrl((prev) => (url ? url : prev || tempProfileImage));
-      } catch {
-        setProfileImageUrl((prev) => prev || tempProfileImage);
       }
     };
 
@@ -514,23 +495,27 @@ export const MyPage = () => {
     setProfileUploadErrorMessage("");
 
     try {
-      const uploaded = await uploadMyFile("PROFILE_IMAGE", file);
-      const remoteUrl = normalizeProfileImageUrl(uploaded?.fileUrl || uploaded?.url);
-      if (remoteUrl) {
-        if (profilePreviewObjectUrlRef.current) {
-          URL.revokeObjectURL(profilePreviewObjectUrlRef.current);
-          profilePreviewObjectUrlRef.current = "";
-        }
-        setProfileImageUrl(remoteUrl);
-        return;
+      let existingProfileFileIds;
+      try {
+        const filesPayload = await getMyFiles();
+        existingProfileFileIds = extractFileList(filesPayload)
+          .filter((savedFile) => savedFile?.fileType === "PROFILE_IMAGE")
+          .map((savedFile) => extractFileId(savedFile))
+          .filter((fileId) => fileId !== null && fileId !== undefined);
+      } catch {
+        existingProfileFileIds = [];
       }
 
-      const previewUrl = URL.createObjectURL(file);
-      if (profilePreviewObjectUrlRef.current) {
-        URL.revokeObjectURL(profilePreviewObjectUrlRef.current);
+      const uploaded = await uploadMyFile("PROFILE_IMAGE", file);
+      const uploadedFileId = extractFileId(uploaded);
+
+      const staleProfileFileIds = existingProfileFileIds.filter(
+        (fileId) => String(fileId) !== String(uploadedFileId ?? "")
+      );
+      if (staleProfileFileIds.length > 0) {
+        await Promise.allSettled(staleProfileFileIds.map((fileId) => deleteMyFile(fileId)));
       }
-      profilePreviewObjectUrlRef.current = previewUrl;
-      setProfileImageUrl(previewUrl);
+      setProfileImageUrl(getMyProfileImageUrl());
     } catch (error) {
       setProfileUploadErrorMessage(error?.message || "프로필 사진 업로드에 실패했습니다.");
     } finally {
@@ -569,6 +554,45 @@ export const MyPage = () => {
     }
   };
 
+  const submitGeminiApiKey = async () => {
+    const normalizedKey = geminiApiKeyInput.trim();
+    if (!normalizedKey) {
+      setGeminiApiKeyErrorMessage("Gemini API 키를 입력해 주세요.");
+      return;
+    }
+    setGeminiApiKeySubmitting(true);
+    setGeminiApiKeyErrorMessage("");
+    setGeminiApiKeyMessage("");
+    try {
+      const payload = await updateMyGeminiApiKey(normalizedKey);
+      const profile = extractProfile(payload);
+      setHasGeminiApiKey(Boolean(profile?.hasGeminiApiKey));
+      setGeminiApiKeyInput("");
+      setGeminiApiKeyMessage("Gemini API 키가 저장되었습니다.");
+    } catch (error) {
+      setGeminiApiKeyErrorMessage(error?.message || "Gemini API 키 저장에 실패했습니다.");
+    } finally {
+      setGeminiApiKeySubmitting(false);
+    }
+  };
+
+  const removeGeminiApiKey = async () => {
+    setGeminiApiKeySubmitting(true);
+    setGeminiApiKeyErrorMessage("");
+    setGeminiApiKeyMessage("");
+    try {
+      const payload = await clearMyGeminiApiKey();
+      const profile = extractProfile(payload);
+      setHasGeminiApiKey(Boolean(profile?.hasGeminiApiKey));
+      setGeminiApiKeyInput("");
+      setGeminiApiKeyMessage("Gemini API 키가 제거되었습니다.");
+    } catch (error) {
+      setGeminiApiKeyErrorMessage(error?.message || "Gemini API 키 제거에 실패했습니다.");
+    } finally {
+      setGeminiApiKeySubmitting(false);
+    }
+  };
+
   const moveToLoginAfterPasswordChange = async () => {
     setShowReLoginGuideModal(false);
     try {
@@ -603,7 +627,7 @@ export const MyPage = () => {
   }, [location.pathname]);
 
   return (
-    <div className="min-h-screen bg-white pt-[54px]">
+    <div className="min-h-screen overflow-x-hidden bg-white pt-[54px]">
       <ContentTopNav
         point={pointSummaryText}
         onClickCharge={() => setShowPointChargeModal(true)}
@@ -651,7 +675,15 @@ export const MyPage = () => {
                       className="relative"
                       aria-label="프로필 사진 변경"
                     >
-                      <img src={profileImageUrl} alt="프로필" className="h-16 w-16 rounded-full border border-[#dddddd] object-cover sm:h-20 sm:w-20" />
+                      <img
+                        src={profileImageUrl}
+                        alt="프로필"
+                        className="h-16 w-16 rounded-full border border-[#dddddd] object-cover sm:h-20 sm:w-20"
+                        onError={(event) => {
+                          event.currentTarget.onerror = null;
+                          event.currentTarget.src = tempProfileImage;
+                        }}
+                      />
                       <span className="absolute bottom-[-2px] right-[-2px] inline-flex h-7 w-7 items-center justify-center rounded-full border border-[#d5d8de] bg-white text-[#5f6670] shadow-[0_2px_5px_rgba(0,0,0,0.16)]">
                         <svg viewBox="0 0 24 24" aria-hidden="true" className="h-4 w-4 fill-current">
                           <path d="M7.5 5.5a2 2 0 0 1 1.8-1.1h5.4a2 2 0 0 1 1.8 1.1l.7 1.3h1.3a2.5 2.5 0 0 1 2.5 2.5v7.2a2.5 2.5 0 0 1-2.5 2.5H5.5A2.5 2.5 0 0 1 3 16.5V9.3a2.5 2.5 0 0 1 2.5-2.5h1.3l.7-1.3zm4.5 3.3a4.2 4.2 0 1 0 0 8.4 4.2 4.2 0 0 0 0-8.4zm0 1.8a2.4 2.4 0 1 1 0 4.8 2.4 2.4 0 0 1 0-4.8z" />
@@ -676,6 +708,47 @@ export const MyPage = () => {
                   </div>
                 </div>
                 {profileUploadErrorMessage ? <p className="mt-3 text-[12px] text-[#d84a4a]">{profileUploadErrorMessage}</p> : null}
+              </div>
+
+              <div className="mt-4 rounded-[16px] border border-[#e0e0e0] bg-white p-6">
+                <h2 className="text-[18px] font-medium text-[#1f1f1f]">Gemini API 키</h2>
+                <p className="mt-1 whitespace-pre-line text-[12px] leading-[1.6] text-[#7a7a7a]">
+                  {"본 서비스는 Gemini API를 기반으로 작동합니다.\n입력하신 API 키는 암호화되어 관리되며 비용이 따로 발생하지 않습니다."}
+                </p>
+                <div className="mt-4 flex flex-col gap-3 sm:flex-row">
+                  <input
+                    type="password"
+                    value={geminiApiKeyInput}
+                    onChange={(event) => setGeminiApiKeyInput(event.target.value)}
+                    placeholder="Gemini API 키 입력"
+                    className="h-[40px] w-full rounded-[10px] border border-[#d8d8d8] px-3 text-[13px] text-[#202020] outline-none focus:border-[#9a9a9a]"
+                  />
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={submitGeminiApiKey}
+                      disabled={geminiApiKeySubmitting}
+                      className="rounded-[10px] border border-[#1f1f1f] bg-[#1f1f1f] px-4 py-2 text-[12px] text-white disabled:opacity-60"
+                    >
+                      {geminiApiKeySubmitting ? "저장 중..." : "저장"}
+                    </button>
+                    {hasGeminiApiKey ? (
+                      <button
+                        type="button"
+                        onClick={removeGeminiApiKey}
+                        disabled={geminiApiKeySubmitting}
+                        className="rounded-[10px] border border-[#d6d6d6] px-4 py-2 text-[12px] text-[#555] disabled:opacity-60"
+                      >
+                        키 제거
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
+                <p className="mt-2 text-[12px] text-[#4f5664]">
+                  현재 상태: {hasGeminiApiKey ? "등록됨" : "미등록"}
+                </p>
+                {geminiApiKeyMessage ? <p className="mt-2 text-[12px] text-[#1f8f55]">{geminiApiKeyMessage}</p> : null}
+                {geminiApiKeyErrorMessage ? <p className="mt-2 text-[12px] text-[#d84a4a]">{geminiApiKeyErrorMessage}</p> : null}
               </div>
 
               <div className="mt-4 rounded-[16px] border border-[#e0e0e0] bg-white p-6">
