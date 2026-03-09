@@ -166,7 +166,7 @@ export const Join = () => {
   };
 
   return (
-    <div className="min-h-screen w-full bg-white">
+    <div className="min-h-screen w-full overflow-x-hidden bg-white">
       <TopNav />
 
       <div className="flex min-h-[calc(100vh-54px)] flex-col pt-[54px]">

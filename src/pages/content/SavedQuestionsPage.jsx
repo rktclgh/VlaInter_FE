@@ -186,7 +186,7 @@ export const SavedQuestionsPage = () => {
   };
 
   return (
-    <div className="min-h-screen bg-white pt-[54px]">
+    <div className="min-h-screen overflow-x-hidden bg-white pt-[54px]">
       <ContentTopNav point={formatPoint(userPoint)} onClickCharge={() => setShowPointChargeModal(true)} onOpenMenu={() => setIsMobileMenuOpen(true)} />
       <MobileSidebarDrawer open={isMobileMenuOpen} activeKey="saved_question" onClose={() => setIsMobileMenuOpen(false)} onNavigate={handleSidebarNavigate} userName={userName} profileImageUrl={profileImageUrl} fallbackProfileImageUrl={tempProfileImage} onLogout={() => { setIsMobileMenuOpen(false); setShowLogoutModal(true); }} />
       <div className="flex min-h-[calc(100vh-54px)]">
@@ -195,8 +195,8 @@ export const SavedQuestionsPage = () => {
           <div className="mx-auto w-full max-w-[1280px]">
             <section className="rounded-[24px] border border-[#e4e7ee] bg-[linear-gradient(180deg,#ffffff_0%,#f7f9fc_100%)] p-6">
               <p className="text-[12px] font-semibold tracking-[0.08em] text-[#7a8190]">SAVED QUESTIONS</p>
-              <h1 className="mt-2 text-[30px] font-semibold tracking-[-0.02em] text-[#161a22] sm:text-[40px]">질문 카드로 빠르게 다시 찾는다</h1>
-              <p className="mt-3 text-[14px] leading-[1.7] text-[#5e6472]">직무, 카테고리, 난이도, 날짜 기준으로 추려서 필요한 질문만 바로 다시 본다.</p>
+              <h1 className="mt-2 text-[30px] font-semibold tracking-[-0.02em] text-[#161a22] sm:text-[40px]">질문 카드를 빠르게 다시 찾습니다</h1>
+              <p className="mt-3 text-[14px] leading-[1.7] text-[#5e6472]">직무, 카테고리, 난이도, 날짜 기준으로 추려서 필요한 질문만 바로 다시 보실 수 있습니다.</p>
             </section>
 
             <section className="mt-5 rounded-[24px] border border-[#e4e7ee] bg-white p-5 sm:p-6">

@@ -53,7 +53,7 @@ export const ForgotPassword = () => {
   const isSendDisabled = pending || cooldownSeconds > 0;
 
   return (
-    <div className="min-h-screen w-full bg-white">
+    <div className="min-h-screen w-full overflow-x-hidden bg-white">
       <TopNav />
 
       <div className="flex min-h-[calc(100vh-54px)] flex-col pt-[54px]">

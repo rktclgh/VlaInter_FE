@@ -284,7 +284,7 @@ export const TechPracticePage = () => {
   };
 
   return (
-    <div className="min-h-screen bg-white pt-[54px]">
+    <div className="min-h-screen overflow-x-hidden bg-white pt-[54px]">
       <ContentTopNav point={formatPoint(userPoint)} onClickCharge={() => { if (!isStartingPractice) setShowPointChargeModal(true); }} onOpenMenu={() => { if (!isStartingPractice) setIsMobileMenuOpen(true); }} />
 
       <MobileSidebarDrawer open={isMobileMenuOpen} activeKey="tech_practice" onClose={() => setIsMobileMenuOpen(false)} onNavigate={handleSidebarNavigate} userName={userName} profileImageUrl={profileImageUrl} fallbackProfileImageUrl={tempProfileImage} onLogout={() => { setIsMobileMenuOpen(false); setShowLogoutModal(true); }} />
@@ -298,8 +298,8 @@ export const TechPracticePage = () => {
           <div className="mx-auto w-full max-w-[1280px]">
             <section className="rounded-[24px] border border-[#e4e7ee] bg-[linear-gradient(180deg,#ffffff_0%,#f7f9fc_100%)] p-6">
               <p className="text-[12px] font-semibold tracking-[0.08em] text-[#7a8190]">TECH PRACTICE</p>
-              <h1 className="mt-2 text-[30px] font-semibold tracking-[-0.02em] text-[#161a22] sm:text-[40px]">카테고리 기준으로 실전 연습을 시작한다</h1>
-              <p className="mt-3 text-[14px] leading-[1.7] text-[#5e6472]">직무와 기술 카테고리, 난이도를 고르면 그 기준에 맞는 기술질문 연습을 바로 시작할 수 있다.</p>
+              <h1 className="mt-2 text-[30px] font-semibold tracking-[-0.02em] text-[#161a22] sm:text-[40px]">카테고리 기준으로 실전 연습을 시작합니다</h1>
+              <p className="mt-3 text-[14px] leading-[1.7] text-[#5e6472]">직무와 기술 카테고리, 난이도를 고르면 해당 기준에 맞는 기술질문 연습을 바로 시작하실 수 있습니다.</p>
             </section>
 
             <section className="mt-5 rounded-[24px] border border-[#e4e7ee] bg-white p-5 sm:p-6">
@@ -323,8 +323,8 @@ export const TechPracticePage = () => {
               {canCreateCategory ? (
                 <div className="mt-4 flex items-center justify-between gap-3 rounded-[18px] border border-dashed border-[#d7dce5] bg-[#fafbfd] p-4">
                   <div>
-                    <p className="text-[13px] font-semibold text-[#171b24]">`{categoryQuery.trim()}` 카테고리가 아직 없다.</p>
-                    <p className="mt-1 text-[12px] text-[#5e6472]">직무를 고른 뒤 새 카테고리를 만들면 바로 기술질문 연습에 사용할 수 있다.</p>
+                    <p className="text-[13px] font-semibold text-[#171b24]">`{categoryQuery.trim()}` 카테고리가 아직 없습니다.</p>
+                    <p className="mt-1 text-[12px] text-[#5e6472]">직무를 고른 뒤 새 카테고리를 만드시면 바로 기술질문 연습에 사용하실 수 있습니다.</p>
                   </div>
                   <button type="button" disabled={creatingCategory} onClick={handleCreateCategory} className="rounded-[14px] border border-[#171b24] px-4 py-2.5 text-[13px] font-semibold text-[#171b24] disabled:opacity-60">{creatingCategory ? "생성 중..." : "카테고리 추가"}</button>
                 </div>
@@ -342,7 +342,7 @@ export const TechPracticePage = () => {
                     <DifficultyStars difficulty={ratingToDifficulty(selectedRating)} compact />
                   </div>
                   <p className="mt-4 text-[18px] font-semibold text-[#171b24]">{category.name}</p>
-                  <p className="mt-2 text-[13px] leading-[1.7] text-[#5e6472]">선택한 난이도 기준으로 {QUESTION_COUNT}문항 연습을 시작한다.</p>
+                  <p className="mt-2 text-[13px] leading-[1.7] text-[#5e6472]">선택한 난이도 기준으로 {QUESTION_COUNT}문항 연습을 시작합니다.</p>
                   <div className="mt-5 flex items-center justify-between gap-3">
                     {startingCategoryId === category.categoryId ? <InlineSpinner label="면접 시작 중..." /> : <span className="text-[12px] text-[#6b7280]">문항 {QUESTION_COUNT}개</span>}
                     <button type="button" disabled={isStartingPractice} onClick={() => handleStartPractice(category)} className="rounded-[14px] bg-[#171b24] px-4 py-2.5 text-[13px] font-semibold text-white disabled:opacity-60">{startingCategoryId === category.categoryId ? "시작 중..." : "연습 시작"}</button>

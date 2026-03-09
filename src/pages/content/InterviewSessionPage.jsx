@@ -363,7 +363,7 @@ export const InterviewSessionPage = () => {
   }
 
   return (
-    <div className="min-h-screen bg-white pt-[54px]">
+    <div className="min-h-screen overflow-x-hidden bg-white pt-[54px]">
       <ContentTopNav
         point={formatPoint(userPoint)}
         onClickCharge={() => setShowPointChargeModal(true)}
@@ -423,10 +423,10 @@ export const InterviewSessionPage = () => {
                     <h1 className="mt-2 text-[28px] font-semibold text-[#161a22] sm:text-[34px]">{currentQuestionTitle}</h1>
                     <p className="mt-2 text-[13px] leading-[1.6] text-[#5e6472]">
                       {isMockInterview
-                        ? "모의면접 중에는 다음 문제에 집중하고, 종료 후 질문·답변·평가를 한 번에 확인한다."
+                        ? "모의면접 중에는 다음 문제에 집중하시고, 종료 후 질문·답변·평가를 한 번에 확인하실 수 있습니다."
                         : isQuestionSetPractice
                           ? "내 질문 세트 연습은 질문, 내 답변, 모범답안을 중심으로 확인합니다."
-                          : "답변 제출 후 피드백과 모범 답안을 바로 확인할 수 있다."}
+                          : "답변 제출 후 피드백과 모범 답안을 바로 확인하실 수 있습니다."}
                     </p>
                   </div>
                   <button
@@ -564,7 +564,7 @@ export const InterviewSessionPage = () => {
                       <div>
                         <p className="text-[16px] font-medium text-[#171b24]">면접 결과</p>
                         <p className="mt-1 text-[13px] leading-[1.7] text-[#5e6472]">
-                          질문, 답변, 평가를 한 번에 확인하고 필요한 항목만 저장할 수 있다.
+                          질문, 답변, 평가를 한 번에 확인하시고 필요한 항목만 저장하실 수 있습니다.
                         </p>
                       </div>
                     </div>
@@ -637,7 +637,7 @@ export const InterviewSessionPage = () => {
                     <p className="mt-2 text-[13px] leading-[1.7] text-[#5e6472]">
                       {isQuestionSetPractice
                         ? "내 질문 세트 연습이 완료되었습니다. 세트 화면으로 돌아가 다음 연습을 이어갈 수 있습니다."
-                        : "새 면접을 시작하거나 저장된 질문을 확인해 다음 연습을 이어갈 수 있다."}
+                        : "새 면접을 시작하거나 저장된 질문을 확인하여 다음 연습을 이어가실 수 있습니다."}
                     </p>
                   </div>
                 ) : null}

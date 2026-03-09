@@ -9,7 +9,7 @@ import { PointChargeSuccessModal } from "../../components/PointChargeSuccessModa
 import { Sidebar } from "../../components/Sidebar";
 import tempProfileImage from "../../assets/icon/temp.png";
 import { logout } from "../../lib/authApi";
-import { getInterviewSessionHistory, getInterviewSessionResults } from "../../lib/interviewApi";
+import { bookmarkInterviewTurn, getInterviewSessionHistory, getInterviewSessionResults } from "../../lib/interviewApi";
 import { getQuestionCategoryDisplayName } from "../../lib/categoryPresentation";
 import { consumePointChargeSuccessResult } from "../../lib/pointChargeFlow";
 import { getMyProfile, getMyProfileImageUrl } from "../../lib/userApi";
@@ -69,15 +69,30 @@ const InlineSpinner = ({ label }) => (
   </div>
 );
 
-const ResultCard = ({ turn }) => {
+const ResultCard = ({ turn, onBookmark, bookmarking }) => {
   const stars = scoreToStars(turn?.evaluation?.score);
+  const bookmarked = Boolean(turn?.bookmarked);
+  const bookmarkDisabled = bookmarked || bookmarking || !turn?.turnId;
+  const bookmarkLabel = bookmarking ? "저장 중..." : (bookmarked ? "저장됨" : "저장하기");
   return (
     <article className="rounded-[22px] border border-[#e4e7ee] bg-white p-5 shadow-[0_12px_28px_rgba(15,23,42,0.04)]">
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center gap-2">
         <span className="rounded-full bg-[#eef2f8] px-3 py-1 text-[11px] text-[#556070]">질문 {turn.turnNo}</span>
         {turn.category ? <span className="rounded-full bg-[#f7f8fb] px-3 py-1 text-[11px] text-[#556070]">{getQuestionCategoryDisplayName(turn.category)}</span> : null}
         {turn.sourceTag === "USER" ? <span className="rounded-full bg-[#e8f7ef] px-3 py-1 text-[11px] text-[#18784a]">사용자 생성</span> : null}
         {turn.difficulty ? <DifficultyStars difficulty={turn.difficulty} compact /> : null}
+        </div>
+        <button
+          type="button"
+          onClick={() => onBookmark?.(turn.turnId)}
+          disabled={bookmarkDisabled}
+          className={`rounded-[10px] border px-3 py-1.5 text-[12px] font-semibold transition ${
+            bookmarkDisabled ? "cursor-not-allowed border-[#d8dce5] bg-[#f4f6fa] text-[#9aa3b2]" : "border-[#171b24] bg-[#171b24] text-white hover:opacity-90"
+          }`}
+        >
+          {bookmarkLabel}
+        </button>
       </div>
       <p className="mt-4 text-[16px] font-semibold leading-[1.7] text-[#1d2430]">{turn.questionText}</p>
       <div className="mt-4 grid gap-3 md:grid-cols-2">
@@ -127,6 +142,7 @@ export const SessionHistoryTemplate = ({ title, description, apiBasePath, active
   const [items, setItems] = useState([]);
   const [selectedSessionId, setSelectedSessionId] = useState(null);
   const [selectedResults, setSelectedResults] = useState(null);
+  const [bookmarkingTurnIds, setBookmarkingTurnIds] = useState([]);
 
   useEffect(() => {
     const charged = consumePointChargeSuccessResult();
@@ -169,6 +185,7 @@ export const SessionHistoryTemplate = ({ title, description, apiBasePath, active
     if (!selectedSessionId) return;
     const loadResults = async () => {
       setLoadingResult(true);
+      setBookmarkingTurnIds([]);
       try {
         const result = await getInterviewSessionResults(apiBasePath, selectedSessionId);
         setSelectedResults(result);
@@ -182,6 +199,31 @@ export const SessionHistoryTemplate = ({ title, description, apiBasePath, active
   }, [apiBasePath, selectedSessionId]);
 
   const selectedSummary = useMemo(() => items.find((item) => item.sessionId === selectedSessionId) || null, [items, selectedSessionId]);
+
+  const handleBookmarkTurn = useCallback(async (turnId) => {
+    if (!turnId) return;
+    if (bookmarkingTurnIds.includes(turnId)) return;
+    const target = selectedResults?.turns?.find((item) => item.turnId === turnId);
+    if (target?.bookmarked) return;
+
+    setBookmarkingTurnIds((prev) => [...prev, turnId]);
+    setPageErrorMessage("");
+    try {
+      await bookmarkInterviewTurn(apiBasePath, turnId);
+      setSelectedResults((prev) =>
+        prev
+          ? {
+              ...prev,
+              turns: prev.turns.map((item) => (item.turnId === turnId ? { ...item, bookmarked: true } : item)),
+            }
+          : prev
+      );
+    } catch (error) {
+      setPageErrorMessage(error?.message || "질문 저장에 실패했습니다.");
+    } finally {
+      setBookmarkingTurnIds((prev) => prev.filter((id) => id !== turnId));
+    }
+  }, [apiBasePath, bookmarkingTurnIds, selectedResults]);
 
   const handleSidebarNavigate = (item) => {
     setIsMobileMenuOpen(false);
@@ -200,7 +242,7 @@ export const SessionHistoryTemplate = ({ title, description, apiBasePath, active
   };
 
   return (
-    <div className="min-h-screen bg-white pt-[54px]">
+    <div className="min-h-screen overflow-x-hidden bg-white pt-[54px]">
       <ContentTopNav point={formatPoint(userPoint)} onClickCharge={() => setShowPointChargeModal(true)} onOpenMenu={() => setIsMobileMenuOpen(true)} />
 
       <MobileSidebarDrawer
@@ -237,7 +279,7 @@ export const SessionHistoryTemplate = ({ title, description, apiBasePath, active
                 <div className="flex items-center justify-between gap-3">
                   <div>
                     <p className="text-[12px] font-semibold tracking-[0.08em] text-[#7a8190]">SESSION LIST</p>
-                    <p className="mt-1 text-[13px] text-[#5e6472]">카드를 클릭하면 질문-답변-평가 세트를 아래에서 바로 확인한다.</p>
+                    <p className="mt-1 text-[13px] text-[#5e6472]">카드를 클릭하시면 질문-답변-평가 세트를 아래에서 바로 확인하실 수 있습니다.</p>
                   </div>
                   {loadingList ? <InlineSpinner label="이력 불러오는 중..." /> : null}
                 </div>
@@ -306,7 +348,14 @@ export const SessionHistoryTemplate = ({ title, description, apiBasePath, active
                     </div>
                   ) : null}
                   <div className="mt-5 grid gap-4 lg:grid-cols-2">
-                    {(selectedResults?.turns || []).map((turn) => <ResultCard key={turn.turnId} turn={turn} />)}
+                    {(selectedResults?.turns || []).map((turn) => (
+                      <ResultCard
+                        key={turn.turnId}
+                        turn={turn}
+                        onBookmark={handleBookmarkTurn}
+                        bookmarking={bookmarkingTurnIds.includes(turn.turnId)}
+                      />
+                    ))}
                   </div>
                 </section>
               ) : null}

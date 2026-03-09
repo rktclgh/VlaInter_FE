@@ -174,7 +174,7 @@ const CreateQuestionSetModal = ({ categories, onClose, onSubmit, submitting, err
 
           <div className="border-t border-[#edf1f6] px-6 py-4">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              {submitting ? <InlineSpinner label="문답 세트를 저장하는 중입니다." /> : <span className="text-[12px] text-[#6b7280]">저장 중에는 모달을 닫지 않는다.</span>}
+              {submitting ? <InlineSpinner label="문답 세트를 저장하는 중입니다." /> : <span className="text-[12px] text-[#6b7280]">저장 중에는 모달을 닫지 말아 주세요.</span>}
               <div className="flex items-center justify-end gap-2">
                 <button type="button" disabled={submitting} onClick={requestClose} className="rounded-[14px] border border-[#d9dde5] px-4 py-2.5 text-[13px] text-[#4f5664] disabled:opacity-50">취소</button>
                 <button type="button" disabled={submitting} onClick={() => onSubmit({ setTitle: setTitle.trim(), selectedJobId, selectedCategoryId, categoryQuery: categoryQuery.trim(), rows })} className="rounded-[14px] bg-[#171b24] px-4 py-2.5 text-[13px] font-semibold text-white disabled:opacity-60">{submitting ? "저장 중..." : "문답 세트 저장"}</button>
@@ -424,7 +424,7 @@ export const QuestionSetsPage = () => {
   };
 
   return (
-    <div className="min-h-screen bg-white pt-[54px]">
+    <div className="min-h-screen overflow-x-hidden bg-white pt-[54px]">
       <ContentTopNav point={formatPoint(userPoint)} onClickCharge={() => setShowPointChargeModal(true)} onOpenMenu={() => setIsMobileMenuOpen(true)} />
       <MobileSidebarDrawer open={isMobileMenuOpen} activeKey="question_set" onClose={() => setIsMobileMenuOpen(false)} onNavigate={handleSidebarNavigate} userName={userName} profileImageUrl={profileImageUrl} fallbackProfileImageUrl={tempProfileImage} onLogout={() => { setIsMobileMenuOpen(false); setShowLogoutModal(true); }} />
       <div className="flex min-h-[calc(100vh-54px)]">
@@ -435,8 +435,8 @@ export const QuestionSetsPage = () => {
               <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                 <div>
                   <p className="text-[12px] font-semibold tracking-[0.08em] text-[#7a8190]">MY Q&A SETS</p>
-                  <h1 className="mt-2 text-[30px] font-semibold tracking-[-0.02em] text-[#161a22] sm:text-[40px]">질문 카드 중심으로 관리한다</h1>
-                  <p className="mt-3 text-[14px] leading-[1.7] text-[#5e6472]">질문만 빠르게 훑고, 클릭했을 때 모달에서 질문과 답변을 확인한다.</p>
+                  <h1 className="mt-2 text-[30px] font-semibold tracking-[-0.02em] text-[#161a22] sm:text-[40px]">질문 카드 중심으로 관리합니다</h1>
+                  <p className="mt-3 text-[14px] leading-[1.7] text-[#5e6472]">질문을 빠르게 훑고, 클릭했을 때 모달에서 질문과 답변을 확인하실 수 있습니다.</p>
                 </div>
                 <button type="button" onClick={() => setShowCreateModal(true)} className="rounded-[16px] bg-[#171b24] px-5 py-3 text-[13px] font-semibold text-white">문답 세트 만들기</button>
               </div>

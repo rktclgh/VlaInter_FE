@@ -405,7 +405,7 @@ export const InterviewStartPage = () => {
   };
 
   return (
-    <div className="min-h-screen bg-white pt-13.5">
+    <div className="min-h-screen overflow-x-hidden bg-white pt-13.5">
       <ContentTopNav
         point={formatPoint(userPoint)}
         onClickCharge={() => {
@@ -456,16 +456,16 @@ export const InterviewStartPage = () => {
                 <h1 className="mt-2 text-[30px] font-semibold tracking-[-0.02em] text-[#161a22] sm:text-[42px]">
                   서류와 직무를 고르고
                   <br />
-                  실전처럼 면접을 시작한다
+                  실전처럼 면접을 시작합니다
                 </h1>
                 <p className="mt-3 max-w-180 text-[14px] leading-[1.7] text-[#5e6472] sm:text-[15px]">
-                  분석 완료된 서류만 선택할 수 있다. 직무와 기술 카테고리를 같이 선택하면 문서 질문과 기술 질문을 섞어 면접을 생성한다.
+                  분석 완료된 서류만 선택하실 수 있습니다. 직무와 기술 카테고리를 함께 선택하시면 문서 질문과 기술 질문을 섞어 면접을 생성합니다.
                 </p>
               </section>
 
               <div className="grid grid-cols-1 gap-5 xl:grid-cols-[1.15fr_0.85fr]">
                 <div className="space-y-5">
-                  <CategoryCard title="직무 선택" description="직무는 한글 기준으로 선택하고, 없다면 바로 추가한다.">
+                  <CategoryCard title="직무 선택" description="직무는 한글 기준으로 선택하시고, 없으면 바로 추가해 주세요.">
                     <div className="grid gap-3 md:grid-cols-[1fr_auto]">
                       <input
                         value={jobQuery}
@@ -492,7 +492,7 @@ export const InterviewStartPage = () => {
                     </div>
                   </CategoryCard>
 
-                  <CategoryCard title="기술 카테고리 선택" description="모의면접에는 기술질문이 40% 비율로 포함된다. 직무를 먼저 고르고 기술을 선택하거나 직접 추가한다.">
+                  <CategoryCard title="기술 카테고리 선택" description="모의면접에는 기술질문이 40% 비율로 포함됩니다. 직무를 먼저 고른 뒤 기술을 선택하거나 직접 추가해 주세요.">
                     <div className="grid gap-3 md:grid-cols-[1fr_auto]">
                       <input
                         value={skillQuery}
@@ -516,11 +516,11 @@ export const InterviewStartPage = () => {
                           onClick={() => setSelectedCategoryId(String(skill.categoryId))}
                         />
                       ))}
-                      {!visibleSkills.length && jobFilter ? <span className="text-[12px] text-[#7a8190]">현재 직무에 등록된 기술이 없다. 직접 추가하면 바로 사용할 수 있다.</span> : null}
+                      {!visibleSkills.length && jobFilter ? <span className="text-[12px] text-[#7a8190]">현재 직무에 등록된 기술이 없습니다. 직접 추가하시면 바로 사용하실 수 있습니다.</span> : null}
                     </div>
                   </CategoryCard>
 
-                  <CategoryCard title="서류 선택" description="AI 분석이 끝난 서류만 노출된다. 포트폴리오는 선택 사항이며, 문서 1개 이상이면 시작할 수 있다. OCR fallback이 사용된 문서는 배지를 함께 표시한다.">
+                  <CategoryCard title="서류 선택" description="AI 분석이 끝난 서류만 노출됩니다. 포트폴리오는 선택 사항이며, 문서가 1개 이상이면 시작하실 수 있습니다. OCR fallback이 사용된 문서는 배지를 함께 표시합니다.">
                     <div className="grid gap-4 md:grid-cols-3">
                       {DOCUMENT_TYPES.map((documentType) => {
                         const files = filesByType[documentType.key] || [];
@@ -552,7 +552,7 @@ export const InterviewStartPage = () => {
                                   </button>
                                 );
                               })}
-                              {!loadingPage && !files.length ? <p className="text-[11px] text-[#7a8190]">분석 완료된 파일이 없다.</p> : null}
+                              {!loadingPage && !files.length ? <p className="text-[11px] text-[#7a8190]">분석 완료된 파일이 없습니다.</p> : null}
                             </div>
                           </div>
                         );
@@ -562,7 +562,7 @@ export const InterviewStartPage = () => {
                 </div>
 
                 <div className="space-y-5">
-                  <CategoryCard title="난이도와 문항 수" description="모의면접은 최소 5문항이며, 기술질문은 전체의 40% 비율로 자동 배분한다.">
+                  <CategoryCard title="난이도와 문항 수" description="모의면접은 최소 5문항이며, 기술질문은 전체의 40% 비율로 자동 배분됩니다.">
                     <div className="rounded-[18px] border border-[#eef1f5] bg-[#fafbfd] p-4">
                       <p className="text-[12px] font-semibold text-[#6a7383]">난이도</p>
                       <div className="mt-3 flex items-center gap-3">
@@ -589,7 +589,7 @@ export const InterviewStartPage = () => {
                     </div>
                   </CategoryCard>
 
-                  <CategoryCard title="선택 요약" description="세션 상단에 그대로 표시될 메타 정보다.">
+                  <CategoryCard title="선택 요약" description="세션 상단에 그대로 표시되는 메타 정보입니다.">
                     <div className="flex flex-wrap gap-2">
                       {selectedJob ? <span className="rounded-full border border-[#d8dde7] bg-white px-3 py-1 text-[12px] text-[#4f5664]">{selectedJob.displayName || selectedJob.name}</span> : null}
                       <span className="rounded-full border border-[#d8dde7] bg-white px-3 py-1 text-[12px] text-[#4f5664]">

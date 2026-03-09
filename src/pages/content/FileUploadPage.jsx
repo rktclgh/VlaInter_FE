@@ -682,7 +682,7 @@ export const FileUploadPage = () => {
   const hasAnyPending = useMemo(() => Object.values(pendingFiles).some(Boolean), [pendingFiles]);
 
   return (
-    <div className="min-h-screen bg-white pt-[54px]">
+    <div className="min-h-screen overflow-x-hidden bg-white pt-[54px]">
       <ContentTopNav
         point={formatPoint(userPoint)}
         onClickCharge={() => setShowPointChargeModal(true)}
