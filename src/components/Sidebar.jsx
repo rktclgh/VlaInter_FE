@@ -1,5 +1,8 @@
 import { MAIN_MENU_ITEMS, MY_MENU_ITEMS } from "./sidebarMenuItems";
 
+const FINAL_PROFILE_FALLBACK =
+  "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==";
+
 export const Sidebar = ({
   activeKey = "interview_start",
   onNavigate,
@@ -54,7 +57,13 @@ export const Sidebar = ({
               if (!alreadyTriedFallback && fallbackProfileImageUrl && target.src !== fallbackProfileImageUrl) {
                 target.dataset.fallbackTried = "true";
                 event.currentTarget.src = fallbackProfileImageUrl;
+                return;
               }
+              if (target.src !== FINAL_PROFILE_FALLBACK) {
+                target.src = FINAL_PROFILE_FALLBACK;
+                return;
+              }
+              target.style.display = "none";
             }}
           />
           <span className="min-w-0 flex-1 truncate text-[13px] text-[#1f1f1f]">{userName}</span>

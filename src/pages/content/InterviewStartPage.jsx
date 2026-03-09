@@ -14,6 +14,7 @@ import { ratingToDifficulty } from "../../lib/difficultyRating";
 import { createInterviewCatalogJob, createInterviewCatalogSkill, getInterviewCatalogJobs, getInterviewCatalogSkills, getReadyMockDocuments, startMockInterview } from "../../lib/interviewApi";
 import { saveTechInterviewSession } from "../../lib/interviewSessionFlow";
 import { consumePointChargeSuccessResult } from "../../lib/pointChargeFlow";
+import { extractProfile, formatPoint, parsePoint } from "../../lib/profileUtils";
 import { getMyProfile, getMyProfileImageUrl } from "../../lib/userApi";
 
 const DOCUMENT_TYPES = [
@@ -22,23 +23,6 @@ const DOCUMENT_TYPES = [
   { key: "PORTFOLIO", label: "포트폴리오" },
 ];
 
-const formatPoint = (value) => `${new Intl.NumberFormat("ko-KR").format(Number(value) || 0)}P`;
-const parsePoint = (rawValue) => {
-  if (typeof rawValue === "number") return rawValue;
-  if (typeof rawValue === "string") {
-    const normalized = rawValue.replace(/,/g, "").trim();
-    const parsed = Number(normalized);
-    return Number.isFinite(parsed) ? parsed : 0;
-  }
-  return 0;
-};
-const extractProfile = (payload) => {
-  if (!payload || typeof payload !== "object") return {};
-  if (payload.data && typeof payload.data === "object" && !Array.isArray(payload.data)) return payload.data;
-  if (payload.result && typeof payload.result === "object" && !Array.isArray(payload.result)) return payload.result;
-  if (payload.user && typeof payload.user === "object" && !Array.isArray(payload.user)) return payload.user;
-  return payload;
-};
 const extractFileList = (payload) => {
   if (Array.isArray(payload)) return payload;
   if (Array.isArray(payload?.files)) return payload.files;
@@ -64,13 +48,13 @@ const buildSelectedDocumentMeta = (file, type) => {
   };
 };
 const LogoutConfirmModal = ({ onCancel, onConfirm }) => (
-  <div className="fixed inset-0 z-70 flex items-center justify-center bg-black/35 px-4">
+  <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/35 px-4">
     <div
       role="dialog"
       aria-modal="true"
       aria-labelledby="interview-start-logout-title"
       aria-describedby="interview-start-logout-description"
-      className="w-full max-w-105 rounded-2xl border border-[#d9d9d9] bg-white p-5"
+      className="w-full max-w-[420px] rounded-2xl border border-[#d9d9d9] bg-white p-5"
     >
       <p id="interview-start-logout-title" className="text-[15px] font-medium text-[#252525]">
         정말 로그아웃 하시겠습니까?
@@ -94,7 +78,7 @@ const InlineSpinner = ({ label }) => (
 );
 
 const BlockingLoadingOverlay = ({ title, description }) => (
-  <div className="fixed inset-0 z-120 flex items-center justify-center bg-[#0f172a]/55 px-4">
+  <div className="fixed inset-0 z-[120] flex items-center justify-center bg-[#0f172a]/55 px-4">
     <div className="w-full max-w-[420px] rounded-2xl border border-white/25 bg-white/95 p-5 text-center shadow-[0_18px_48px_rgba(15,23,42,0.28)]">
       <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-full border-2 border-[#cbd5e1] border-t-[#171b24] animate-spin" />
       <p className="mt-4 text-[16px] font-semibold text-[#111827]">{title}</p>
@@ -445,7 +429,7 @@ export const InterviewStartPage = () => {
       />
 
       <div className="flex min-h-[calc(100vh-54px)]">
-        <div className="hidden w-68 shrink-0 md:block">
+        <div className="hidden w-[272px] shrink-0 md:block">
           <Sidebar
             activeKey="interview_start"
             onNavigate={handleSidebarNavigate}
@@ -461,7 +445,7 @@ export const InterviewStartPage = () => {
 
         <main className="flex min-w-0 flex-1 flex-col">
           <div className="flex-1 overflow-y-auto px-4 pb-6 pt-6 sm:px-5 md:px-8 md:pt-10">
-            <div className="mx-auto w-full max-w-280 space-y-5">
+            <div className="mx-auto w-full max-w-[1280px] space-y-5">
               <section className="rounded-3xl border border-[#e4e7ee] bg-[linear-gradient(180deg,#ffffff_0%,#f7f9fc_100%)] p-5 sm:p-6">
                 <p className="text-[12px] font-semibold tracking-[0.08em] text-[#7a8190]">MOCK INTERVIEW</p>
                 <h1 className="mt-2 text-[30px] font-semibold tracking-[-0.02em] text-[#161a22] sm:text-[42px]">
@@ -469,7 +453,7 @@ export const InterviewStartPage = () => {
                   <br />
                   실전처럼 면접을 시작합니다
                 </h1>
-                <p className="mt-3 max-w-180 text-[14px] leading-[1.7] text-[#5e6472] sm:text-[15px]">
+                <p className="mt-3 max-w-[720px] text-[14px] leading-[1.7] text-[#5e6472] sm:text-[15px]">
                   분석 완료된 서류만 선택하실 수 있습니다. 직무와 기술 카테고리를 함께 선택하시면 문서 질문과 기술 질문을 섞어 면접을 생성합니다.
                 </p>
               </section>
@@ -593,7 +577,7 @@ export const InterviewStartPage = () => {
                           max={20}
                           value={selectedQuestionCount}
                           onChange={(event) => setSelectedQuestionCount(Math.max(5, Number(event.target.value) || 5))}
-                          className="w-30 rounded-[14px] border border-[#dfe3eb] px-4 py-3 text-[13px] outline-none focus:border-[#8aa2e8]"
+                          className="w-[120px] rounded-[14px] border border-[#dfe3eb] px-4 py-3 text-[13px] outline-none focus:border-[#8aa2e8]"
                         />
                         <span className="text-[12px] text-[#6a7383]">최소 5문항, 최대 20문항</span>
                       </div>

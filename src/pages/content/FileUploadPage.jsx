@@ -12,6 +12,7 @@ import tempProfileImage from "../../assets/icon/temp.png";
 import { logout } from "../../lib/authApi";
 import { ingestMockDocument } from "../../lib/interviewApi";
 import { consumePointChargeSuccessResult } from "../../lib/pointChargeFlow";
+import { extractProfile, formatPoint, parsePoint } from "../../lib/profileUtils";
 import { deleteMyFile, getMyFiles, getMyProfile, getMyProfileImageUrl, uploadMyFile } from "../../lib/userApi";
 
 const DOCUMENT_TYPES = [
@@ -25,21 +26,6 @@ const createEmptyFilesByType = () =>
     acc[key] = [];
     return acc;
   }, {});
-
-const formatPoint = (value) => {
-  const safeNumber = Number.isFinite(Number(value)) ? Math.max(0, Number(value)) : 0;
-  return `${new Intl.NumberFormat("ko-KR").format(safeNumber)}P`;
-};
-
-const parsePoint = (rawValue) => {
-  if (typeof rawValue === "number") return rawValue;
-  if (typeof rawValue === "string") {
-    const normalized = rawValue.replace(/,/g, "").trim();
-    const parsed = Number(normalized);
-    return Number.isFinite(parsed) ? parsed : 0;
-  }
-  return 0;
-};
 
 const toTimestamp = (rawDateTime) => {
   const time = new Date(rawDateTime || "").getTime();
@@ -125,14 +111,6 @@ const normalizeFileRecord = (file, fallbackName = "") => {
     fileName: resolveDisplayFileName(source, fallbackName),
     createdAt: source.createdAt ?? source.created_at ?? new Date().toISOString(),
   };
-};
-
-const extractProfile = (payload) => {
-  if (!payload || typeof payload !== "object") return {};
-  if (payload.data && typeof payload.data === "object" && !Array.isArray(payload.data)) return payload.data;
-  if (payload.result && typeof payload.result === "object" && !Array.isArray(payload.result)) return payload.result;
-  if (payload.user && typeof payload.user === "object" && !Array.isArray(payload.user)) return payload.user;
-  return payload;
 };
 
 const isPdfFile = (file) => {
@@ -503,7 +481,13 @@ export const FileUploadPage = () => {
   useEffect(() => {
     if (!hasOngoingIngestion) return undefined;
     const timer = window.setInterval(() => {
-      void loadSavedFiles();
+      void (async () => {
+        try {
+          await loadSavedFiles();
+        } catch (error) {
+          console.error("ingestion polling failed", error);
+        }
+      })();
     }, 4000);
     return () => window.clearInterval(timer);
   }, [hasOngoingIngestion, loadSavedFiles]);

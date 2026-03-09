@@ -52,6 +52,23 @@ const LogoutConfirmModal = ({ onCancel, onConfirm }) => (
   </div>
 );
 
+const DeleteConfirmModal = ({ targetQuestion, deleting, onCancel, onConfirm }) => (
+  <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/45 px-4">
+    <div className="w-full max-w-[460px] rounded-[16px] border border-[#d9d9d9] bg-white p-5">
+      <p className="text-[15px] font-medium text-[#252525]">저장된 질문을 삭제하시겠습니까?</p>
+      <p className="mt-2 text-[13px] leading-[1.6] text-[#4f5664]">
+        {targetQuestion?.questionText
+          ? `삭제 대상: ${targetQuestion.questionText.slice(0, 80)}${targetQuestion.questionText.length > 80 ? "..." : ""}`
+          : "선택한 질문이 삭제됩니다."}
+      </p>
+      <div className="mt-4 flex justify-end gap-2">
+        <button type="button" onClick={onCancel} disabled={deleting} className="rounded-[10px] border border-[#d6d6d6] px-3 py-1.5 text-[12px] text-[#666] disabled:opacity-60">취소</button>
+        <button type="button" onClick={onConfirm} disabled={deleting} className="rounded-[10px] border border-[#7f1d1d] bg-[#7f1d1d] px-3 py-1.5 text-[12px] text-white disabled:opacity-60">{deleting ? "삭제 중..." : "삭제"}</button>
+      </div>
+    </div>
+  </div>
+);
+
 const CategoryChip = ({ label, active = false, onClick }) => (
   <button type="button" onClick={onClick} className={`rounded-full border px-3 py-1 text-[11px] transition ${active ? "border-[#171b24] bg-[#171b24] text-white" : "border-[#d9dde5] bg-white text-[#556070]"}`}>
     {label}
@@ -85,6 +102,8 @@ export const SavedQuestionsPage = () => {
   const [dateTo, setDateTo] = useState("");
   const [page, setPage] = useState(1);
   const [selectedQuestion, setSelectedQuestion] = useState(null);
+  const [deleteTargetQuestion, setDeleteTargetQuestion] = useState(null);
+  const [deletingQuestion, setDeletingQuestion] = useState(false);
   const [pageErrorMessage, setPageErrorMessage] = useState("");
   const [showAllCategories, setShowAllCategories] = useState(false);
 
@@ -188,12 +207,19 @@ export const SavedQuestionsPage = () => {
     }
   };
 
-  const handleDelete = async (savedQuestionId) => {
+  const handleDelete = async () => {
+    const savedQuestionId = deleteTargetQuestion?.savedQuestionId;
+    if (!savedQuestionId) return;
+    setDeletingQuestion(true);
     try {
       await deleteSavedInterviewQuestion(savedQuestionId);
       setItems((prev) => prev.filter((item) => item.savedQuestionId !== savedQuestionId));
+      setSelectedQuestion((prev) => (prev?.savedQuestionId === savedQuestionId ? null : prev));
+      setDeleteTargetQuestion(null);
     } catch (error) {
       setPageErrorMessage(error?.message || "저장된 질문 삭제에 실패했습니다.");
+    } finally {
+      setDeletingQuestion(false);
     }
   };
 
@@ -238,23 +264,26 @@ export const SavedQuestionsPage = () => {
             <section className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
               {loading ? <p className="text-[13px] text-[#5e6472]">저장된 질문을 불러오는 중...</p> : null}
               {!loading && pagedItems.length === 0 ? <p className="text-[13px] text-[#5e6472]">조건에 맞는 저장 질문이 없습니다.</p> : null}
-              {pagedItems.map((item) => (
-                <article key={item.savedQuestionId} className="rounded-[22px] border border-[#e4e7ee] bg-white p-5 shadow-[0_12px_32px_rgba(15,23,42,0.04)] transition hover:border-[#cfd6e4] hover:shadow-[0_18px_36px_rgba(15,23,42,0.08)]">
-                  <div className="flex items-start justify-between gap-3">
-                    <button type="button" onClick={() => setSelectedQuestion(item)} className="min-w-0 flex-1 text-left">
-                      <div className="flex flex-wrap gap-2">
-                        <span className="rounded-full bg-[#eef2f8] px-3 py-1 text-[11px] text-[#556070]">{item.jobName}</span>
-                        <span className="rounded-full bg-[#f4f6fb] px-3 py-1 text-[11px] text-[#556070]">{item.categoryName}</span>
-                        {item.difficulty ? <DifficultyStars difficulty={item.difficulty} compact /> : null}
-                      </div>
-                      <p className="mt-4 line-clamp-5 whitespace-pre-wrap text-[17px] font-semibold leading-[1.7] text-[#171b24]">{item.questionText}</p>
-                      {(item.tags || []).map(sanitizeQuestionTag).filter(Boolean).length > 0 ? <div className="mt-4 flex flex-wrap gap-2">{item.tags.map(sanitizeQuestionTag).filter(Boolean).slice(0, 4).map((tag) => <span key={`${item.savedQuestionId}-${tag}`} className="rounded-full bg-[#fff7ed] px-3 py-1 text-[11px] text-[#9a5b11]">#{tag}</span>)}</div> : null}
-                      <div className="mt-4 text-[11px] text-[#6b7280]">저장일 {formatDate(item.createdAt)}</div>
-                    </button>
-                    <button type="button" onClick={() => handleDelete(item.savedQuestionId)} className="shrink-0 rounded-[12px] border border-[#d8dde7] px-3 py-2 text-[12px] text-[#4f5664]">삭제</button>
-                  </div>
-                </article>
-              ))}
+              {pagedItems.map((item) => {
+                const sanitizedTags = (item.tags || []).map(sanitizeQuestionTag).filter(Boolean);
+                return (
+                  <article key={item.savedQuestionId} className="rounded-[22px] border border-[#e4e7ee] bg-white p-5 shadow-[0_12px_32px_rgba(15,23,42,0.04)] transition hover:border-[#cfd6e4] hover:shadow-[0_18px_36px_rgba(15,23,42,0.08)]">
+                    <div className="flex items-start justify-between gap-3">
+                      <button type="button" onClick={() => setSelectedQuestion(item)} className="min-w-0 flex-1 text-left">
+                        <div className="flex flex-wrap gap-2">
+                          <span className="rounded-full bg-[#eef2f8] px-3 py-1 text-[11px] text-[#556070]">{item.jobName}</span>
+                          <span className="rounded-full bg-[#f4f6fb] px-3 py-1 text-[11px] text-[#556070]">{item.categoryName}</span>
+                          {item.difficulty ? <DifficultyStars difficulty={item.difficulty} compact /> : null}
+                        </div>
+                        <p className="mt-4 line-clamp-5 whitespace-pre-wrap text-[17px] font-semibold leading-[1.7] text-[#171b24]">{item.questionText}</p>
+                        {sanitizedTags.length > 0 ? <div className="mt-4 flex flex-wrap gap-2">{sanitizedTags.slice(0, 4).map((tag) => <span key={`${item.savedQuestionId}-${tag}`} className="rounded-full bg-[#fff7ed] px-3 py-1 text-[11px] text-[#9a5b11]">#{tag}</span>)}</div> : null}
+                        <div className="mt-4 text-[11px] text-[#6b7280]">저장일 {formatDate(item.createdAt)}</div>
+                      </button>
+                      <button type="button" onClick={() => setDeleteTargetQuestion(item)} className="shrink-0 rounded-[12px] border border-[#d8dde7] px-3 py-2 text-[12px] text-[#4f5664]">삭제</button>
+                    </div>
+                  </article>
+                );
+              })}
             </section>
 
             <div className="mt-5 flex items-center justify-center gap-2">
@@ -268,6 +297,7 @@ export const SavedQuestionsPage = () => {
         </main>
       </div>
       {selectedQuestion ? <QuestionAnswerDetailModal item={selectedQuestion} onClose={() => setSelectedQuestion(null)} /> : null}
+      {deleteTargetQuestion ? <DeleteConfirmModal targetQuestion={deleteTargetQuestion} deleting={deletingQuestion} onCancel={() => setDeleteTargetQuestion(null)} onConfirm={handleDelete} /> : null}
       {showLogoutModal ? <LogoutConfirmModal onCancel={() => setShowLogoutModal(false)} onConfirm={handleLogoutConfirm} /> : null}
       {showPointChargeModal ? <PointChargeModal onClose={() => setShowPointChargeModal(false)} onCharged={(result) => { setUserPoint(parsePoint(result?.currentPoint)); setShowPointChargeModal(false); setShowPointChargeSuccessModal(true); }} /> : null}
       {showPointChargeSuccessModal ? <PointChargeSuccessModal onClose={() => setShowPointChargeSuccessModal(false)} /> : null}

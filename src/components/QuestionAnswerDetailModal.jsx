@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { DifficultyStars } from "./DifficultyStars";
 import { getQuestionCategoryDisplayName, sanitizeQuestionTag } from "../lib/categoryPresentation";
 
@@ -29,6 +30,18 @@ const isGuideLikeText = (value) => {
 };
 
 export const QuestionAnswerDetailModal = ({ item, onClose }) => {
+  useEffect(() => {
+    if (!item) return undefined;
+    const handleKeyDown = (event) => {
+      if (event.key !== "Escape") return;
+      onClose?.();
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [item, onClose]);
+
   if (!item) return null;
 
   const tags = Array.isArray(item.tags) ? item.tags.map(sanitizeQuestionTag).filter(Boolean) : [];
@@ -38,11 +51,17 @@ export const QuestionAnswerDetailModal = ({ item, onClose }) => {
   const feedbackText = item.feedback?.trim() || "";
   const guideText = item.bestPractice?.trim() || (isGuideLikeText(rawCanonicalAnswer) ? rawCanonicalAnswer : "");
   const categoryLabel = getQuestionCategoryDisplayName(item.categoryName || item.category);
+  const questionHeadingId = "question-answer-detail-title";
 
   return (
-    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/45 px-4" role="dialog" aria-modal="true">
+    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/45 px-4">
       <div className="absolute inset-0" onClick={onClose} />
-      <div className="relative w-full max-w-[760px] rounded-[24px] border border-[#dfe3eb] bg-white p-6 shadow-[0_24px_80px_rgba(15,23,42,0.18)] sm:p-7">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={questionHeadingId}
+        className="relative w-full max-w-[760px] rounded-[24px] border border-[#dfe3eb] bg-white p-6 shadow-[0_24px_80px_rgba(15,23,42,0.18)] sm:p-7"
+      >
         <div className="flex items-start justify-between gap-4">
           <div className="flex flex-wrap gap-2">
             {categoryLabel ? <span className="rounded-full bg-[#f4f6fb] px-3 py-1 text-[11px] text-[#556070]">{categoryLabel}</span> : null}
@@ -60,7 +79,7 @@ export const QuestionAnswerDetailModal = ({ item, onClose }) => {
 
         <div className="mt-5 rounded-[20px] border border-[#e8ecf3] bg-[#fbfcfe] p-5">
           <p className="text-[12px] font-semibold text-[#738094]">질문</p>
-          <p className="mt-3 whitespace-pre-wrap text-[18px] leading-[1.8] text-[#171b24]">{item.questionText}</p>
+          <p id={questionHeadingId} className="mt-3 whitespace-pre-wrap text-[18px] leading-[1.8] text-[#171b24]">{item.questionText}</p>
         </div>
 
         {userAnswer ? (

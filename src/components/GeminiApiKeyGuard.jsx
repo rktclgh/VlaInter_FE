@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { getMyProfile } from "../lib/userApi";
 
 const extractProfile = (payload) => {
@@ -11,7 +11,6 @@ const extractProfile = (payload) => {
 };
 
 export const GeminiApiKeyGuard = ({ children }) => {
-  const location = useLocation();
   const navigate = useNavigate();
   const [hasGeminiApiKey, setHasGeminiApiKey] = useState(true);
   const [loading, setLoading] = useState(true);
@@ -39,7 +38,7 @@ export const GeminiApiKeyGuard = ({ children }) => {
     return () => {
       cancelled = true;
     };
-  }, [location.pathname]);
+  }, []);
 
   const showBlockingModal = !loading && !hasGeminiApiKey;
 

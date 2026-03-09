@@ -50,24 +50,74 @@ const scoreToStars = (score) => {
   return Math.max(1, Math.min(5, Math.round(numeric / 20)));
 };
 
-const LogoutConfirmModal = ({ onCancel, onConfirm }) => (
-  <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/35 px-4">
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="session-history-logout-title"
-      className="w-full max-w-[420px] rounded-[16px] border border-[#d9d9d9] bg-white p-5"
-    >
-      <p id="session-history-logout-title" className="text-[15px] font-medium text-[#252525]">
-        정말 로그아웃 하시겠습니까?<br />현재 페이지의 진행 중 작업은 유지되지 않습니다.
-      </p>
-      <div className="mt-4 flex justify-end gap-2">
-        <button type="button" onClick={onCancel} className="rounded-[10px] border border-[#d6d6d6] px-3 py-1.5 text-[12px] text-[#666]">취소</button>
-        <button type="button" onClick={onConfirm} className="rounded-[10px] border border-[#1f1f1f] bg-[#1f1f1f] px-3 py-1.5 text-[12px] text-white">로그아웃</button>
+const LogoutConfirmModal = ({ onCancel, onConfirm }) => {
+  const dialogRef = useRef(null);
+  const cancelButtonRef = useRef(null);
+
+  useEffect(() => {
+    const previousFocusedElement = document.activeElement;
+    cancelButtonRef.current?.focus();
+
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onCancel?.();
+        return;
+      }
+      if (event.key !== "Tab") return;
+
+      const dialogElement = dialogRef.current;
+      if (!dialogElement) return;
+      const focusableElements = dialogElement.querySelectorAll(
+        'button,[href],input,select,textarea,[tabindex]:not([tabindex="-1"])'
+      );
+      if (!focusableElements.length) return;
+
+      const firstElement = focusableElements[0];
+      const lastElement = focusableElements[focusableElements.length - 1];
+      const activeElement = document.activeElement;
+
+      if (event.shiftKey && activeElement === firstElement) {
+        event.preventDefault();
+        lastElement.focus();
+        return;
+      }
+      if (!event.shiftKey && activeElement === lastElement) {
+        event.preventDefault();
+        firstElement.focus();
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+      if (previousFocusedElement && typeof previousFocusedElement.focus === "function") {
+        previousFocusedElement.focus();
+      }
+    };
+  }, [onCancel]);
+
+  return (
+    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/35 px-4">
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="session-history-logout-title"
+        tabIndex={-1}
+        className="w-full max-w-[420px] rounded-[16px] border border-[#d9d9d9] bg-white p-5"
+      >
+        <p id="session-history-logout-title" className="text-[15px] font-medium text-[#252525]">
+          정말 로그아웃 하시겠습니까?<br />현재 페이지의 진행 중 작업은 유지되지 않습니다.
+        </p>
+        <div className="mt-4 flex justify-end gap-2">
+          <button ref={cancelButtonRef} type="button" onClick={onCancel} className="rounded-[10px] border border-[#d6d6d6] px-3 py-1.5 text-[12px] text-[#666]">취소</button>
+          <button type="button" onClick={onConfirm} className="rounded-[10px] border border-[#1f1f1f] bg-[#1f1f1f] px-3 py-1.5 text-[12px] text-white">로그아웃</button>
+        </div>
       </div>
     </div>
-  </div>
-);
+  );
+};
 
 const InlineSpinner = ({ label }) => (
   <div className="inline-flex items-center gap-2 text-[12px] text-[#5e6472]">
@@ -151,6 +201,7 @@ export const SessionHistoryTemplate = ({ title, description, apiBasePath, active
   const [selectedResults, setSelectedResults] = useState(null);
   const [bookmarkingTurnIds, setBookmarkingTurnIds] = useState([]);
   const bookmarkingTurnIdsRef = useRef([]);
+  const resultRequestTokenRef = useRef(0);
 
   useEffect(() => {
     const charged = consumePointChargeSuccessResult();
@@ -190,21 +241,38 @@ export const SessionHistoryTemplate = ({ title, description, apiBasePath, active
   }, [loadPage]);
 
   useEffect(() => {
-    if (!selectedSessionId) return;
+    setSelectedResults(null);
+    bookmarkingTurnIdsRef.current = [];
+    setBookmarkingTurnIds([]);
+    if (!selectedSessionId) {
+      setLoadingResult(false);
+      return;
+    }
+
+    let active = true;
+    const requestToken = resultRequestTokenRef.current + 1;
+    resultRequestTokenRef.current = requestToken;
+
     const loadResults = async () => {
       setLoadingResult(true);
-      bookmarkingTurnIdsRef.current = [];
-      setBookmarkingTurnIds([]);
+      setPageErrorMessage("");
       try {
         const result = await getInterviewSessionResults(apiBasePath, selectedSessionId);
+        if (!active || resultRequestTokenRef.current !== requestToken) return;
         setSelectedResults(result);
       } catch (error) {
+        if (!active || resultRequestTokenRef.current !== requestToken) return;
         setPageErrorMessage(error?.message || "상세 결과를 불러오지 못했습니다.");
       } finally {
-        setLoadingResult(false);
+        if (active && resultRequestTokenRef.current === requestToken) {
+          setLoadingResult(false);
+        }
       }
     };
     void loadResults();
+    return () => {
+      active = false;
+    };
   }, [apiBasePath, selectedSessionId]);
 
   const selectedSummary = useMemo(() => items.find((item) => item.sessionId === selectedSessionId) || null, [items, selectedSessionId]);
@@ -215,8 +283,16 @@ export const SessionHistoryTemplate = ({ title, description, apiBasePath, active
     const target = selectedResults?.turns?.find((item) => item.turnId === turnId);
     if (target?.bookmarked) return;
 
-    bookmarkingTurnIdsRef.current = [...bookmarkingTurnIdsRef.current, turnId];
-    setBookmarkingTurnIds((prev) => (prev.includes(turnId) ? prev : [...prev, turnId]));
+    let added = false;
+    setBookmarkingTurnIds((prev) => {
+      if (prev.includes(turnId)) return prev;
+      const next = [...prev, turnId];
+      bookmarkingTurnIdsRef.current = next;
+      added = true;
+      return next;
+    });
+    if (!added) return;
+
     setPageErrorMessage("");
     try {
       await bookmarkInterviewTurn(apiBasePath, turnId);

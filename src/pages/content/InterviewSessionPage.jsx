@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { FaRegStar, FaStar } from "react-icons/fa6";
 import { ContentTopNav } from "../../components/ContentTopNav";
+import { InlineSpinner } from "../../components/InlineSpinner";
+import { LogoutConfirmModal } from "../../components/LogoutConfirmModal";
 import { MobileSidebarDrawer } from "../../components/MobileSidebarDrawer";
 import { OcrInfoBadge } from "../../components/OcrInfoBadge";
 import { Sidebar } from "../../components/Sidebar";
@@ -17,30 +19,8 @@ import {
   saveTechInterviewSession,
 } from "../../lib/interviewSessionFlow";
 import { consumePointChargeSuccessResult } from "../../lib/pointChargeFlow";
+import { extractProfile, formatPoint, parsePoint } from "../../lib/profileUtils";
 import { getMyProfile, getMyProfileImageUrl } from "../../lib/userApi";
-
-const formatPoint = (value) => {
-  const safeNumber = Number.isFinite(Number(value)) ? Math.max(0, Number(value)) : 0;
-  return `${new Intl.NumberFormat("ko-KR").format(safeNumber)}P`;
-};
-
-const parsePoint = (rawValue) => {
-  if (typeof rawValue === "number") return rawValue;
-  if (typeof rawValue === "string") {
-    const normalized = rawValue.replace(/,/g, "").trim();
-    const parsed = Number(normalized);
-    return Number.isFinite(parsed) ? parsed : 0;
-  }
-  return 0;
-};
-
-const extractProfile = (payload) => {
-  if (!payload || typeof payload !== "object") return {};
-  if (payload.data && typeof payload.data === "object" && !Array.isArray(payload.data)) return payload.data;
-  if (payload.result && typeof payload.result === "object" && !Array.isArray(payload.result)) return payload.result;
-  if (payload.user && typeof payload.user === "object" && !Array.isArray(payload.user)) return payload.user;
-  return payload;
-};
 
 const QuestionMetaChip = ({ label }) => (
   <span className="inline-flex rounded-full border border-[#d9dde5] bg-[#f7f8fb] px-2.5 py-1 text-[11px] text-[#505866]">
@@ -53,13 +33,6 @@ const DocumentMetaChip = ({ label, ocrUsed }) => (
     <span>{label}</span>
     {ocrUsed ? <OcrInfoBadge compact /> : null}
   </span>
-);
-
-const InlineSpinner = ({ label }) => (
-  <div className="inline-flex items-center gap-2 text-[12px] text-[#5e6472]">
-    <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-[#cbd5e1] border-t-[#171b24]" />
-    <span>{label}</span>
-  </div>
 );
 
 const scoreToStars = (score) => {
@@ -97,37 +70,6 @@ const normalizeSelectedDocumentMeta = (value) => {
     };
   }
   return null;
-};
-
-const LogoutConfirmModal = ({ onCancel, onConfirm }) => {
-  return (
-    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/35 px-4">
-      <div className="w-full max-w-[420px] rounded-[16px] border border-[#d9d9d9] bg-white p-5">
-        <p className="text-[15px] font-medium text-[#252525]">
-          정말 로그아웃 하시겠습니까?
-          <br />
-          종료하지 않은 면접 내용은 저장되지 않습니다
-        </p>
-
-        <div className="mt-4 flex justify-end gap-2">
-          <button
-            type="button"
-            onClick={onCancel}
-            className="rounded-[10px] border border-[#d6d6d6] px-3 py-1.5 text-[12px] text-[#666]"
-          >
-            취소
-          </button>
-          <button
-            type="button"
-            onClick={onConfirm}
-            className="rounded-[10px] border border-[#1f1f1f] bg-[#1f1f1f] px-3 py-1.5 text-[12px] text-white"
-          >
-            로그아웃
-          </button>
-        </div>
-      </div>
-    </div>
-  );
 };
 
 export const InterviewSessionPage = () => {

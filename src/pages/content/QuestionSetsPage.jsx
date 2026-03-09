@@ -12,6 +12,7 @@ import { logout } from "../../lib/authApi";
 import { buildVisibleCategories, getCategoryDisplayName, sanitizeQuestionTag, searchCategoryByText } from "../../lib/categoryPresentation";
 import { ratingToDifficulty } from "../../lib/difficultyRating";
 import { consumePointChargeSuccessResult } from "../../lib/pointChargeFlow";
+import { extractProfile, formatPoint, parsePoint } from "../../lib/profileUtils";
 import { addQuestionToInterviewSet, createInterviewSet, getInterviewCategories, getInterviewSetQuestions, getInterviewSets, startTechInterview } from "../../lib/interviewApi";
 import { saveTechInterviewSession } from "../../lib/interviewSessionFlow";
 import { getMyProfile, getMyProfileImageUrl } from "../../lib/userApi";
@@ -19,16 +20,6 @@ import { getMyProfile, getMyProfileImageUrl } from "../../lib/userApi";
 const PAGE_SIZE = 12;
 const DEFAULT_ROW = { questionText: "", canonicalAnswer: "", tags: "", rating: 3 };
 
-const formatPoint = (value) => `${new Intl.NumberFormat("ko-KR").format(Number(value) || 0)}P`;
-const parsePoint = (rawValue) => {
-  if (typeof rawValue === "number") return rawValue;
-  if (typeof rawValue === "string") {
-    const parsed = Number(rawValue.replace(/,/g, "").trim());
-    return Number.isFinite(parsed) ? parsed : 0;
-  }
-  return 0;
-};
-const extractProfile = (payload) => payload?.data || payload?.result || payload?.user || payload || {};
 const formatDate = (value) => {
   const date = new Date(value || "");
   if (Number.isNaN(date.getTime())) return "-";
@@ -36,7 +27,11 @@ const formatDate = (value) => {
 };
 const normalizeDateInput = (value) => {
   const date = new Date(value || "");
-  return Number.isNaN(date.getTime()) ? "" : date.toISOString().slice(0, 10);
+  if (Number.isNaN(date.getTime())) return "";
+  const year = String(date.getFullYear());
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 };
 
 const LogoutConfirmModal = ({ onCancel, onConfirm }) => (
@@ -107,14 +102,19 @@ const CreateQuestionSetModal = ({ categories, onClose, onSubmit, submitting, err
 
   return (
     <>
-      <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/45 px-4" role="dialog" aria-modal="true">
+      <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/45 px-4">
         <div className="absolute inset-0" onClick={requestClose} />
-        <div className="relative flex max-h-[90vh] w-full max-w-[1120px] flex-col overflow-hidden rounded-[28px] border border-[#dfe3eb] bg-white shadow-[0_24px_80px_rgba(15,23,42,0.18)]">
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="create-set-title"
+          className="relative flex max-h-[90vh] w-full max-w-[1120px] flex-col overflow-hidden rounded-[28px] border border-[#dfe3eb] bg-white shadow-[0_24px_80px_rgba(15,23,42,0.18)]"
+        >
           <div className="border-b border-[#edf1f6] px-6 py-5">
             <div className="flex items-start justify-between gap-4">
               <div>
                 <p className="text-[12px] font-semibold tracking-[0.08em] text-[#7a8190]">CREATE Q&A SET</p>
-                <h2 className="mt-2 text-[28px] font-semibold tracking-[-0.02em] text-[#161a22]">문답 세트 만들기</h2>
+                <h2 id="create-set-title" className="mt-2 text-[28px] font-semibold tracking-[-0.02em] text-[#161a22]">문답 세트 만들기</h2>
               </div>
               <button type="button" onClick={requestClose} className="rounded-full border border-[#d9dde5] px-3 py-1 text-[12px] text-[#4f5664]">닫기</button>
             </div>
@@ -304,7 +304,14 @@ export const QuestionSetsPage = () => {
   }, [query, jobFilter, categoryQuery, selectedCategoryId, selectedRating, dateFrom, dateTo]);
 
   const totalPages = Math.max(1, Math.ceil(filteredCards.length / PAGE_SIZE));
-  const pagedCards = filteredCards.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const currentPage = Math.max(1, Math.min(page, totalPages));
+  const pagedCards = filteredCards.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+
+  useEffect(() => {
+    if (page > totalPages) {
+      setPage(totalPages);
+    }
+  }, [page, totalPages]);
 
   const handleSidebarNavigate = (item) => {
     setIsMobileMenuOpen(false);
@@ -372,16 +379,34 @@ export const QuestionSetsPage = () => {
         description: null,
         visibility: "PRIVATE",
       });
-      for (const row of normalizedRows) {
-        await addQuestionToInterviewSet(createdSet.setId, {
-          questionText: row.questionText,
-          canonicalAnswer: row.canonicalAnswer,
-          categoryId,
-          jobName,
-          skillName,
-          difficulty: row.difficulty,
-          tags: row.tags,
-        });
+      const failedRows = [];
+      for (const [rowIndex, row] of normalizedRows.entries()) {
+        try {
+          await addQuestionToInterviewSet(createdSet.setId, {
+            questionText: row.questionText,
+            canonicalAnswer: row.canonicalAnswer,
+            categoryId,
+            jobName,
+            skillName,
+            difficulty: row.difficulty,
+            tags: row.tags,
+          });
+        } catch (error) {
+          failedRows.push({
+            rowNo: rowIndex + 1,
+            questionText: row.questionText,
+            reason: error?.message || "질문 추가 실패",
+          });
+        }
+      }
+      if (failedRows.length > 0) {
+        const failedSummary = failedRows
+          .map((failed) => `문답 ${failed.rowNo}: ${failed.questionText.slice(0, 24)}... (${failed.reason})`)
+          .join(" / ");
+        setModalErrorMessage(`일부 문답 저장에 실패했습니다. ${failedSummary}`);
+        await loadPage();
+        setSubmitting(false);
+        return;
       }
       await loadPage();
       setShowCreateModal(false);
@@ -512,7 +537,7 @@ export const QuestionSetsPage = () => {
 
             <div className="mt-5 flex items-center justify-center gap-2">
               <button type="button" disabled={page <= 1} onClick={() => setPage((prev) => Math.max(1, prev - 1))} className="rounded-[12px] border border-[#d8dde7] px-3 py-2 text-[12px] text-[#4f5664] disabled:opacity-50">이전</button>
-              <span className="text-[12px] text-[#5e6472]">{page} / {totalPages}</span>
+              <span className="text-[12px] text-[#5e6472]">{currentPage} / {totalPages}</span>
               <button type="button" disabled={page >= totalPages} onClick={() => setPage((prev) => Math.min(totalPages, prev + 1))} className="rounded-[12px] border border-[#d8dde7] px-3 py-2 text-[12px] text-[#4f5664] disabled:opacity-50">다음</button>
             </div>
 
