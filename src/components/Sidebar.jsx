@@ -25,7 +25,7 @@ export const Sidebar = ({
   };
 
   return (
-    <aside className="sticky top-[54px] flex h-[calc(100vh-54px)] w-full flex-col border-r border-[#e8e8e8] bg-[#f8f8f8]">
+    <aside className="sticky top-0 flex h-[calc(100vh-54px)] w-full flex-col border-r border-[#e8e8e8] bg-[#f8f8f8]">
       <div className="flex-1 overflow-y-auto px-4 pb-4 pt-6">
         <div>
           <p className="mb-2 text-[12px] font-medium text-[#b1b1b1]">Main</p>

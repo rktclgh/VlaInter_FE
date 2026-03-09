@@ -5,7 +5,7 @@ export const OcrInfoBadge = ({ compact = false }) => {
   return (
     <span className="group relative inline-flex items-center">
       <span
-        className={`inline-flex items-center rounded-full border border-[#f1b169] bg-[#fff4e6] font-semibold text-[#9b5a13] ${
+        className={`inline-flex shrink-0 items-center whitespace-nowrap rounded-full border border-[#f1b169] bg-[#fff4e6] font-semibold leading-none text-[#9b5a13] ${
           compact ? "px-1.5 py-[2px] text-[9px]" : "px-2 py-1 text-[10px]"
         }`}
       >
