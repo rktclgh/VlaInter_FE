@@ -1,4 +1,7 @@
-import { MAIN_MENU_ITEMS, MY_MENU_ITEMS } from "./sidebarMenuItems";
+import { useEffect, useMemo, useState } from "react";
+import { extractProfile } from "../lib/profileUtils";
+import { getMyProfile } from "../lib/userApi";
+import { getMainMenuItems, MY_MENU_ITEMS } from "./sidebarMenuItems";
 
 const FINAL_PROFILE_FALLBACK =
   "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==";
@@ -9,8 +12,37 @@ export const Sidebar = ({
   userName = "송치호",
   profileImageUrl = "",
   fallbackProfileImageUrl = "",
+  isAdmin = null,
   onLogout,
 }) => {
+  const [fetchedIsAdmin, setFetchedIsAdmin] = useState(false);
+  const resolvedIsAdmin = typeof isAdmin === "boolean" ? isAdmin : fetchedIsAdmin;
+
+  useEffect(() => {
+    if (typeof isAdmin === "boolean") return;
+
+    let cancelled = false;
+    const loadRole = async () => {
+      try {
+        const payload = await getMyProfile();
+        if (cancelled) return;
+        const profile = extractProfile(payload);
+        setFetchedIsAdmin(String(profile?.role || "").toUpperCase() === "ADMIN");
+      } catch {
+        if (!cancelled) {
+          setFetchedIsAdmin(false);
+        }
+      }
+    };
+
+    void loadRole();
+    return () => {
+      cancelled = true;
+    };
+  }, [isAdmin]);
+
+  const mainMenuItems = useMemo(() => getMainMenuItems({ isAdmin: resolvedIsAdmin }), [resolvedIsAdmin]);
+
   const renderMenuButton = (item) => {
     const active = item.key === activeKey;
     return (
@@ -32,7 +64,7 @@ export const Sidebar = ({
       <div className="flex-1 overflow-y-auto px-4 pb-4 pt-6">
         <div>
           <p className="mb-2 text-[12px] font-medium text-[#b1b1b1]">Main</p>
-          <div className="space-y-1.5">{MAIN_MENU_ITEMS.map(renderMenuButton)}</div>
+          <div className="space-y-1.5">{mainMenuItems.map(renderMenuButton)}</div>
         </div>
 
         <div className="pt-6">

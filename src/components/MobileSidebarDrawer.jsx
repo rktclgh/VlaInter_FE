@@ -1,4 +1,7 @@
-import { MAIN_MENU_ITEMS, MY_MENU_ITEMS } from "./sidebarMenuItems";
+import { useEffect, useMemo, useState } from "react";
+import { extractProfile } from "../lib/profileUtils";
+import { getMyProfile } from "../lib/userApi";
+import { getMainMenuItems, MY_MENU_ITEMS } from "./sidebarMenuItems";
 
 export const MobileSidebarDrawer = ({
   open,
@@ -8,8 +11,37 @@ export const MobileSidebarDrawer = ({
   userName = "사용자",
   profileImageUrl = "",
   fallbackProfileImageUrl = "",
+  isAdmin = null,
   onLogout,
 }) => {
+  const [fetchedIsAdmin, setFetchedIsAdmin] = useState(false);
+  const resolvedIsAdmin = typeof isAdmin === "boolean" ? isAdmin : fetchedIsAdmin;
+
+  useEffect(() => {
+    if (typeof isAdmin === "boolean") return;
+
+    let cancelled = false;
+    const loadRole = async () => {
+      try {
+        const payload = await getMyProfile();
+        if (cancelled) return;
+        const profile = extractProfile(payload);
+        setFetchedIsAdmin(String(profile?.role || "").toUpperCase() === "ADMIN");
+      } catch {
+        if (!cancelled) {
+          setFetchedIsAdmin(false);
+        }
+      }
+    };
+
+    void loadRole();
+    return () => {
+      cancelled = true;
+    };
+  }, [isAdmin]);
+
+  const mainMenuItems = useMemo(() => getMainMenuItems({ isAdmin: resolvedIsAdmin }), [resolvedIsAdmin]);
+
   const renderMenuButton = (item) => {
     const active = item.key === activeKey;
     return (
@@ -59,7 +91,7 @@ export const MobileSidebarDrawer = ({
 
         <div className="px-4 pt-5">
           <p className="mb-2 text-[12px] font-medium text-[#b1b1b1]">Main</p>
-          <div className="space-y-1.5">{MAIN_MENU_ITEMS.map(renderMenuButton)}</div>
+          <div className="space-y-1.5">{mainMenuItems.map(renderMenuButton)}</div>
         </div>
 
         <div className="px-4 pt-5">

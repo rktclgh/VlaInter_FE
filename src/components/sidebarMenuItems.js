@@ -7,7 +7,16 @@ export const MAIN_MENU_ITEMS = [
   { key: "saved_question", label: "저장된 질문", path: "/content/saved-questions" },
 ];
 
+export const ADMIN_MENU_ITEMS = [
+  { key: "admin_console", label: "관리자 콘솔", path: "/content/admin" },
+];
+
 export const MY_MENU_ITEMS = [
   { key: "file_upload", label: "이력서 및 자기소개서 업로드", path: "/content/files" },
   { key: "mypage", label: "마이페이지", path: "/content/mypage" },
 ];
+
+export const getMainMenuItems = ({ isAdmin = false } = {}) => {
+  if (!isAdmin) return MAIN_MENU_ITEMS;
+  return [...MAIN_MENU_ITEMS, ...ADMIN_MENU_ITEMS];
+};

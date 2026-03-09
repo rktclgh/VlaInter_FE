@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ContentTopNav } from "../../components/ContentTopNav";
 import { MobileSidebarDrawer } from "../../components/MobileSidebarDrawer";
+import { GeminiOverloadModal } from "../../components/GeminiOverloadModal";
 import { PointChargeModal } from "../../components/PointChargeModal";
 import { PointChargeSuccessModal } from "../../components/PointChargeSuccessModal";
 import { QuestionAnswerDetailModal } from "../../components/QuestionAnswerDetailModal";
@@ -15,6 +16,7 @@ import { consumePointChargeSuccessResult } from "../../lib/pointChargeFlow";
 import { extractProfile, formatPoint, parsePoint } from "../../lib/profileUtils";
 import { addQuestionToInterviewSet, createInterviewSet, getInterviewCategories, getInterviewSetQuestions, getInterviewSets, startTechInterview } from "../../lib/interviewApi";
 import { saveTechInterviewSession } from "../../lib/interviewSessionFlow";
+import { isGeminiOverloadError } from "../../lib/geminiErrorUtils";
 import { getMyProfile, getMyProfileImageUrl } from "../../lib/userApi";
 
 const PAGE_SIZE = 12;
@@ -217,6 +219,7 @@ export const QuestionSetsPage = () => {
   const [showAllCategories, setShowAllCategories] = useState(false);
   const [startingSetId, setStartingSetId] = useState(null);
   const [isStartingSetLaunch, setIsStartingSetLaunch] = useState(false);
+  const [showGeminiOverloadModal, setShowGeminiOverloadModal] = useState(false);
 
   const loadPage = async () => {
     const [setList, categoryList] = await Promise.all([getInterviewSets(), getInterviewCategories()]);
@@ -444,6 +447,11 @@ export const QuestionSetsPage = () => {
       });
       navigate("/content/interview/session");
     } catch (error) {
+      if (isGeminiOverloadError(error)) {
+        setShowGeminiOverloadModal(true);
+        setPageErrorMessage("");
+        return;
+      }
       setPageErrorMessage(error?.message || "질문 세트 연습 시작에 실패했습니다.");
     } finally {
       setStartingSetId(null);
@@ -550,6 +558,7 @@ export const QuestionSetsPage = () => {
       {showLogoutModal ? <LogoutConfirmModal onCancel={() => setShowLogoutModal(false)} onConfirm={handleLogoutConfirm} /> : null}
       {showPointChargeModal ? <PointChargeModal onClose={() => setShowPointChargeModal(false)} onCharged={(result) => { setUserPoint(parsePoint(result?.currentPoint)); setShowPointChargeModal(false); setShowPointChargeSuccessModal(true); }} /> : null}
       {showPointChargeSuccessModal ? <PointChargeSuccessModal onClose={() => setShowPointChargeSuccessModal(false)} currentPoint={userPoint} /> : null}
+      {showGeminiOverloadModal ? <GeminiOverloadModal onClose={() => setShowGeminiOverloadModal(false)} /> : null}
     </div>
   );
 };

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ContentTopNav } from "../../components/ContentTopNav";
 import { MobileSidebarDrawer } from "../../components/MobileSidebarDrawer";
+import { GeminiOverloadModal } from "../../components/GeminiOverloadModal";
 import { PointChargeModal } from "../../components/PointChargeModal";
 import { PointChargeSuccessModal } from "../../components/PointChargeSuccessModal";
 import { Sidebar } from "../../components/Sidebar";
@@ -13,6 +14,7 @@ import { ratingToDifficulty } from "../../lib/difficultyRating";
 import { saveTechInterviewSession } from "../../lib/interviewSessionFlow";
 import { consumePointChargeSuccessResult } from "../../lib/pointChargeFlow";
 import { createInterviewCatalogJob, createInterviewCatalogSkill, getInterviewCatalogJobs, getInterviewCatalogSkills, startTechInterview } from "../../lib/interviewApi";
+import { isGeminiOverloadError } from "../../lib/geminiErrorUtils";
 import { getMyProfile, getMyProfileImageUrl } from "../../lib/userApi";
 
 const QUESTION_COUNT = 5;
@@ -78,6 +80,7 @@ export const TechPracticePage = () => {
   const [categoryQuery, setCategoryQuery] = useState("");
   const [selectedRating, setSelectedRating] = useState(DEFAULT_RATING);
   const [pageErrorMessage, setPageErrorMessage] = useState("");
+  const [showGeminiOverloadModal, setShowGeminiOverloadModal] = useState(false);
   const [creatingCategory, setCreatingCategory] = useState(false);
   const isStartingPractice = startingCategoryId !== null;
 
@@ -237,6 +240,11 @@ export const TechPracticePage = () => {
       });
       navigate("/content/interview/session");
     } catch (error) {
+      if (isGeminiOverloadError(error)) {
+        setShowGeminiOverloadModal(true);
+        setPageErrorMessage("");
+        return;
+      }
       setPageErrorMessage(error?.message || "기술질문 연습 시작에 실패했습니다.");
     } finally {
       setStartingCategoryId(null);
@@ -363,6 +371,7 @@ export const TechPracticePage = () => {
         setShowPointChargeSuccessModal(true);
       }} /> : null}
       {showPointChargeSuccessModal ? <PointChargeSuccessModal onClose={() => setShowPointChargeSuccessModal(false)} currentPoint={userPoint} /> : null}
+      {showGeminiOverloadModal ? <GeminiOverloadModal onClose={() => setShowGeminiOverloadModal(false)} /> : null}
       {isStartingPractice ? (
         <div className="fixed inset-0 z-[200] flex items-center justify-center bg-[#0f172acc]">
           <div className="rounded-[18px] border border-[#334155] bg-[#111827] px-6 py-5 text-center">

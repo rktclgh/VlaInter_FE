@@ -4,6 +4,7 @@ import { ContentTopNav } from "../../components/ContentTopNav";
 import { MobileSidebarDrawer } from "../../components/MobileSidebarDrawer";
 import { OcrInfoBadge } from "../../components/OcrInfoBadge";
 import { Sidebar } from "../../components/Sidebar";
+import { GeminiOverloadModal } from "../../components/GeminiOverloadModal";
 import { PointChargeModal } from "../../components/PointChargeModal";
 import { PointChargeSuccessModal } from "../../components/PointChargeSuccessModal";
 import { StarRatingInput, StarIcons } from "../../components/DifficultyStars";
@@ -16,6 +17,7 @@ import { saveTechInterviewSession } from "../../lib/interviewSessionFlow";
 import { consumePointChargeSuccessResult } from "../../lib/pointChargeFlow";
 import { extractProfile, formatPoint, parsePoint } from "../../lib/profileUtils";
 import { getMyProfile, getMyProfileImageUrl } from "../../lib/userApi";
+import { isGeminiOverloadError } from "../../lib/geminiErrorUtils";
 
 const DOCUMENT_TYPES = [
   { key: "RESUME", label: "이력서" },
@@ -131,6 +133,7 @@ export const InterviewStartPage = () => {
   const [startingInterview, setStartingInterview] = useState(false);
   const [creatingCategory, setCreatingCategory] = useState(false);
   const [pageErrorMessage, setPageErrorMessage] = useState("");
+  const [showGeminiOverloadModal, setShowGeminiOverloadModal] = useState(false);
 
   useEffect(() => {
     const charged = consumePointChargeSuccessResult();
@@ -393,6 +396,11 @@ export const InterviewStartPage = () => {
 
       navigate("/content/interview/session");
     } catch (error) {
+      if (isGeminiOverloadError(error)) {
+        setShowGeminiOverloadModal(true);
+        setPageErrorMessage("");
+        return;
+      }
       setPageErrorMessage(error?.message || "면접 시작에 실패했습니다.");
     } finally {
       setStartingInterview(false);
@@ -633,6 +641,7 @@ export const InterviewStartPage = () => {
         />
       ) : null}
       {showPointChargeSuccessModal ? <PointChargeSuccessModal onClose={() => setShowPointChargeSuccessModal(false)} /> : null}
+      {showGeminiOverloadModal ? <GeminiOverloadModal onClose={() => setShowGeminiOverloadModal(false)} /> : null}
     </div>
   );
 };
