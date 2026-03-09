@@ -42,7 +42,7 @@ export const ErrorPage = ({ code = 404 }) => {
   }, [isVideoOpen]);
 
   return (
-    <main className="min-h-screen bg-[#f6f7fb] px-5 pt-[28vh]">
+    <main className="min-h-screen overflow-x-hidden bg-[#f6f7fb] px-4 pt-[18vh] sm:px-5 sm:pt-[28vh]">
       <section className="relative mx-auto w-full max-w-[560px] overflow-hidden rounded-[28px] border border-[#e6e9f2] bg-white px-7 pb-[30px] pt-[34px] text-center shadow-[0_18px_40px_rgba(93,131,222,0.12)]">
         <div className="pointer-events-none absolute left-[-70px] top-[-80px] h-[180px] w-[180px] rounded-full bg-[#b8c8f7] opacity-20" />
         <div className="pointer-events-none absolute bottom-[-100px] right-[-90px] h-[200px] w-[200px] rounded-full bg-[#ffd1ea] opacity-20" />

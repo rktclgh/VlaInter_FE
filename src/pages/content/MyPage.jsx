@@ -15,10 +15,12 @@ import {
 } from "../../lib/paymentApi";
 import {
   changeMyPassword,
+  clearMyGeminiApiKey,
   deleteMyFile,
   getMyFiles,
   getMyProfile,
   getMyProfileImageUrl,
+  updateMyGeminiApiKey,
   uploadMyFile,
 } from "../../lib/userApi";
 
@@ -342,6 +344,11 @@ export const MyPage = () => {
 
   const [profileUploading, setProfileUploading] = useState(false);
   const [profileUploadErrorMessage, setProfileUploadErrorMessage] = useState("");
+  const [hasGeminiApiKey, setHasGeminiApiKey] = useState(false);
+  const [geminiApiKeyInput, setGeminiApiKeyInput] = useState("");
+  const [geminiApiKeySubmitting, setGeminiApiKeySubmitting] = useState(false);
+  const [geminiApiKeyMessage, setGeminiApiKeyMessage] = useState("");
+  const [geminiApiKeyErrorMessage, setGeminiApiKeyErrorMessage] = useState("");
   const profileImageInputRef = useRef(null);
 
   const [activeHistoryTab, setActiveHistoryTab] = useState("payment");
@@ -420,6 +427,7 @@ export const MyPage = () => {
         setUserName(profile?.name || "사용자");
         setUserEmail(profile?.email || "-");
         setUserPoint(parsePoint(profile?.point));
+        setHasGeminiApiKey(Boolean(profile?.hasGeminiApiKey));
         setProfileImageUrl(getMyProfileImageUrl());
       } catch {
         navigate("/login", { replace: true });
@@ -546,6 +554,45 @@ export const MyPage = () => {
     }
   };
 
+  const submitGeminiApiKey = async () => {
+    const normalizedKey = geminiApiKeyInput.trim();
+    if (!normalizedKey) {
+      setGeminiApiKeyErrorMessage("Gemini API 키를 입력해 주세요.");
+      return;
+    }
+    setGeminiApiKeySubmitting(true);
+    setGeminiApiKeyErrorMessage("");
+    setGeminiApiKeyMessage("");
+    try {
+      const payload = await updateMyGeminiApiKey(normalizedKey);
+      const profile = extractProfile(payload);
+      setHasGeminiApiKey(Boolean(profile?.hasGeminiApiKey));
+      setGeminiApiKeyInput("");
+      setGeminiApiKeyMessage("Gemini API 키가 저장되었습니다.");
+    } catch (error) {
+      setGeminiApiKeyErrorMessage(error?.message || "Gemini API 키 저장에 실패했습니다.");
+    } finally {
+      setGeminiApiKeySubmitting(false);
+    }
+  };
+
+  const removeGeminiApiKey = async () => {
+    setGeminiApiKeySubmitting(true);
+    setGeminiApiKeyErrorMessage("");
+    setGeminiApiKeyMessage("");
+    try {
+      const payload = await clearMyGeminiApiKey();
+      const profile = extractProfile(payload);
+      setHasGeminiApiKey(Boolean(profile?.hasGeminiApiKey));
+      setGeminiApiKeyInput("");
+      setGeminiApiKeyMessage("Gemini API 키가 제거되었습니다.");
+    } catch (error) {
+      setGeminiApiKeyErrorMessage(error?.message || "Gemini API 키 제거에 실패했습니다.");
+    } finally {
+      setGeminiApiKeySubmitting(false);
+    }
+  };
+
   const moveToLoginAfterPasswordChange = async () => {
     setShowReLoginGuideModal(false);
     try {
@@ -580,7 +627,7 @@ export const MyPage = () => {
   }, [location.pathname]);
 
   return (
-    <div className="min-h-screen bg-white pt-[54px]">
+    <div className="min-h-screen overflow-x-hidden bg-white pt-[54px]">
       <ContentTopNav
         point={pointSummaryText}
         onClickCharge={() => setShowPointChargeModal(true)}
@@ -661,6 +708,47 @@ export const MyPage = () => {
                   </div>
                 </div>
                 {profileUploadErrorMessage ? <p className="mt-3 text-[12px] text-[#d84a4a]">{profileUploadErrorMessage}</p> : null}
+              </div>
+
+              <div className="mt-4 rounded-[16px] border border-[#e0e0e0] bg-white p-6">
+                <h2 className="text-[18px] font-medium text-[#1f1f1f]">Gemini API 키</h2>
+                <p className="mt-1 whitespace-pre-line text-[12px] leading-[1.6] text-[#7a7a7a]">
+                  {"본 서비스는 Gemini API를 기반으로 작동합니다.\n입력하신 API 키는 암호화되어 관리되며 비용이 따로 발생하지 않습니다."}
+                </p>
+                <div className="mt-4 flex flex-col gap-3 sm:flex-row">
+                  <input
+                    type="password"
+                    value={geminiApiKeyInput}
+                    onChange={(event) => setGeminiApiKeyInput(event.target.value)}
+                    placeholder="Gemini API 키 입력"
+                    className="h-[40px] w-full rounded-[10px] border border-[#d8d8d8] px-3 text-[13px] text-[#202020] outline-none focus:border-[#9a9a9a]"
+                  />
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={submitGeminiApiKey}
+                      disabled={geminiApiKeySubmitting}
+                      className="rounded-[10px] border border-[#1f1f1f] bg-[#1f1f1f] px-4 py-2 text-[12px] text-white disabled:opacity-60"
+                    >
+                      {geminiApiKeySubmitting ? "저장 중..." : "저장"}
+                    </button>
+                    {hasGeminiApiKey ? (
+                      <button
+                        type="button"
+                        onClick={removeGeminiApiKey}
+                        disabled={geminiApiKeySubmitting}
+                        className="rounded-[10px] border border-[#d6d6d6] px-4 py-2 text-[12px] text-[#555] disabled:opacity-60"
+                      >
+                        키 제거
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
+                <p className="mt-2 text-[12px] text-[#4f5664]">
+                  현재 상태: {hasGeminiApiKey ? "등록됨" : "미등록"}
+                </p>
+                {geminiApiKeyMessage ? <p className="mt-2 text-[12px] text-[#1f8f55]">{geminiApiKeyMessage}</p> : null}
+                {geminiApiKeyErrorMessage ? <p className="mt-2 text-[12px] text-[#d84a4a]">{geminiApiKeyErrorMessage}</p> : null}
               </div>
 
               <div className="mt-4 rounded-[16px] border border-[#e0e0e0] bg-white p-6">

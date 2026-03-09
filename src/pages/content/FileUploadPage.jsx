@@ -1,15 +1,18 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ContentTopNav } from "../../components/ContentTopNav";
 import { Sidebar } from "../../components/Sidebar";
 import { MobileSidebarDrawer } from "../../components/MobileSidebarDrawer";
+import { OcrInfoBadge } from "../../components/OcrInfoBadge";
 import { PointChargeModal } from "../../components/PointChargeModal";
 import { PointChargeSuccessModal } from "../../components/PointChargeSuccessModal";
 import dragDropIcon from "../../assets/icon/Drag_Drop.png";
 import plusIcon from "../../assets/icon/plus.png";
 import tempProfileImage from "../../assets/icon/temp.png";
 import { logout } from "../../lib/authApi";
+import { ingestMockDocument } from "../../lib/interviewApi";
 import { consumePointChargeSuccessResult } from "../../lib/pointChargeFlow";
+import { extractProfile, formatPoint, parsePoint } from "../../lib/profileUtils";
 import { deleteMyFile, getMyFiles, getMyProfile, getMyProfileImageUrl, uploadMyFile } from "../../lib/userApi";
 
 const DOCUMENT_TYPES = [
@@ -23,21 +26,6 @@ const createEmptyFilesByType = () =>
     acc[key] = [];
     return acc;
   }, {});
-
-const formatPoint = (value) => {
-  const safeNumber = Number.isFinite(Number(value)) ? Math.max(0, Number(value)) : 0;
-  return `${new Intl.NumberFormat("ko-KR").format(safeNumber)}P`;
-};
-
-const parsePoint = (rawValue) => {
-  if (typeof rawValue === "number") return rawValue;
-  if (typeof rawValue === "string") {
-    const normalized = rawValue.replace(/,/g, "").trim();
-    const parsed = Number(normalized);
-    return Number.isFinite(parsed) ? parsed : 0;
-  }
-  return 0;
-};
 
 const toTimestamp = (rawDateTime) => {
   const time = new Date(rawDateTime || "").getTime();
@@ -125,14 +113,6 @@ const normalizeFileRecord = (file, fallbackName = "") => {
   };
 };
 
-const extractProfile = (payload) => {
-  if (!payload || typeof payload !== "object") return {};
-  if (payload.data && typeof payload.data === "object" && !Array.isArray(payload.data)) return payload.data;
-  if (payload.result && typeof payload.result === "object" && !Array.isArray(payload.result)) return payload.result;
-  if (payload.user && typeof payload.user === "object" && !Array.isArray(payload.user)) return payload.user;
-  return payload;
-};
-
 const isPdfFile = (file) => {
   const lowerName = (file?.name || "").toLowerCase();
   const extensionValid = lowerName.endsWith(".pdf");
@@ -152,6 +132,19 @@ const formatDate = (iso) => {
   if (Number.isNaN(date.getTime())) return "-";
   return date.toISOString().slice(0, 10).replace(/-/g, ".");
 };
+
+const formatIngestionStatus = (rawStatus, ingested, extractionMethod, ocrUsed) => {
+  if (ingested || rawStatus === "READY") {
+    if (ocrUsed || extractionMethod === "OCR_TESSERACT") return "AI 분석 완료 · OCR fallback 적용";
+    if (extractionMethod === "PDFBOX") return "AI 분석 완료 · 텍스트 추출";
+    return "AI 분석 완료";
+  }
+  if (rawStatus === "PROCESSING" || rawStatus === "QUEUED") return "AI 분석 중";
+  if (rawStatus === "FAILED") return "AI 분석 실패";
+  return "AI 분석 전";
+};
+
+const isIngestionRunning = (status) => status === "QUEUED" || status === "PROCESSING";
 
 const LogoutConfirmModal = ({ onCancel, onConfirm }) => {
   return (
@@ -216,7 +209,15 @@ const FileDeleteConfirmModal = ({ onCancel, onConfirm }) => {
   );
 };
 
-const FileRow = ({ fileName, uploadedDate, sizeLabel, showPdfBadge = true, actionNode = null }) => {
+const FileRow = ({
+  fileName,
+  uploadedDate,
+  sizeLabel,
+  statusLabel = "",
+  showPdfBadge = true,
+  actionNode = null,
+  ocrUsed = false,
+}) => {
   return (
     <div className="flex flex-col gap-3 rounded-[12px] border border-[#dddddd] bg-[#f7f7f7] px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
       <div className="flex min-w-0 items-center gap-3">
@@ -226,9 +227,13 @@ const FileRow = ({ fileName, uploadedDate, sizeLabel, showPdfBadge = true, actio
           </div>
         ) : null}
         <div className="min-w-0">
-          <p className="truncate text-[13px] font-medium text-[#2b2b2b]">{fileName}</p>
+          <div className="flex min-w-0 items-center gap-2">
+            <p className="truncate text-[13px] font-medium text-[#2b2b2b]">{fileName}</p>
+            {ocrUsed ? <OcrInfoBadge compact /> : null}
+          </div>
           <p className="mt-0.5 text-[10px] text-[#9d9d9d]">업로드 날짜: {uploadedDate}</p>
           <p className="text-[10px] text-[#9d9d9d]">{sizeLabel}</p>
+          {statusLabel ? <p className="mt-1 text-[11px] font-medium text-[#4f6ddf]">{statusLabel}</p> : null}
         </div>
       </div>
       <div className="self-end sm:self-auto">{actionNode}</div>
@@ -250,6 +255,8 @@ const UploadDropZone = ({
   onDeletePending,
   onSavePending,
   onDeleteSaved,
+  onAnalyzeSaved,
+  analyzingFileId,
   isExpanded,
   onToggleExpanded,
   inputId,
@@ -319,14 +326,39 @@ const UploadDropZone = ({
               fileName={resolveDisplayFileName(file)}
               uploadedDate={formatDate(file?.createdAt ?? file?.created_at)}
               sizeLabel="PDF"
+              ocrUsed={Boolean(file?.ocrUsed)}
+              statusLabel={formatIngestionStatus(
+                file?.ingestionStatus,
+                file?.ingested,
+                file?.extractionMethod,
+                file?.ocrUsed
+              )}
               actionNode={
-                <button
-                  type="button"
-                  onClick={() => onDeleteSaved(file?.fileId)}
-                  className="rounded-full bg-[#ff4a4a] px-2 py-1 text-[10px] font-semibold text-white"
-                >
-                  삭제
-                </button>
+                <div className="flex items-center gap-2">
+                  {file?.ingested ? (
+                    <span className="rounded-full bg-[#e9f5ee] px-2 py-1 text-[10px] font-semibold text-[#2f7a4d]">
+                      READY
+                    </span>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => onAnalyzeSaved(file?.fileId)}
+                      disabled={analyzingFileId === String(file?.fileId) || isIngestionRunning(file?.ingestionStatus)}
+                      className="rounded-full border border-[#5d6ef8] px-2 py-1 text-[10px] font-semibold text-[#5d6ef8] disabled:opacity-60"
+                    >
+                      {analyzingFileId === String(file?.fileId) || isIngestionRunning(file?.ingestionStatus)
+                        ? "분석 중..."
+                        : "AI 분석"}
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => onDeleteSaved(file?.fileId)}
+                    className="rounded-full bg-[#ff4a4a] px-2 py-1 text-[10px] font-semibold text-white"
+                  >
+                    삭제
+                  </button>
+                </div>
               }
             />
           ))}
@@ -380,6 +412,26 @@ export const FileUploadPage = () => {
   const [errors, setErrors] = useState({ RESUME: "", INTRODUCE: "", PORTFOLIO: "" });
   const [dragActiveType, setDragActiveType] = useState("");
   const [savingType, setSavingType] = useState("");
+  const [analyzingFileId, setAnalyzingFileId] = useState("");
+
+  const loadSavedFiles = useCallback(async () => {
+    const filesPayload = await getMyFiles();
+    const files = extractFileList(filesPayload).map((file) => normalizeFileRecord(file));
+    const nextFilesByType = createEmptyFilesByType();
+
+    for (const file of files) {
+      const type = file?.fileType;
+      if (!DOCUMENT_TYPE_KEYS.includes(type)) continue;
+      nextFilesByType[type].push(file);
+    }
+
+    for (const key of DOCUMENT_TYPE_KEYS) {
+      nextFilesByType[key].sort(sortByLatestFile);
+    }
+
+    setSavedFilesByType(nextFilesByType);
+    return nextFilesByType;
+  }, []);
 
   useEffect(() => {
     const charged = consumePointChargeSuccessResult();
@@ -409,28 +461,36 @@ export const FileUploadPage = () => {
       }
 
       try {
-        const filesPayload = await getMyFiles();
-        const files = extractFileList(filesPayload).map((file) => normalizeFileRecord(file));
-        const nextFilesByType = createEmptyFilesByType();
-
-        for (const file of files) {
-          const type = file?.fileType;
-          if (!DOCUMENT_TYPE_KEYS.includes(type)) continue;
-          nextFilesByType[type].push(file);
-        }
-
-        for (const key of DOCUMENT_TYPE_KEYS) {
-          nextFilesByType[key].sort(sortByLatestFile);
-        }
-
-        setSavedFilesByType(nextFilesByType);
+        await loadSavedFiles();
       } catch {
         setProfileImageUrl((prev) => prev || tempProfileImage);
       }
     };
 
     loadData();
-  }, [navigate]);
+  }, [loadSavedFiles, navigate]);
+
+  const hasOngoingIngestion = useMemo(
+    () =>
+      Object.values(savedFilesByType).some((files) =>
+        (files || []).some((file) => isIngestionRunning(file?.ingestionStatus))
+      ),
+    [savedFilesByType]
+  );
+
+  useEffect(() => {
+    if (!hasOngoingIngestion) return undefined;
+    const timer = window.setInterval(() => {
+      void (async () => {
+        try {
+          await loadSavedFiles();
+        } catch (error) {
+          console.error("ingestion polling failed", error);
+        }
+      })();
+    }, 4000);
+    return () => window.clearInterval(timer);
+  }, [hasOngoingIngestion, loadSavedFiles]);
 
   const onSelectSidebar = (item) => {
     setIsMobileMenuOpen(false);
@@ -548,6 +608,22 @@ export const FileUploadPage = () => {
     }
   };
 
+  const analyzeSaved = async (type, fileId) => {
+    const target = (savedFilesByType[type] || []).find((file) => String(file?.fileId) === String(fileId));
+    if (!target?.fileId) return;
+
+    setAnalyzingFileId(String(target.fileId));
+    setTypeError(type, "");
+    try {
+      await ingestMockDocument(target.fileId);
+      void loadSavedFiles();
+    } catch (error) {
+      setTypeError(type, error?.message || "AI 분석 요청 중 오류가 발생했습니다.");
+    } finally {
+      setAnalyzingFileId("");
+    }
+  };
+
   const requestDeletePending = (type) => {
     setDeleteConfirmTarget({ type, mode: "pending" });
   };
@@ -575,7 +651,7 @@ export const FileUploadPage = () => {
   const hasAnyPending = useMemo(() => Object.values(pendingFiles).some(Boolean), [pendingFiles]);
 
   return (
-    <div className="min-h-screen bg-white pt-[54px]">
+    <div className="min-h-screen overflow-x-hidden bg-white pt-[54px]">
       <ContentTopNav
         point={formatPoint(userPoint)}
         onClickCharge={() => setShowPointChargeModal(true)}
@@ -638,6 +714,8 @@ export const FileUploadPage = () => {
                       onDeletePending={() => requestDeletePending(item.key)}
                       onSavePending={() => savePending(item.key)}
                       onDeleteSaved={(fileId) => requestDeleteSaved(item.key, fileId)}
+                      onAnalyzeSaved={(fileId) => analyzeSaved(item.key, fileId)}
+                      analyzingFileId={analyzingFileId}
                       isExpanded={expandedUploadByType[item.key]}
                       onToggleExpanded={() => toggleExpandedUploader(item.key)}
                       inputId={`file-input-${item.key}`}

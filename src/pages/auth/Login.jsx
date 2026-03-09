@@ -4,6 +4,7 @@ import { TopNav } from "../../components/TopNav";
 import eyeOpenIcon from "../../assets/icon/eye-open.svg";
 import eyeOffIcon from "../../assets/icon/eye-off.svg";
 import kakaoLoginButtonImage from "../../assets/icon/kakao_login_medium_wide.png";
+import brandFavicon from "../../assets/logo/favicon.png";
 import { login } from "../../lib/authApi";
 
 const footerLinks = [
@@ -75,16 +76,14 @@ export const Login = () => {
   };
 
   return (
-    <div className="min-h-screen w-full bg-white">
+    <div className="min-h-screen w-full overflow-x-hidden bg-white">
       <TopNav />
 
       <div className="flex min-h-[calc(100vh-54px)] flex-col pt-[54px]">
         <main className="flex flex-1 items-center justify-center px-6 py-14">
           <section className="w-full max-w-[410px]">
             <header className="text-center">
-              <h1 className="bg-[linear-gradient(145deg,#5D83DE_0%,#FF1C91_100%)] bg-clip-text text-[54px] font-medium leading-none text-transparent">
-                Vlainter
-              </h1>
+              <img src={brandFavicon} alt="Vlainter" className="mx-auto h-[72px] w-auto" />
               <p className="mt-1 text-[12px] text-[#7e7e7e]">로그인</p>
             </header>
 
@@ -154,7 +153,7 @@ export const Login = () => {
         </main>
 
         <footer className="border-t border-[#ececec] py-9">
-          <p className="text-center text-[12px] text-[#7a7a7a]">간편하고 안전한 행사 관리 솔루션</p>
+          <p className="text-center text-[12px] text-[#7a7a7a]">합격의 페이스메이커 AI 면접 솔루션</p>
           <nav className="mt-4 flex items-center justify-center gap-6">
             {footerLinks.map((item) => (
               <a key={item.text} href={item.href} className="text-[10px] text-[#7a7a7a]">

@@ -315,7 +315,7 @@ export const PointChargePage = () => {
   const pointSummaryText = useMemo(() => formatPoint(userPoint), [userPoint]);
 
   return (
-    <div className="min-h-screen bg-white pt-[54px]">
+    <div className="min-h-screen overflow-x-hidden bg-white pt-[54px]">
       <ContentTopNav
         point={pointSummaryText}
         onClickCharge={() => setShowPointChargeModal(true)}
