@@ -9,9 +9,9 @@ import { PointChargeSuccessModal } from "../../components/PointChargeSuccessModa
 import { StarRatingInput, StarIcons } from "../../components/DifficultyStars";
 import tempProfileImage from "../../assets/icon/temp.png";
 import { logout } from "../../lib/authApi";
-import { buildCategoryCode, buildVisibleCategories, findTechRootId, getCategoryDisplayName } from "../../lib/categoryPresentation";
+import { searchCategoryByText } from "../../lib/categoryPresentation";
 import { ratingToDifficulty } from "../../lib/difficultyRating";
-import { createInterviewCategory, getInterviewCategories, getReadyMockDocuments, startMockInterview } from "../../lib/interviewApi";
+import { createInterviewCatalogJob, createInterviewCatalogSkill, getInterviewCatalogJobs, getInterviewCatalogSkills, getReadyMockDocuments, startMockInterview } from "../../lib/interviewApi";
 import { saveTechInterviewSession } from "../../lib/interviewSessionFlow";
 import { consumePointChargeSuccessResult } from "../../lib/pointChargeFlow";
 import { getMyProfile, getMyProfileImageUrl } from "../../lib/userApi";
@@ -63,7 +63,6 @@ const buildSelectedDocumentMeta = (file, type) => {
     ocrUsed: Boolean(file?.ocrUsed),
   };
 };
-
 const LogoutConfirmModal = ({ onCancel, onConfirm }) => (
   <div className="fixed inset-0 z-70 flex items-center justify-center bg-black/35 px-4">
     <div className="w-full max-w-105 rounded-2xl border border-[#d9d9d9] bg-white p-5">
@@ -80,6 +79,16 @@ const InlineSpinner = ({ label }) => (
   <div className="inline-flex items-center gap-2 text-[12px] text-[#5e6472]">
     <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-[#cbd5e1] border-t-[#171b24]" />
     <span>{label}</span>
+  </div>
+);
+
+const BlockingLoadingOverlay = ({ title, description }) => (
+  <div className="fixed inset-0 z-[120] flex items-center justify-center bg-[#0f172a]/55 px-4">
+    <div className="w-full max-w-[420px] rounded-2xl border border-white/25 bg-white/95 p-5 text-center shadow-[0_18px_48px_rgba(15,23,42,0.28)]">
+      <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-full border-2 border-[#cbd5e1] border-t-[#171b24] animate-spin" />
+      <p className="mt-4 text-[16px] font-semibold text-[#111827]">{title}</p>
+      <p className="mt-2 text-[13px] leading-[1.6] text-[#4b5563]">{description}</p>
+    </div>
   </div>
 );
 
@@ -113,7 +122,8 @@ export const InterviewStartPage = () => {
   const [showPointChargeSuccessModal, setShowPointChargeSuccessModal] = useState(false);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
 
-  const [categories, setCategories] = useState([]);
+  const [jobItems, setJobItems] = useState([]);
+  const [skillItems, setSkillItems] = useState([]);
   const [filesByType, setFilesByType] = useState({ RESUME: [], INTRODUCE: [], PORTFOLIO: [] });
   const [selectedFiles, setSelectedFiles] = useState({ RESUME: "", INTRODUCE: "", PORTFOLIO: "" });
   const [jobFilter, setJobFilter] = useState("");
@@ -148,8 +158,12 @@ export const InterviewStartPage = () => {
     }
 
     try {
-      const [categoriesPayload, filesPayload] = await Promise.all([getInterviewCategories(), getReadyMockDocuments()]);
-      const nextCategories = buildVisibleCategories(Array.isArray(categoriesPayload) ? categoriesPayload : []);
+      const [jobsPayload, filesPayload] = await Promise.all([getInterviewCatalogJobs(), getReadyMockDocuments()]);
+      const nextJobs = (Array.isArray(jobsPayload) ? jobsPayload : []).map((job) => ({
+        categoryId: Number(job?.jobId),
+        name: String(job?.name || "").trim(),
+        displayName: String(job?.name || "").trim(),
+      })).filter((job) => Number.isFinite(job.categoryId) && job.name);
       const rawFiles = extractFileList(filesPayload);
       const nextFilesByType = { RESUME: [], INTRODUCE: [], PORTFOLIO: [] };
 
@@ -163,14 +177,14 @@ export const InterviewStartPage = () => {
         nextFilesByType[type].sort((a, b) => toTimestamp(b?.createdAt || b?.created_at) - toTimestamp(a?.createdAt || a?.created_at));
       });
 
-      const jobs = nextCategories.filter((item) => Number(item.depth) === 1);
       const profileJobName = typeof profile?.jobName === "string" ? profile.jobName.trim() : "";
       const matchedJob = profileJobName
-        ? jobs.find((item) => [item.displayName, item.name].filter(Boolean).some((name) => name.trim().toLowerCase() === profileJobName.toLowerCase()))
+        ? nextJobs.find((item) => [item.displayName, item.name].filter(Boolean).some((name) => name.trim().toLowerCase() === profileJobName.toLowerCase()))
         : null;
-      const defaultJob = matchedJob?.categoryId ? String(matchedJob.categoryId) : jobs[0]?.categoryId ? String(jobs[0].categoryId) : "";
+      const defaultJob = matchedJob?.categoryId ? String(matchedJob.categoryId) : nextJobs[0]?.categoryId ? String(nextJobs[0].categoryId) : "";
 
-      setCategories(nextCategories);
+      setJobItems(nextJobs);
+      setSkillItems([]);
       setFilesByType(nextFilesByType);
       setSelectedFiles({
         RESUME: String(nextFilesByType.RESUME[0]?.fileId || nextFilesByType.RESUME[0]?.file_id || ""),
@@ -189,26 +203,19 @@ export const InterviewStartPage = () => {
     void loadPageData();
   }, [loadPageData]);
 
-  const jobs = useMemo(() => categories.filter((item) => Number(item.depth) === 1), [categories]);
+  const jobs = useMemo(() => jobItems, [jobItems]);
   const visibleJobs = useMemo(() => {
-    const keyword = jobQuery.trim().toLowerCase();
-    if (!keyword) return jobs;
-    return jobs.filter((job) => [job.displayName, job.name, job.code].filter(Boolean).join(" ").toLowerCase().includes(keyword));
+    return jobs.filter((job) => searchCategoryByText(job, jobQuery));
   }, [jobQuery, jobs]);
-  const leafCategories = useMemo(() => categories.filter((item) => item?.isLeaf), [categories]);
   const visibleSkills = useMemo(() => {
     const keyword = skillQuery.trim().toLowerCase();
-    return leafCategories
-      .filter((category) => {
-        if (jobFilter && String(category.parentId) !== jobFilter) return false;
-        if (!keyword) return true;
-        return [category.displayName, category.name, category.code, category.path].filter(Boolean).join(" ").toLowerCase().includes(keyword);
-      })
+    return skillItems
+      .filter((category) => searchCategoryByText(category, keyword))
       .map((category) => ({
         ...category,
-        label: category.displayName || getCategoryDisplayName(category),
+        label: category.displayName || category.name,
       }));
-  }, [jobFilter, leafCategories, skillQuery]);
+  }, [skillItems, skillQuery]);
 
   useEffect(() => {
     if (selectedCategoryId && !visibleSkills.some((item) => String(item.categoryId) === String(selectedCategoryId))) {
@@ -216,17 +223,48 @@ export const InterviewStartPage = () => {
     }
   }, [selectedCategoryId, visibleSkills]);
 
-  const canCreateJob = Boolean(jobQuery.trim() && !visibleJobs.some((job) => (job.displayName || job.name).trim().toLowerCase() === jobQuery.trim().toLowerCase()));
+  const canCreateJob = Boolean(jobQuery.trim() && !visibleJobs.some((job) => (job.displayName || job.name || "").trim().toLowerCase() === jobQuery.trim().toLowerCase()));
   const canCreateSkill = Boolean(jobFilter && skillQuery.trim() && !visibleSkills.some((skill) => skill.label.trim().toLowerCase() === skillQuery.trim().toLowerCase()));
 
-  const selectedSkill = useMemo(() => categories.find((item) => String(item.categoryId) === String(selectedCategoryId)) || null, [categories, selectedCategoryId]);
+  const selectedSkill = useMemo(() => skillItems.find((item) => String(item.categoryId) === String(selectedCategoryId)) || null, [skillItems, selectedCategoryId]);
   const selectedJob = useMemo(() => jobs.find((item) => String(item.categoryId) === String(jobFilter)) || null, [jobFilter, jobs]);
   const selectedFileObjects = useMemo(() => DOCUMENT_TYPES.reduce((acc, item) => {
     acc[item.key] = filesByType[item.key].find((file) => String(file?.fileId || file?.file_id || "") === String(selectedFiles[item.key] || "")) || null;
     return acc;
   }, {}), [filesByType, selectedFiles]);
 
+  useEffect(() => {
+    const loadSkills = async () => {
+      if (!jobFilter) {
+        setSkillItems([]);
+        return;
+      }
+      const targetJob = jobs.find((item) => String(item.categoryId) === String(jobFilter));
+      const jobName = (targetJob?.displayName || targetJob?.name || "").trim();
+      if (!jobName) {
+        setSkillItems([]);
+        return;
+      }
+      try {
+        const payload = await getInterviewCatalogSkills({ jobName, query: skillQuery.trim() });
+        const nextSkills = (Array.isArray(payload) ? payload : []).map((skill) => ({
+          categoryId: Number(skill?.skillId),
+          parentId: Number(skill?.jobId || targetJob?.categoryId || 0),
+          name: String(skill?.name || "").trim(),
+          displayName: String(skill?.name || "").trim(),
+          isLeaf: true,
+        })).filter((item) => Number.isFinite(item.categoryId) && item.name);
+        setSkillItems(nextSkills);
+      } catch (error) {
+        setPageErrorMessage(error?.message || "기술 목록을 불러오지 못했습니다.");
+      }
+    };
+
+    void loadSkills();
+  }, [jobFilter, jobs, skillQuery]);
+
   const handleSidebarNavigate = (item) => {
+    if (startingInterview) return;
     setIsMobileMenuOpen(false);
     if (item?.path) navigate(item.path);
   };
@@ -247,16 +285,18 @@ export const InterviewStartPage = () => {
     setCreatingCategory(true);
     setPageErrorMessage("");
     try {
-      const created = await createInterviewCategory({
-        parentId: findTechRootId(categories),
-        code: buildCategoryCode(jobQuery),
-        name: jobQuery.trim(),
-        description: null,
-        sortOrder: 100,
-      });
-      await loadPageData();
-      setJobFilter(String(created.categoryId));
-      setJobQuery(created.displayName || created.name);
+      const created = await createInterviewCatalogJob(jobQuery.trim());
+      const displayName = (created?.name || jobQuery.trim()).trim();
+      const refreshed = await getInterviewCatalogJobs();
+      const nextJobs = (Array.isArray(refreshed) ? refreshed : []).map((job) => ({
+        categoryId: Number(job?.jobId),
+        name: String(job?.name || "").trim(),
+        displayName: String(job?.name || "").trim(),
+      })).filter((job) => Number.isFinite(job.categoryId) && job.name);
+      setJobItems(nextJobs);
+      const matched = nextJobs.find((job) => job.name.toLowerCase() === displayName.toLowerCase()) || nextJobs.at(0);
+      setJobFilter(matched?.categoryId ? String(matched.categoryId) : "");
+      setJobQuery(displayName);
     } catch (error) {
       setPageErrorMessage(error?.message || "직무 생성에 실패했습니다.");
     } finally {
@@ -269,16 +309,28 @@ export const InterviewStartPage = () => {
     setCreatingCategory(true);
     setPageErrorMessage("");
     try {
-      const created = await createInterviewCategory({
-        parentId: Number(jobFilter),
-        code: buildCategoryCode(skillQuery),
-        name: skillQuery.trim(),
-        description: null,
-        sortOrder: 100,
+      const jobName = (selectedJob?.displayName || selectedJob?.name || jobQuery.trim()).trim();
+      if (!jobName) {
+        setPageErrorMessage("직무를 먼저 선택해 주세요.");
+        return;
+      }
+      const created = await createInterviewCatalogSkill({
+        jobName,
+        skillName: skillQuery.trim(),
       });
-      await loadPageData();
-      setSelectedCategoryId(String(created.categoryId));
-      setSkillQuery(created.displayName || created.name);
+      const displayName = (created?.name || skillQuery.trim()).trim();
+      const refreshed = await getInterviewCatalogSkills({ jobName });
+      const nextSkills = (Array.isArray(refreshed) ? refreshed : []).map((skill) => ({
+        categoryId: Number(skill?.skillId),
+        parentId: Number(skill?.jobId || selectedJob?.categoryId || 0),
+        name: String(skill?.name || "").trim(),
+        displayName: String(skill?.name || "").trim(),
+        isLeaf: true,
+      })).filter((item) => Number.isFinite(item.categoryId) && item.name);
+      setSkillItems(nextSkills);
+      const matched = nextSkills.find((item) => item.name.toLowerCase() === displayName.toLowerCase()) || nextSkills.at(0);
+      setSelectedCategoryId(matched?.categoryId ? String(matched.categoryId) : "");
+      setSkillQuery(displayName);
     } catch (error) {
       setPageErrorMessage(error?.message || "기술 카테고리 생성에 실패했습니다.");
     } finally {
@@ -296,8 +348,14 @@ export const InterviewStartPage = () => {
       setPageErrorMessage("AI 분석이 완료된 문서를 1개 이상 선택해 주세요.");
       return;
     }
-    if (!selectedCategoryId) {
-      setPageErrorMessage("모의면접에는 기술 카테고리 선택이 필요합니다.");
+    const resolvedJobName = (selectedJob?.displayName || selectedJob?.name || jobQuery.trim()).trim();
+    const resolvedSkillName = (selectedSkill?.displayName || selectedSkill?.name || skillQuery.trim()).trim();
+    if (!resolvedJobName) {
+      setPageErrorMessage("모의면접에는 직무 입력이 필요합니다.");
+      return;
+    }
+    if (!resolvedSkillName) {
+      setPageErrorMessage("모의면접에는 기술 입력이 필요합니다.");
       return;
     }
 
@@ -306,7 +364,8 @@ export const InterviewStartPage = () => {
     try {
       const response = await startMockInterview({
         documentFileIds: selectedDocumentIds,
-        categoryId: selectedCategoryId ? Number(selectedCategoryId) : null,
+        jobName: resolvedJobName,
+        skillName: resolvedSkillName,
         difficulty: ratingToDifficulty(selectedRating),
         questionCount: Math.max(5, Number(selectedQuestionCount) || 5),
       });
@@ -330,9 +389,9 @@ export const InterviewStartPage = () => {
           },
           difficulty: ratingToDifficulty(selectedRating),
           difficultyRating: selectedRating,
-          categoryId: selectedCategoryId ? Number(selectedCategoryId) : null,
-          categoryName: selectedSkill?.displayName || selectedSkill?.name || null,
-          jobName: selectedJob?.displayName || selectedJob?.name || null,
+          categoryId: null,
+          categoryName: resolvedSkillName,
+          jobName: resolvedJobName,
           questionCount: Math.max(5, Number(selectedQuestionCount) || 5),
         },
       });
@@ -347,7 +406,17 @@ export const InterviewStartPage = () => {
 
   return (
     <div className="min-h-screen bg-white pt-13.5">
-      <ContentTopNav point={formatPoint(userPoint)} onClickCharge={() => setShowPointChargeModal(true)} onOpenMenu={() => setIsMobileMenuOpen(true)} />
+      <ContentTopNav
+        point={formatPoint(userPoint)}
+        onClickCharge={() => {
+          if (startingInterview) return;
+          setShowPointChargeModal(true);
+        }}
+        onOpenMenu={() => {
+          if (startingInterview) return;
+          setIsMobileMenuOpen(true);
+        }}
+      />
 
       <MobileSidebarDrawer
         open={isMobileMenuOpen}
@@ -358,6 +427,7 @@ export const InterviewStartPage = () => {
         profileImageUrl={profileImageUrl}
         fallbackProfileImageUrl={tempProfileImage}
         onLogout={() => {
+          if (startingInterview) return;
           setIsMobileMenuOpen(false);
           setShowLogoutModal(true);
         }}
@@ -371,7 +441,10 @@ export const InterviewStartPage = () => {
             userName={userName}
             profileImageUrl={profileImageUrl}
             fallbackProfileImageUrl={tempProfileImage}
-            onLogout={() => setShowLogoutModal(true)}
+            onLogout={() => {
+              if (startingInterview) return;
+              setShowLogoutModal(true);
+            }}
           />
         </div>
 
@@ -410,7 +483,7 @@ export const InterviewStartPage = () => {
                       {visibleJobs.map((job) => (
                         <FilterChip
                           key={job.categoryId}
-                          label={job.displayName || getCategoryDisplayName(job)}
+                          label={job.displayName || job.name}
                           active={String(job.categoryId) === jobFilter}
                           onClick={() => setJobFilter(String(job.categoryId))}
                         />
@@ -447,7 +520,7 @@ export const InterviewStartPage = () => {
                     </div>
                   </CategoryCard>
 
-                  <CategoryCard title="서류 선택" description="AI 분석이 끝난 서류만 노출된다. OCR fallback이 사용된 문서는 배지를 함께 표시한다.">
+                  <CategoryCard title="서류 선택" description="AI 분석이 끝난 서류만 노출된다. 포트폴리오는 선택 사항이며, 문서 1개 이상이면 시작할 수 있다. OCR fallback이 사용된 문서는 배지를 함께 표시한다.">
                     <div className="grid gap-4 md:grid-cols-3">
                       {DOCUMENT_TYPES.map((documentType) => {
                         const files = filesByType[documentType.key] || [];
@@ -548,6 +621,12 @@ export const InterviewStartPage = () => {
         </main>
       </div>
 
+      {startingInterview ? (
+        <BlockingLoadingOverlay
+          title="면접 세션을 준비하는 중입니다"
+          description="질문 생성이 완료될 때까지 잠시만 기다려 주세요. 이 과정에서는 다른 화면으로 이동할 수 없습니다."
+        />
+      ) : null}
       {showLogoutModal ? <LogoutConfirmModal onCancel={() => setShowLogoutModal(false)} onConfirm={handleLogoutConfirm} /> : null}
       {showPointChargeModal ? (
         <PointChargeModal

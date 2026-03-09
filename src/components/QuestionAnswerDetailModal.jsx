@@ -35,7 +35,8 @@ export const QuestionAnswerDetailModal = ({ item, onClose }) => {
   const userAnswer = item.answerText?.trim();
   const rawCanonicalAnswer = item.modelAnswer?.trim() || item.canonicalAnswer?.trim();
   const canonicalAnswer = isGuideLikeText(rawCanonicalAnswer) ? "" : rawCanonicalAnswer;
-  const guideText = item.bestPractice?.trim() || item.feedback?.trim() || (isGuideLikeText(rawCanonicalAnswer) ? rawCanonicalAnswer : "");
+  const feedbackText = item.feedback?.trim() || "";
+  const guideText = item.bestPractice?.trim() || (isGuideLikeText(rawCanonicalAnswer) ? rawCanonicalAnswer : "");
   const categoryLabel = getQuestionCategoryDisplayName(item.categoryName || item.category);
 
   return (
@@ -76,6 +77,13 @@ export const QuestionAnswerDetailModal = ({ item, onClose }) => {
           </div>
         ) : null}
 
+        {feedbackText ? (
+          <div className="mt-4 rounded-[20px] border border-[#e8ecf3] bg-white p-5">
+            <p className="text-[12px] font-semibold text-[#738094]">피드백</p>
+            <p className="mt-3 whitespace-pre-wrap text-[14px] leading-[1.8] text-[#4f5664]">{feedbackText}</p>
+          </div>
+        ) : null}
+
         {guideText ? (
           <div className="mt-4 rounded-[20px] border border-[#e8ecf3] bg-white p-5">
             <p className="text-[12px] font-semibold text-[#738094]">가이드</p>
@@ -83,7 +91,7 @@ export const QuestionAnswerDetailModal = ({ item, onClose }) => {
           </div>
         ) : null}
 
-        {!userAnswer && !canonicalAnswer && !guideText ? (
+        {!userAnswer && !canonicalAnswer && !feedbackText && !guideText ? (
           <div className="mt-4 rounded-[20px] border border-[#e8ecf3] bg-white p-5">
             <p className="text-[12px] font-semibold text-[#738094]">답변</p>
             <p className="mt-3 whitespace-pre-wrap text-[14px] leading-[1.8] text-[#4f5664]">답변 정보가 없습니다.</p>

@@ -209,6 +209,7 @@ export const InterviewSessionPage = () => {
   }, [completed, currentQuestion]);
 
   const isMockInterview = sessionMetadata.apiBasePath === "/api/interview/mock";
+  const isQuestionSetPractice = Boolean(sessionMetadata.fromQuestionSet);
   const isLastMockQuestion = Boolean(
     isMockInterview &&
     currentQuestion &&
@@ -319,8 +320,16 @@ export const InterviewSessionPage = () => {
     setCompleted(false);
   };
 
-  const handleBookmark = async (turnId = pendingResult?.answeredTurnId) => {
+  const resolveTurnId = (value) => {
+    if (typeof value === "number" && Number.isFinite(value)) return value;
+    if (typeof value === "string" && /^\d+$/.test(value.trim())) return Number(value.trim());
+    return null;
+  };
+
+  const handleBookmark = async (rawTurnId = pendingResult?.answeredTurnId) => {
+    const turnId = resolveTurnId(rawTurnId) ?? resolveTurnId(pendingResult?.answeredTurnId);
     if (!turnId) {
+      setPageErrorMessage("저장할 질문 정보를 찾지 못했습니다. 다시 시도해 주세요.");
       return;
     }
     const resultTurn = sessionResults?.turns?.find((item) => item.turnId === turnId);
@@ -415,14 +424,16 @@ export const InterviewSessionPage = () => {
                     <p className="mt-2 text-[13px] leading-[1.6] text-[#5e6472]">
                       {isMockInterview
                         ? "모의면접 중에는 다음 문제에 집중하고, 종료 후 질문·답변·평가를 한 번에 확인한다."
-                        : "답변 제출 후 피드백과 모범 답안을 바로 확인할 수 있다."}
+                        : isQuestionSetPractice
+                          ? "내 질문 세트 연습은 질문, 내 답변, 모범답안을 중심으로 확인합니다."
+                          : "답변 제출 후 피드백과 모범 답안을 바로 확인할 수 있다."}
                     </p>
                   </div>
                   <button
                     type="button"
                     onClick={() => {
                       clearTechInterviewSession();
-                      navigate("/content/interview", { replace: true });
+                      navigate(isQuestionSetPractice ? "/content/question-sets" : "/content/interview", { replace: true });
                     }}
                     className="rounded-[12px] border border-[#d8dde7] px-3 py-2 text-[12px] text-[#4f5664]"
                   >
@@ -434,6 +445,7 @@ export const InterviewSessionPage = () => {
                   <>
                     <div className="mt-5 flex flex-wrap gap-2">
                       {currentQuestion.category ? <QuestionMetaChip label={getQuestionCategoryDisplayName(currentQuestion.category)} /> : null}
+                      {currentQuestion.sourceTag === "USER" ? <QuestionMetaChip label="사용자 생성" /> : null}
                       {currentQuestion.difficulty ? <QuestionMetaChip label={`난이도 ${currentQuestion.difficulty}`} /> : null}
                       {(currentQuestion.tags || []).map(sanitizeQuestionTag).filter(Boolean).map((tag) => (
                         <QuestionMetaChip key={tag} label={`#${tag}`} />
@@ -493,14 +505,16 @@ export const InterviewSessionPage = () => {
                           <StarRating score={pendingResult.evaluation?.score} />
                         </div>
                       </div>
-                      <button
-                        type="button"
-                        onClick={handleBookmark}
-                        disabled={bookmarking || pendingResult.bookmarked}
-                        className="rounded-[12px] border border-[#d8dde7] px-3 py-2 text-[12px] text-[#4f5664] disabled:opacity-60"
-                      >
-                        {pendingResult.bookmarked ? "저장 완료" : bookmarking ? "저장 중..." : "질문 저장"}
-                      </button>
+                      {!isQuestionSetPractice ? (
+                        <button
+                          type="button"
+                          onClick={() => handleBookmark()}
+                          disabled={bookmarking || pendingResult.bookmarked}
+                          className="rounded-[12px] border border-[#d8dde7] px-3 py-2 text-[12px] text-[#4f5664] disabled:opacity-60"
+                        >
+                          {pendingResult.bookmarked ? "저장 완료" : bookmarking ? "저장 중..." : "질문 저장"}
+                        </button>
+                      ) : null}
                     </div>
 
                     <div className="mt-5 grid gap-4 lg:grid-cols-2">
@@ -522,12 +536,14 @@ export const InterviewSessionPage = () => {
                           {pendingResult.evaluation?.feedback || "-"}
                         </p>
                       </section>
-                      <section className="rounded-[16px] bg-[#f6f8fb] p-4">
-                        <p className="text-[12px] font-semibold text-[#5d6676]">모범 답안 가이드</p>
-                        <p className="mt-2 whitespace-pre-wrap text-[13px] leading-[1.7] text-[#252b36]">
-                          {pendingResult.evaluation?.bestPractice || "-"}
-                        </p>
-                      </section>
+                      {!isQuestionSetPractice && pendingResult.evaluation?.bestPractice?.trim() ? (
+                        <section className="rounded-[16px] bg-[#f6f8fb] p-4">
+                          <p className="text-[12px] font-semibold text-[#5d6676]">모범 답안 가이드</p>
+                          <p className="mt-2 whitespace-pre-wrap text-[13px] leading-[1.7] text-[#252b36]">
+                            {pendingResult.evaluation?.bestPractice}
+                          </p>
+                        </section>
+                      ) : null}
                     </div>
 
                     <div className="mt-5 flex justify-end">
@@ -597,7 +613,7 @@ export const InterviewSessionPage = () => {
                                 <div className="mt-3 rounded-[12px] bg-[#f6f8fb] p-3">
                                   <p className="text-[11px] font-semibold text-[#5d6676]">보완 포인트</p>
                                   <p className="mt-1 whitespace-pre-wrap text-[12px] leading-[1.6] text-[#4f5664]">
-                                    {turn.evaluation?.bestPractice || "-"}
+                                    {turn.evaluation?.bestPractice?.trim() || "-"}
                                   </p>
                                 </div>
                                 <div className="mt-3 rounded-[12px] bg-[#f6f8fb] p-3">
@@ -619,7 +635,9 @@ export const InterviewSessionPage = () => {
                   <div className="mt-5 rounded-[18px] border border-[#dfe3eb] bg-white px-5 py-6">
                     <p className="text-[16px] font-medium text-[#171b24]">면접이 종료되었습니다.</p>
                     <p className="mt-2 text-[13px] leading-[1.7] text-[#5e6472]">
-                      새 면접을 시작하거나 저장된 질문을 확인해 다음 연습을 이어갈 수 있다.
+                      {isQuestionSetPractice
+                        ? "내 질문 세트 연습이 완료되었습니다. 세트 화면으로 돌아가 다음 연습을 이어갈 수 있습니다."
+                        : "새 면접을 시작하거나 저장된 질문을 확인해 다음 연습을 이어갈 수 있다."}
                     </p>
                   </div>
                 ) : null}

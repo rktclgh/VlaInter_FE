@@ -71,3 +71,18 @@ export async function changeMyPassword(currentPassword, newPassword) {
     },
   });
 }
+
+export async function updateMyGeminiApiKey(geminiApiKey) {
+  return apiRequest("/api/users/me/gemini-api-key", {
+    method: "PUT",
+    body: {
+      geminiApiKey,
+    },
+  });
+}
+
+export async function clearMyGeminiApiKey() {
+  return apiRequest("/api/users/me/gemini-api-key", {
+    method: "DELETE",
+  });
+}

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ContentTopNav } from "../../components/ContentTopNav";
 import { Sidebar } from "../../components/Sidebar";
@@ -165,6 +165,8 @@ const formatIngestionStatus = (rawStatus, ingested, extractionMethod, ocrUsed) =
   if (rawStatus === "FAILED") return "AI 분석 실패";
   return "AI 분석 전";
 };
+
+const isIngestionRunning = (status) => status === "QUEUED" || status === "PROCESSING";
 
 const LogoutConfirmModal = ({ onCancel, onConfirm }) => {
   return (
@@ -363,10 +365,10 @@ const UploadDropZone = ({
                     <button
                       type="button"
                       onClick={() => onAnalyzeSaved(file?.fileId)}
-                      disabled={analyzingFileId === String(file?.fileId) || file?.ingestionStatus === "PROCESSING"}
+                      disabled={analyzingFileId === String(file?.fileId) || isIngestionRunning(file?.ingestionStatus)}
                       className="rounded-full border border-[#5d6ef8] px-2 py-1 text-[10px] font-semibold text-[#5d6ef8] disabled:opacity-60"
                     >
-                      {analyzingFileId === String(file?.fileId) || file?.ingestionStatus === "PROCESSING"
+                      {analyzingFileId === String(file?.fileId) || isIngestionRunning(file?.ingestionStatus)
                         ? "분석 중..."
                         : "AI 분석"}
                     </button>
@@ -434,6 +436,25 @@ export const FileUploadPage = () => {
   const [savingType, setSavingType] = useState("");
   const [analyzingFileId, setAnalyzingFileId] = useState("");
 
+  const loadSavedFiles = useCallback(async () => {
+    const filesPayload = await getMyFiles();
+    const files = extractFileList(filesPayload).map((file) => normalizeFileRecord(file));
+    const nextFilesByType = createEmptyFilesByType();
+
+    for (const file of files) {
+      const type = file?.fileType;
+      if (!DOCUMENT_TYPE_KEYS.includes(type)) continue;
+      nextFilesByType[type].push(file);
+    }
+
+    for (const key of DOCUMENT_TYPE_KEYS) {
+      nextFilesByType[key].sort(sortByLatestFile);
+    }
+
+    setSavedFilesByType(nextFilesByType);
+    return nextFilesByType;
+  }, []);
+
   useEffect(() => {
     const charged = consumePointChargeSuccessResult();
     if (!charged) return;
@@ -462,28 +483,30 @@ export const FileUploadPage = () => {
       }
 
       try {
-        const filesPayload = await getMyFiles();
-        const files = extractFileList(filesPayload).map((file) => normalizeFileRecord(file));
-        const nextFilesByType = createEmptyFilesByType();
-
-        for (const file of files) {
-          const type = file?.fileType;
-          if (!DOCUMENT_TYPE_KEYS.includes(type)) continue;
-          nextFilesByType[type].push(file);
-        }
-
-        for (const key of DOCUMENT_TYPE_KEYS) {
-          nextFilesByType[key].sort(sortByLatestFile);
-        }
-
-        setSavedFilesByType(nextFilesByType);
+        await loadSavedFiles();
       } catch {
         setProfileImageUrl((prev) => prev || tempProfileImage);
       }
     };
 
     loadData();
-  }, [navigate]);
+  }, [loadSavedFiles, navigate]);
+
+  const hasOngoingIngestion = useMemo(
+    () =>
+      Object.values(savedFilesByType).some((files) =>
+        (files || []).some((file) => isIngestionRunning(file?.ingestionStatus))
+      ),
+    [savedFilesByType]
+  );
+
+  useEffect(() => {
+    if (!hasOngoingIngestion) return undefined;
+    const timer = window.setInterval(() => {
+      void loadSavedFiles();
+    }, 4000);
+    return () => window.clearInterval(timer);
+  }, [hasOngoingIngestion, loadSavedFiles]);
 
   const onSelectSidebar = (item) => {
     setIsMobileMenuOpen(false);
@@ -609,20 +632,22 @@ export const FileUploadPage = () => {
     setTypeError(type, "");
     try {
       const result = await ingestMockDocument(target.fileId);
+      const nextStatus = result?.status || "QUEUED";
       setSavedFilesByType((prev) => ({
         ...prev,
         [type]: (prev[type] || []).map((file) =>
           String(file?.fileId) === String(target.fileId)
             ? {
                 ...file,
-                ingestionStatus: result?.status || "READY",
-                ingested: result?.status === "READY",
+                ingestionStatus: nextStatus,
+                ingested: nextStatus === "READY",
                 extractionMethod: result?.extractionMethod || null,
                 ocrUsed: Boolean(result?.ocrUsed),
               }
             : file
         ),
       }));
+      void loadSavedFiles();
     } catch (error) {
       setTypeError(type, error?.message || "AI 분석 요청 중 오류가 발생했습니다.");
     } finally {

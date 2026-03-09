@@ -9,7 +9,7 @@ import { Sidebar } from "../../components/Sidebar";
 import { DifficultyStars, StarIcons } from "../../components/DifficultyStars";
 import tempProfileImage from "../../assets/icon/temp.png";
 import { logout } from "../../lib/authApi";
-import { buildVisibleCategories, getCategoryDisplayName, sanitizeQuestionTag } from "../../lib/categoryPresentation";
+import { buildVisibleCategories, getCategoryDisplayName, sanitizeQuestionTag, searchCategoryByText } from "../../lib/categoryPresentation";
 import { ratingToDifficulty } from "../../lib/difficultyRating";
 import { consumePointChargeSuccessResult } from "../../lib/pointChargeFlow";
 import { deleteSavedInterviewQuestion, getInterviewCategories, getSavedInterviewQuestions } from "../../lib/interviewApi";
@@ -125,8 +125,7 @@ export const SavedQuestionsPage = () => {
     const keyword = categoryQuery.trim().toLowerCase();
     const matched = leafCategories.filter((category) => {
       if (jobFilter && String(category.parentId) !== jobFilter) return false;
-      if (!keyword) return true;
-      return [category.name, category.path].filter(Boolean).join(" ").toLowerCase().includes(keyword);
+      return searchCategoryByText(category, keyword);
     });
     return showAllCategories ? matched : matched.slice(0, 8);
   }, [leafCategories, categoryQuery, jobFilter, showAllCategories]);

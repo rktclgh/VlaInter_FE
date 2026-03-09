@@ -8,11 +8,11 @@ import { Sidebar } from "../../components/Sidebar";
 import { DifficultyStars, StarIcons } from "../../components/DifficultyStars";
 import tempProfileImage from "../../assets/icon/temp.png";
 import { logout } from "../../lib/authApi";
-import { buildCategoryCode, buildVisibleCategories, findTechRootId, getCategoryDisplayName } from "../../lib/categoryPresentation";
+import { getCategoryDisplayName, searchCategoryByText } from "../../lib/categoryPresentation";
 import { ratingToDifficulty } from "../../lib/difficultyRating";
 import { saveTechInterviewSession } from "../../lib/interviewSessionFlow";
 import { consumePointChargeSuccessResult } from "../../lib/pointChargeFlow";
-import { createInterviewCategory, getInterviewCategories, getInterviewSetQuestions, getInterviewSets, startTechInterview } from "../../lib/interviewApi";
+import { createInterviewCatalogJob, createInterviewCatalogSkill, getInterviewCatalogJobs, getInterviewCatalogSkills, startTechInterview } from "../../lib/interviewApi";
 import { getMyProfile, getMyProfileImageUrl } from "../../lib/userApi";
 
 const QUESTION_COUNT = 5;
@@ -73,29 +73,70 @@ export const TechPracticePage = () => {
   const [loading, setLoading] = useState(true);
   const [startingCategoryId, setStartingCategoryId] = useState(null);
   const [categories, setCategories] = useState([]);
-  const [poolCounts, setPoolCounts] = useState({});
   const [jobFilter, setJobFilter] = useState("");
   const [jobQuery, setJobQuery] = useState("");
   const [categoryQuery, setCategoryQuery] = useState("");
   const [selectedRating, setSelectedRating] = useState(DEFAULT_RATING);
   const [pageErrorMessage, setPageErrorMessage] = useState("");
   const [creatingCategory, setCreatingCategory] = useState(false);
+  const isStartingPractice = startingCategoryId !== null;
 
-  const loadPage = async () => {
-    const [setList, categoryList] = await Promise.all([getInterviewSets(), getInterviewCategories()]);
-    const normalizedSets = Array.isArray(setList) ? setList : [];
-    const normalizedCategories = buildVisibleCategories(Array.isArray(categoryList) ? categoryList : []);
-    setCategories(normalizedCategories);
+  const loadCatalog = async ({ preferredJobName = "", preferredSkillName = "" } = {}) => {
+    const jobsPayload = await getInterviewCatalogJobs();
+    const normalizedJobs = (Array.isArray(jobsPayload) ? jobsPayload : [])
+      .map((job) => ({
+        categoryId: Number(job?.jobId),
+        parentId: null,
+        name: String(job?.name || "").trim(),
+        displayName: String(job?.name || "").trim(),
+        depth: 1,
+        isLeaf: false,
+      }))
+      .filter((job) => Number.isFinite(job.categoryId) && job.name);
 
-    const details = await Promise.all(normalizedSets.map(async (set) => ({ ...set, questions: (await getInterviewSetQuestions(set.setId)) || [] })));
-    const countMap = {};
-    details.forEach((set) => {
-      (set.questions || []).forEach((question) => {
-        if (!question?.categoryId) return;
-        countMap[question.categoryId] = (countMap[question.categoryId] || 0) + 1;
+    const skillsByJob = await Promise.all(
+      normalizedJobs.map(async (job) => {
+        const payload = await getInterviewCatalogSkills({ jobName: job.name });
+        return (Array.isArray(payload) ? payload : []).map((skill) => ({
+          categoryId: Number(skill?.skillId),
+          parentId: Number(skill?.jobId || job.categoryId),
+          name: String(skill?.name || "").trim(),
+          displayName: String(skill?.name || "").trim(),
+          depth: 2,
+          isLeaf: true,
+        }));
+      })
+    );
+    const normalizedSkills = skillsByJob.flat().filter((skill) => Number.isFinite(skill.categoryId) && Number.isFinite(skill.parentId) && skill.name);
+
+    const nextCategories = [...normalizedJobs, ...normalizedSkills];
+    setCategories(nextCategories);
+
+    const normalizedPreferredJobName = String(preferredJobName || "").trim().toLowerCase();
+    const matchedJob = normalizedPreferredJobName
+      ? normalizedJobs.find((job) => (job.displayName || job.name).trim().toLowerCase() === normalizedPreferredJobName)
+      : null;
+
+    const nextJobFilter = matchedJob?.categoryId ? String(matchedJob.categoryId) : "";
+    if (nextJobFilter) {
+      setJobFilter(nextJobFilter);
+    } else {
+      setJobFilter((prev) => {
+        if (prev && normalizedJobs.some((job) => String(job.categoryId) === String(prev))) return prev;
+        return "";
       });
-    });
-    setPoolCounts(countMap);
+    }
+
+    const normalizedPreferredSkillName = String(preferredSkillName || "").trim().toLowerCase();
+    if (normalizedPreferredSkillName) {
+      const skillMatches = normalizedSkills.filter((skill) => (skill.displayName || skill.name).trim().toLowerCase() === normalizedPreferredSkillName);
+      const preferredSkill = nextJobFilter
+        ? skillMatches.find((skill) => String(skill.parentId) === String(nextJobFilter)) || skillMatches[0]
+        : skillMatches[0];
+      if (preferredSkill) {
+        setCategoryQuery(preferredSkill.displayName || preferredSkill.name);
+      }
+    }
   };
 
   useEffect(() => {
@@ -119,9 +160,9 @@ export const TechPracticePage = () => {
       }
 
       try {
-        await loadPage();
+        await loadCatalog();
       } catch (error) {
-        setPageErrorMessage(error?.message || "기술면접 연습 카테고리를 불러오지 못했습니다.");
+        setPageErrorMessage(error?.message || "기술질문 연습 카테고리를 불러오지 못했습니다.");
       } finally {
         setLoading(false);
       }
@@ -132,9 +173,7 @@ export const TechPracticePage = () => {
 
   const jobs = useMemo(() => categories.filter((item) => Number(item.depth) === 1), [categories]);
   const visibleJobs = useMemo(() => {
-    const keyword = jobQuery.trim().toLowerCase();
-    if (!keyword) return jobs;
-    return jobs.filter((job) => [job.displayName, job.name, job.code].filter(Boolean).join(" ").toLowerCase().includes(keyword));
+    return jobs.filter((job) => searchCategoryByText(job, jobQuery));
   }, [jobQuery, jobs]);
   const leafCategories = useMemo(() => categories.filter((item) => item?.isLeaf), [categories]);
   const categoryCards = useMemo(() => {
@@ -142,21 +181,20 @@ export const TechPracticePage = () => {
     return leafCategories
       .filter((category) => {
         if (jobFilter && String(category.parentId) !== jobFilter) return false;
-        if (!keyword) return true;
-        return [category.name, category.code, category.path].filter(Boolean).join(" ").toLowerCase().includes(keyword);
+        return searchCategoryByText(category, keyword);
       })
       .map((category) => ({
         ...category,
         name: category.displayName || getCategoryDisplayName(category),
-        poolCount: poolCounts[category.categoryId] || 0,
         jobName: getCategoryDisplayName(jobs.find((job) => job.categoryId === category.parentId)) || "기타",
       }));
-  }, [categoryQuery, jobFilter, jobs, leafCategories, poolCounts]);
+  }, [categoryQuery, jobFilter, jobs, leafCategories]);
 
   const canCreateJob = Boolean(jobQuery.trim() && !visibleJobs.some((job) => (job.displayName || job.name).toLowerCase() === jobQuery.trim().toLowerCase()));
   const canCreateCategory = Boolean(categoryQuery.trim() && jobFilter && !categoryCards.some((item) => item.name.toLowerCase() === categoryQuery.trim().toLowerCase()));
 
   const handleSidebarNavigate = (item) => {
+    if (isStartingPractice) return;
     setIsMobileMenuOpen(false);
     if (item?.path) navigate(item.path);
   };
@@ -173,12 +211,15 @@ export const TechPracticePage = () => {
   };
 
   const handleStartPractice = async (category) => {
-    if (!category?.categoryId) return;
-    setStartingCategoryId(category.categoryId);
+    if (isStartingPractice) return;
+    if (!category) return;
+    setStartingCategoryId(category.categoryId || category.name);
     setPageErrorMessage("");
     try {
       const response = await startTechInterview({
-        categoryId: category.categoryId,
+        categoryId: null,
+        jobName: category.jobName || null,
+        skillName: category.name || null,
         questionCount: QUESTION_COUNT,
         difficulty: ratingToDifficulty(selectedRating),
       });
@@ -196,7 +237,7 @@ export const TechPracticePage = () => {
       });
       navigate("/content/interview/session");
     } catch (error) {
-      setPageErrorMessage(error?.message || "기술면접 연습 시작에 실패했습니다.");
+      setPageErrorMessage(error?.message || "기술질문 연습 시작에 실패했습니다.");
     } finally {
       setStartingCategoryId(null);
     }
@@ -207,15 +248,18 @@ export const TechPracticePage = () => {
     setCreatingCategory(true);
     setPageErrorMessage("");
     try {
-      const created = await createInterviewCategory({
-        parentId: Number(jobFilter),
-        code: buildCategoryCode(categoryQuery),
-        name: categoryQuery.trim(),
-        description: null,
-        sortOrder: 100,
+      const selectedJob = jobs.find((job) => String(job.categoryId) === String(jobFilter));
+      const jobName = (selectedJob?.displayName || selectedJob?.name || jobQuery.trim()).trim();
+      if (!jobName) {
+        setPageErrorMessage("직무를 먼저 선택해 주세요.");
+        return;
+      }
+      const created = await createInterviewCatalogSkill({
+        jobName,
+        skillName: categoryQuery.trim(),
       });
-      await loadPage();
-      setCategoryQuery(created.name);
+      const displayName = (created?.name || categoryQuery.trim()).trim();
+      await loadCatalog({ preferredJobName: jobName, preferredSkillName: displayName });
     } catch (error) {
       setPageErrorMessage(error?.message || "카테고리 생성에 실패했습니다.");
     } finally {
@@ -228,16 +272,10 @@ export const TechPracticePage = () => {
     setCreatingCategory(true);
     setPageErrorMessage("");
     try {
-      const created = await createInterviewCategory({
-        parentId: findTechRootId(categories),
-        code: buildCategoryCode(jobQuery),
-        name: jobQuery.trim(),
-        description: null,
-        sortOrder: 100,
-      });
-      await loadPage();
-      setJobFilter(String(created.categoryId));
-      setJobQuery(created.displayName || created.name);
+      const created = await createInterviewCatalogJob(jobQuery.trim());
+      const displayName = (created?.name || jobQuery.trim()).trim();
+      await loadCatalog({ preferredJobName: displayName });
+      setJobQuery(displayName);
     } catch (error) {
       setPageErrorMessage(error?.message || "직무 생성에 실패했습니다.");
     } finally {
@@ -247,7 +285,7 @@ export const TechPracticePage = () => {
 
   return (
     <div className="min-h-screen bg-white pt-[54px]">
-      <ContentTopNav point={formatPoint(userPoint)} onClickCharge={() => setShowPointChargeModal(true)} onOpenMenu={() => setIsMobileMenuOpen(true)} />
+      <ContentTopNav point={formatPoint(userPoint)} onClickCharge={() => { if (!isStartingPractice) setShowPointChargeModal(true); }} onOpenMenu={() => { if (!isStartingPractice) setIsMobileMenuOpen(true); }} />
 
       <MobileSidebarDrawer open={isMobileMenuOpen} activeKey="tech_practice" onClose={() => setIsMobileMenuOpen(false)} onNavigate={handleSidebarNavigate} userName={userName} profileImageUrl={profileImageUrl} fallbackProfileImageUrl={tempProfileImage} onLogout={() => { setIsMobileMenuOpen(false); setShowLogoutModal(true); }} />
 
@@ -261,7 +299,7 @@ export const TechPracticePage = () => {
             <section className="rounded-[24px] border border-[#e4e7ee] bg-[linear-gradient(180deg,#ffffff_0%,#f7f9fc_100%)] p-6">
               <p className="text-[12px] font-semibold tracking-[0.08em] text-[#7a8190]">TECH PRACTICE</p>
               <h1 className="mt-2 text-[30px] font-semibold tracking-[-0.02em] text-[#161a22] sm:text-[40px]">카테고리 기준으로 실전 연습을 시작한다</h1>
-              <p className="mt-3 text-[14px] leading-[1.7] text-[#5e6472]">직무와 기술 카테고리, 난이도를 고르면 그 기준에 맞는 기술면접 연습을 바로 시작할 수 있다.</p>
+              <p className="mt-3 text-[14px] leading-[1.7] text-[#5e6472]">직무와 기술 카테고리, 난이도를 고르면 그 기준에 맞는 기술질문 연습을 바로 시작할 수 있다.</p>
             </section>
 
             <section className="mt-5 rounded-[24px] border border-[#e4e7ee] bg-white p-5 sm:p-6">
@@ -286,7 +324,7 @@ export const TechPracticePage = () => {
                 <div className="mt-4 flex items-center justify-between gap-3 rounded-[18px] border border-dashed border-[#d7dce5] bg-[#fafbfd] p-4">
                   <div>
                     <p className="text-[13px] font-semibold text-[#171b24]">`{categoryQuery.trim()}` 카테고리가 아직 없다.</p>
-                    <p className="mt-1 text-[12px] text-[#5e6472]">직무를 고른 뒤 새 카테고리를 만들면 바로 기술면접 연습에 사용할 수 있다.</p>
+                    <p className="mt-1 text-[12px] text-[#5e6472]">직무를 고른 뒤 새 카테고리를 만들면 바로 기술질문 연습에 사용할 수 있다.</p>
                   </div>
                   <button type="button" disabled={creatingCategory} onClick={handleCreateCategory} className="rounded-[14px] border border-[#171b24] px-4 py-2.5 text-[13px] font-semibold text-[#171b24] disabled:opacity-60">{creatingCategory ? "생성 중..." : "카테고리 추가"}</button>
                 </div>
@@ -294,7 +332,7 @@ export const TechPracticePage = () => {
             </section>
 
             <section className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-              {loading ? <p className="text-[13px] text-[#5e6472]">기술면접 연습 카테고리를 불러오는 중...</p> : null}
+              {loading ? <p className="text-[13px] text-[#5e6472]">기술질문 연습 카테고리를 불러오는 중...</p> : null}
               {!loading && categoryCards.length === 0 ? <p className="text-[13px] text-[#5e6472]">조건에 맞는 카테고리가 없습니다.</p> : null}
               {categoryCards.map((category) => (
                 <article key={category.categoryId} className="rounded-[22px] border border-[#e4e7ee] bg-white p-5 shadow-[0_12px_32px_rgba(15,23,42,0.04)]">
@@ -307,7 +345,7 @@ export const TechPracticePage = () => {
                   <p className="mt-2 text-[13px] leading-[1.7] text-[#5e6472]">선택한 난이도 기준으로 {QUESTION_COUNT}문항 연습을 시작한다.</p>
                   <div className="mt-5 flex items-center justify-between gap-3">
                     {startingCategoryId === category.categoryId ? <InlineSpinner label="면접 시작 중..." /> : <span className="text-[12px] text-[#6b7280]">문항 {QUESTION_COUNT}개</span>}
-                    <button type="button" disabled={startingCategoryId === category.categoryId} onClick={() => handleStartPractice(category)} className="rounded-[14px] bg-[#171b24] px-4 py-2.5 text-[13px] font-semibold text-white disabled:opacity-60">{startingCategoryId === category.categoryId ? "시작 중..." : "연습 시작"}</button>
+                    <button type="button" disabled={isStartingPractice} onClick={() => handleStartPractice(category)} className="rounded-[14px] bg-[#171b24] px-4 py-2.5 text-[13px] font-semibold text-white disabled:opacity-60">{startingCategoryId === category.categoryId ? "시작 중..." : "연습 시작"}</button>
                   </div>
                 </article>
               ))}
@@ -325,6 +363,15 @@ export const TechPracticePage = () => {
         setShowPointChargeSuccessModal(true);
       }} /> : null}
       {showPointChargeSuccessModal ? <PointChargeSuccessModal onClose={() => setShowPointChargeSuccessModal(false)} currentPoint={userPoint} /> : null}
+      {isStartingPractice ? (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-[#0f172acc]">
+          <div className="rounded-[18px] border border-[#334155] bg-[#111827] px-6 py-5 text-center">
+            <div className="mx-auto h-7 w-7 animate-spin rounded-full border-2 border-[#64748b] border-t-white" />
+            <p className="mt-3 text-[14px] font-medium text-white">질문을 준비하고 있습니다</p>
+            <p className="mt-1 text-[12px] text-[#cbd5e1]">잠시만 기다려 주세요. 다른 페이지로 이동할 수 없습니다.</p>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 };

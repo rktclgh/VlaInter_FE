@@ -9,10 +9,11 @@ import { Sidebar } from "../../components/Sidebar";
 import { DifficultyStars, StarIcons, StarRatingInput } from "../../components/DifficultyStars";
 import tempProfileImage from "../../assets/icon/temp.png";
 import { logout } from "../../lib/authApi";
-import { buildCategoryCode, buildVisibleCategories, findTechRootId, getCategoryDisplayName, sanitizeQuestionTag } from "../../lib/categoryPresentation";
+import { buildVisibleCategories, getCategoryDisplayName, sanitizeQuestionTag, searchCategoryByText } from "../../lib/categoryPresentation";
 import { ratingToDifficulty } from "../../lib/difficultyRating";
 import { consumePointChargeSuccessResult } from "../../lib/pointChargeFlow";
-import { addQuestionToInterviewSet, createInterviewCategory, createInterviewSet, getInterviewCategories, getInterviewSetQuestions, getInterviewSets } from "../../lib/interviewApi";
+import { addQuestionToInterviewSet, createInterviewSet, getInterviewCategories, getInterviewSetQuestions, getInterviewSets, startTechInterview } from "../../lib/interviewApi";
+import { saveTechInterviewSession } from "../../lib/interviewSessionFlow";
 import { getMyProfile, getMyProfileImageUrl } from "../../lib/userApi";
 
 const PAGE_SIZE = 12;
@@ -78,11 +79,10 @@ const InlineSpinner = ({ label }) => (
   <div className="inline-flex items-center gap-2 text-[12px] text-[#5e6472]"><span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-[#cbd5e1] border-t-[#171b24]" />{label}</div>
 );
 
-const buildSetTitle = (jobName, skillName, count) => `${jobName} · ${skillName} 문답 ${count}개`;
-
 const CreateQuestionSetModal = ({ categories, onClose, onSubmit, submitting, errorMessage }) => {
   const jobs = useMemo(() => categories.filter((item) => Number(item.depth) === 1), [categories]);
   const leafCategories = useMemo(() => categories.filter((item) => item.isLeaf), [categories]);
+  const [setTitle, setSetTitle] = useState("");
   const [selectedJobId, setSelectedJobId] = useState(() => String(categories.find((item) => Number(item.depth) === 1)?.categoryId || ""));
   const [categoryQuery, setCategoryQuery] = useState("");
   const [selectedCategoryId, setSelectedCategoryId] = useState("");
@@ -98,7 +98,7 @@ const CreateQuestionSetModal = ({ categories, onClose, onSubmit, submitting, err
     });
   }, [categoryQuery, leafCategories, selectedJobId]);
 
-  const dirty = categoryQuery.trim() || selectedCategoryId || rows.some((row) => row.questionText.trim() || row.canonicalAnswer.trim() || row.tags.trim());
+  const dirty = setTitle.trim() || categoryQuery.trim() || selectedCategoryId || rows.some((row) => row.questionText.trim() || row.canonicalAnswer.trim() || row.tags.trim());
   const requestClose = () => {
     if (submitting) return;
     if (dirty) return setShowDiscardConfirm(true);
@@ -123,6 +123,15 @@ const CreateQuestionSetModal = ({ categories, onClose, onSubmit, submitting, err
           <div className="flex-1 overflow-y-auto px-6 py-5">
             <div className="grid gap-5 lg:grid-cols-[320px_minmax(0,1fr)]">
               <section className="space-y-4 rounded-[20px] border border-[#eef1f5] bg-[#fbfcfe] p-4">
+                <div>
+                  <p className="text-[12px] font-semibold text-[#738094]">세트 제목</p>
+                  <input
+                    value={setTitle}
+                    onChange={(event) => setSetTitle(event.target.value)}
+                    placeholder="예: 재무회계 핵심 문답 세트"
+                    className="mt-2 w-full rounded-[14px] border border-[#dfe3eb] px-4 py-3 text-[13px] outline-none focus:border-[#8aa2e8]"
+                  />
+                </div>
                 <div>
                   <p className="text-[12px] font-semibold text-[#738094]">직무</p>
                   <select value={selectedJobId} onChange={(event) => { setSelectedJobId(event.target.value); setSelectedCategoryId(""); }} className="mt-2 w-full rounded-[14px] border border-[#dfe3eb] px-4 py-3 text-[13px] outline-none focus:border-[#8aa2e8]">
@@ -168,7 +177,7 @@ const CreateQuestionSetModal = ({ categories, onClose, onSubmit, submitting, err
               {submitting ? <InlineSpinner label="문답 세트를 저장하는 중입니다." /> : <span className="text-[12px] text-[#6b7280]">저장 중에는 모달을 닫지 않는다.</span>}
               <div className="flex items-center justify-end gap-2">
                 <button type="button" disabled={submitting} onClick={requestClose} className="rounded-[14px] border border-[#d9dde5] px-4 py-2.5 text-[13px] text-[#4f5664] disabled:opacity-50">취소</button>
-                <button type="button" disabled={submitting} onClick={() => onSubmit({ selectedJobId, selectedCategoryId, categoryQuery: categoryQuery.trim(), rows })} className="rounded-[14px] bg-[#171b24] px-4 py-2.5 text-[13px] font-semibold text-white disabled:opacity-60">{submitting ? "저장 중..." : "문답 세트 저장"}</button>
+                <button type="button" disabled={submitting} onClick={() => onSubmit({ setTitle: setTitle.trim(), selectedJobId, selectedCategoryId, categoryQuery: categoryQuery.trim(), rows })} className="rounded-[14px] bg-[#171b24] px-4 py-2.5 text-[13px] font-semibold text-white disabled:opacity-60">{submitting ? "저장 중..." : "문답 세트 저장"}</button>
               </div>
             </div>
             {errorMessage ? <p className="mt-3 text-[12px] text-[#dc4b4b]">{errorMessage}</p> : null}
@@ -206,6 +215,7 @@ export const QuestionSetsPage = () => {
   const [pageErrorMessage, setPageErrorMessage] = useState("");
   const [modalErrorMessage, setModalErrorMessage] = useState("");
   const [showAllCategories, setShowAllCategories] = useState(false);
+  const [startingSetId, setStartingSetId] = useState(null);
 
   const loadPage = async () => {
     const [setList, categoryList] = await Promise.all([getInterviewSets(), getInterviewCategories()]);
@@ -218,6 +228,9 @@ export const QuestionSetsPage = () => {
         (set.questions || []).map((question) => ({
           ...question,
           setId: set.setId,
+          setTitle: set.title,
+          setJobName: set.jobName || null,
+          setSkillName: set.skillName || null,
           createdAt: set.createdAt,
         }))
       )
@@ -262,8 +275,7 @@ export const QuestionSetsPage = () => {
     const keyword = categoryQuery.trim().toLowerCase();
     const matched = leafCategories.filter((category) => {
       if (jobFilter && String(category.parentId) !== jobFilter) return false;
-      if (!keyword) return true;
-      return [category.name, category.path].filter(Boolean).join(" ").toLowerCase().includes(keyword);
+      return searchCategoryByText(category, keyword);
     });
     return showAllCategories ? matched : matched.slice(0, 8);
   }, [categoryQuery, jobFilter, leafCategories, showAllCategories]);
@@ -278,11 +290,11 @@ export const QuestionSetsPage = () => {
       if (dateFrom && normalizeDateInput(item.createdAt) < dateFrom) return false;
       if (dateTo && normalizeDateInput(item.createdAt) > dateTo) return false;
       if (!keyword) return true;
-      return [item.questionText, item.modelAnswer, item.canonicalAnswer, item.bestPractice, item.categoryName, ...(item.tags || [])].filter(Boolean).join(" ").toLowerCase().includes(keyword);
+      return [item.questionText, item.modelAnswer, item.canonicalAnswer, item.categoryName, item.skillName, item.jobName, item.setTitle, ...(item.tags || [])].filter(Boolean).join(" ").toLowerCase().includes(keyword);
     }).map((item) => ({
       ...item,
-      categoryName: getCategoryDisplayName(categoryMap.get(item.categoryId)) || item.categoryName,
-      jobName: getCategoryDisplayName(categoryMap.get(categoryMap.get(item.categoryId)?.parentId)) || "기타",
+      categoryName: item.skillName || item.setSkillName || getCategoryDisplayName(categoryMap.get(item.categoryId)) || item.categoryName,
+      jobName: item.jobName || item.setJobName || getCategoryDisplayName(categoryMap.get(categoryMap.get(item.categoryId)?.parentId)) || "기타",
     }));
   }, [cards, categoryMap, dateFrom, dateTo, jobFilter, query, selectedCategoryId, selectedRating]);
 
@@ -309,7 +321,7 @@ export const QuestionSetsPage = () => {
     }
   };
 
-  const handleCreateSet = async ({ selectedJobId, selectedCategoryId: categoryIdRaw, categoryQuery: rawCategoryName, rows }) => {
+  const handleCreateSet = async ({ setTitle, selectedJobId, selectedCategoryId: categoryIdRaw, categoryQuery: rawCategoryName, rows }) => {
     const normalizedRows = rows
       .map((row) => ({
         questionText: row.questionText.trim(),
@@ -321,26 +333,54 @@ export const QuestionSetsPage = () => {
 
     if (!normalizedRows.length) return setModalErrorMessage("질문과 모범답안을 하나 이상 입력해 주세요.");
     if (normalizedRows.some((row) => !row.questionText || !row.canonicalAnswer)) return setModalErrorMessage("모든 문답에는 질문과 모범답안이 모두 필요합니다.");
+    if (!setTitle?.trim()) return setModalErrorMessage("세트 제목을 입력해 주세요.");
 
     setSubmitting(true);
     setModalErrorMessage("");
     try {
+      const selectedJob = categories.find((item) => String(item.categoryId) === String(selectedJobId)) || null;
+      const jobName = (selectedJob?.displayName || selectedJob?.name || "").trim();
+      if (!jobName) {
+        setModalErrorMessage("직무를 선택해 주세요.");
+        setSubmitting(false);
+        return;
+      }
+
       let categoryId = categoryIdRaw ? Number(categoryIdRaw) : null;
       let category = categories.find((item) => item.categoryId === categoryId) || null;
       const rawName = rawCategoryName.trim();
-      if (!categoryId) {
-        if (!rawName) {
-          setModalErrorMessage("기술 카테고리를 선택하거나 새로 입력해 주세요.");
-          setSubmitting(false);
-          return;
-        }
-        category = await createInterviewCategory({ parentId: Number(selectedJobId || findTechRootId(categories)), code: buildCategoryCode(rawName), name: rawName, description: null, sortOrder: 100 });
-        categoryId = category.categoryId;
+      if (!category && !rawName) {
+        setModalErrorMessage("기술을 선택하거나 입력해 주세요.");
+        setSubmitting(false);
+        return;
       }
-      const job = categories.find((item) => String(item.categoryId) === String(selectedJobId));
-      const createdSet = await createInterviewSet({ title: buildSetTitle(job?.name || "직무", category?.name || rawName, normalizedRows.length), description: null, visibility: "PRIVATE" });
+      const skillName = (category?.displayName || category?.name || rawName).trim();
+      if (!skillName) {
+        setModalErrorMessage("기술을 선택하거나 입력해 주세요.");
+        setSubmitting(false);
+        return;
+      }
+      if (category?.isVirtual) {
+        categoryId = null;
+      }
+
+      const createdSet = await createInterviewSet({
+        title: setTitle.trim(),
+        jobName,
+        skillName,
+        description: null,
+        visibility: "PRIVATE",
+      });
       for (const row of normalizedRows) {
-        await addQuestionToInterviewSet(createdSet.setId, { questionText: row.questionText, canonicalAnswer: row.canonicalAnswer, categoryId, difficulty: row.difficulty, tags: row.tags });
+        await addQuestionToInterviewSet(createdSet.setId, {
+          questionText: row.questionText,
+          canonicalAnswer: row.canonicalAnswer,
+          categoryId,
+          jobName,
+          skillName,
+          difficulty: row.difficulty,
+          tags: row.tags,
+        });
       }
       await loadPage();
       setShowCreateModal(false);
@@ -348,6 +388,38 @@ export const QuestionSetsPage = () => {
       setModalErrorMessage(error?.message || "질문 세트 생성에 실패했습니다.");
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleStartSetPractice = async (item) => {
+    if (!item?.setId) return;
+    setStartingSetId(item.setId);
+    setPageErrorMessage("");
+    try {
+      const response = await startTechInterview({
+        setId: item.setId,
+        jobName: item.jobName || null,
+        skillName: item.categoryName || null,
+        questionCount: 5,
+        saveHistory: false,
+      });
+      saveTechInterviewSession({
+        sessionId: response.sessionId,
+        currentQuestion: response.currentQuestion,
+        pendingResult: null,
+        completed: false,
+        metadata: {
+          apiBasePath: "/api/interview/tech",
+          fromQuestionSet: true,
+          saveHistory: false,
+          categoryName: item.categoryName,
+        },
+      });
+      navigate("/content/interview/session");
+    } catch (error) {
+      setPageErrorMessage(error?.message || "질문 세트 연습 시작에 실패했습니다.");
+    } finally {
+      setStartingSetId(null);
     }
   };
 
@@ -400,11 +472,25 @@ export const QuestionSetsPage = () => {
                   <div className="flex flex-wrap gap-2">
                     <span className="rounded-full bg-[#eef2f8] px-3 py-1 text-[11px] text-[#556070]">{item.jobName}</span>
                     <span className="rounded-full bg-[#f4f6fb] px-3 py-1 text-[11px] text-[#556070]">{item.categoryName}</span>
+                    {item.sourceTag === "USER" ? <span className="rounded-full bg-[#e8f7ef] px-3 py-1 text-[11px] text-[#18784a]">사용자 생성</span> : null}
                     {item.difficulty ? <DifficultyStars difficulty={item.difficulty} compact /> : null}
                   </div>
                   <p className="mt-4 line-clamp-5 whitespace-pre-wrap text-[17px] font-semibold leading-[1.7] text-[#171b24]">{item.questionText}</p>
                   {(item.tags || []).map(sanitizeQuestionTag).filter(Boolean).length > 0 ? <div className="mt-4 flex flex-wrap gap-2">{item.tags.map(sanitizeQuestionTag).filter(Boolean).slice(0, 4).map((tag) => <span key={`${item.questionId}-${tag}`} className="rounded-full bg-[#fff7ed] px-3 py-1 text-[11px] text-[#9a5b11]">#{tag}</span>)}</div> : null}
-                  <p className="mt-4 text-[11px] text-[#6b7280]">{formatDate(item.createdAt)}</p>
+                  <div className="mt-4 flex items-center justify-between gap-2">
+                    <p className="text-[11px] text-[#6b7280]">{formatDate(item.createdAt)}</p>
+                    <button
+                      type="button"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        handleStartSetPractice(item);
+                      }}
+                      disabled={startingSetId === item.setId}
+                      className="rounded-[10px] border border-[#171b24] px-3 py-1.5 text-[11px] font-semibold text-[#171b24] disabled:opacity-60"
+                    >
+                      {startingSetId === item.setId ? "연습 준비 중..." : "이 세트로 연습"}
+                    </button>
+                  </div>
                 </button>
               ))}
             </section>

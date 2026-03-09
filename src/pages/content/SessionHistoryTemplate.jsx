@@ -76,6 +76,7 @@ const ResultCard = ({ turn }) => {
       <div className="flex flex-wrap items-center gap-2">
         <span className="rounded-full bg-[#eef2f8] px-3 py-1 text-[11px] text-[#556070]">질문 {turn.turnNo}</span>
         {turn.category ? <span className="rounded-full bg-[#f7f8fb] px-3 py-1 text-[11px] text-[#556070]">{getQuestionCategoryDisplayName(turn.category)}</span> : null}
+        {turn.sourceTag === "USER" ? <span className="rounded-full bg-[#e8f7ef] px-3 py-1 text-[11px] text-[#18784a]">사용자 생성</span> : null}
         {turn.difficulty ? <DifficultyStars difficulty={turn.difficulty} compact /> : null}
       </div>
       <p className="mt-4 text-[16px] font-semibold leading-[1.7] text-[#1d2430]">{turn.questionText}</p>
@@ -93,10 +94,12 @@ const ResultCard = ({ turn }) => {
                 <span className="text-[12px] font-semibold text-[#99631e]">{stars} / 5</span>
               </div>
               <p className="mt-3 whitespace-pre-wrap text-[13px] leading-[1.7] text-[#2d3645]">{turn.evaluation.feedback || "-"}</p>
-              <div className="mt-3 rounded-[12px] border border-[#eceff4] bg-white p-3">
-                <p className="text-[11px] font-semibold text-[#7a8190]">가이드</p>
-                <p className="mt-2 whitespace-pre-wrap text-[13px] leading-[1.7] text-[#2d3645]">{turn.evaluation.bestPractice || "-"}</p>
-              </div>
+              {turn.evaluation.bestPractice?.trim() ? (
+                <div className="mt-3 rounded-[12px] border border-[#eceff4] bg-white p-3">
+                  <p className="text-[11px] font-semibold text-[#7a8190]">가이드</p>
+                  <p className="mt-2 whitespace-pre-wrap text-[13px] leading-[1.7] text-[#2d3645]">{turn.evaluation.bestPractice}</p>
+                </div>
+              ) : null}
               <div className="mt-3 rounded-[12px] border border-[#eceff4] bg-white p-3">
                 <p className="text-[11px] font-semibold text-[#7a8190]">모범답안</p>
                 <p className="mt-2 whitespace-pre-wrap text-[13px] leading-[1.7] text-[#2d3645]">{turn.evaluation.modelAnswer || "-"}</p>

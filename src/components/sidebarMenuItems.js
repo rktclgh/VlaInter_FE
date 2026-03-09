@@ -1,8 +1,8 @@
 export const MAIN_MENU_ITEMS = [
   { key: "interview_start", label: "모의면접 시작하기", path: "/content/interview" },
-  { key: "tech_practice", label: "기술면접 연습", path: "/content/tech-practice" },
+  { key: "tech_practice", label: "기술질문 연습", path: "/content/tech-practice" },
   { key: "interview_history", label: "면접 이력 조회", path: "/content/interview-history" },
-  { key: "practice_history", label: "연습 이력 조회", path: "/content/practice-history" },
+  { key: "practice_history", label: "기술질문 이력 조회", path: "/content/practice-history" },
   { key: "question_set", label: "내 질문 세트", path: "/content/question-sets" },
   { key: "saved_question", label: "저장된 질문", path: "/content/saved-questions" },
 ];

@@ -1,22 +1,4 @@
 const HIDDEN_CODES = new Set(["NON_TECH", "UNCATEGORIZED"]);
-const JOB_CODE_LABELS = {
-  BACKEND: "백엔드 개발자",
-  FRONTEND: "프론트엔드 개발자",
-  EMBEDDED: "임베디드 개발자",
-  SYSTEM_ARCH: "시스템 아키텍트",
-  MOBILE: "모바일 개발자",
-  DATA: "데이터 직무",
-  AI: "AI 개발자",
-  DEVOPS: "데브옵스 엔지니어",
-  SECURITY: "보안 엔지니어",
-  FINANCE: "재무",
-  ACCOUNTING: "회계",
-  SALES: "영업",
-  MARKETING: "마케팅",
-  HR: "인사",
-  DESIGN: "디자인",
-  PM: "프로덕트 매니저",
-};
 
 const DOCUMENT_CATEGORY_LABELS = {
   INTRODUCE_MOTIVATION: "자기소개서",
@@ -24,56 +6,47 @@ const DOCUMENT_CATEGORY_LABELS = {
   RESUME_EXPERIENCE: "이력서",
 };
 
-const normalize = (value) => String(value || "").trim().toUpperCase();
+const normalize = (value) => String(value || "").trim().toLowerCase();
 
 export const buildCategoryCode = (value) => {
   const base = String(value || "")
     .trim()
-    .toUpperCase()
-    .replace(/[^A-Z0-9_]+/g, "_")
+    .replace(/[^\p{L}\p{N}_]+/gu, "_")
     .replace(/^_+|_+$/g, "");
-  return base || `CUSTOM_${Date.now()}`;
+  return base || `custom_${Date.now()}`;
 };
 
-export const isHiddenCategory = (category) => HIDDEN_CODES.has(normalize(category?.code || category?.name));
+export const isHiddenCategory = (category) => HIDDEN_CODES.has(String(category?.code || "").trim().toUpperCase());
 
 export const findTechRootId = (categories) => {
-  const techRoot = (categories || []).find((item) => normalize(item?.code) === "TECH" && !item?.parentId);
-  return techRoot?.categoryId || 1;
+  const root = (categories || []).find((item) => !item?.parentId) || (categories || []).find((item) => Number(item.depth) === 0);
+  return root?.categoryId || 1;
 };
 
 export const getCategoryDisplayName = (category) => {
   if (!category) return "";
-  const code = normalize(category.code);
-  if (Number(category.depth) === 1 && JOB_CODE_LABELS[code]) return JOB_CODE_LABELS[code];
-  return category.name || code;
+  return String(category.name || "").trim();
 };
 
 export const getQuestionCategoryDisplayName = (value) => {
-  const normalized = normalize(value);
-  if (!normalized) return "";
-  if (DOCUMENT_CATEGORY_LABELS[normalized]) return DOCUMENT_CATEGORY_LABELS[normalized];
-  if (JOB_CODE_LABELS[normalized]) return JOB_CODE_LABELS[normalized];
-  return String(value || "")
-    .split(/[/_]/)
-    .filter(Boolean)
-    .map((token) => {
-      const upper = normalize(token);
-      if (DOCUMENT_CATEGORY_LABELS[upper]) return DOCUMENT_CATEGORY_LABELS[upper];
-      if (JOB_CODE_LABELS[upper]) return JOB_CODE_LABELS[upper];
-      return token.length <= 4 ? upper : token.charAt(0).toUpperCase() + token.slice(1).toLowerCase();
-    })
-    .join(" ");
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  const upper = raw.toUpperCase();
+  if (DOCUMENT_CATEGORY_LABELS[upper]) return DOCUMENT_CATEGORY_LABELS[upper];
+  if (raw.includes("/")) {
+    const token = raw.split("/").filter(Boolean).at(-1);
+    return token ? token.trim() : raw;
+  }
+  return raw;
 };
 
 export const sanitizeQuestionTag = (tag) => {
-  const normalized = normalize(tag);
-  if (!normalized) return "";
-  if (DOCUMENT_CATEGORY_LABELS[normalized]) return "";
-  if (normalized.includes("BACKEND_") || normalized.includes("FRONTEND_")) {
-    return normalized.split("_").slice(-1)[0];
-  }
-  return tag;
+  const raw = String(tag || "").trim();
+  if (!raw) return "";
+  const upper = raw.toUpperCase();
+  if (DOCUMENT_CATEGORY_LABELS[upper]) return "";
+  if (HIDDEN_CODES.has(upper)) return "";
+  return raw;
 };
 
 export const buildVisibleCategories = (rawCategories) => {
@@ -103,4 +76,14 @@ export const findJobLabel = (categories, categoryId) => {
   const category = byId.get(categoryId);
   const job = category?.parentId ? byId.get(category.parentId) : category;
   return getCategoryDisplayName(job);
+};
+
+export const searchCategoryByText = (category, keyword) => {
+  const normalizedKeyword = normalize(keyword);
+  if (!normalizedKeyword) return true;
+  const haystack = [category?.displayName, category?.name]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+  return haystack.includes(normalizedKeyword);
 };

@@ -27,9 +27,42 @@ export async function addQuestionToInterviewSet(setId, payload) {
 }
 
 export async function createInterviewCategory(payload) {
-  return apiRequest("/api/admin/interview/categories", {
+  return apiRequest("/api/interview/categories", {
     method: "POST",
     body: payload,
+  });
+}
+
+export async function getInterviewCatalogJobs(query = "") {
+  const search = new URLSearchParams();
+  if (query && String(query).trim()) search.set("query", String(query).trim());
+  const suffix = search.toString() ? `?${search.toString()}` : "";
+  return apiRequest(`/api/interview/catalog/jobs${suffix}`, {
+    method: "GET",
+  });
+}
+
+export async function createInterviewCatalogJob(name) {
+  return apiRequest("/api/interview/catalog/jobs", {
+    method: "POST",
+    body: { name },
+  });
+}
+
+export async function getInterviewCatalogSkills({ jobName = "", query = "" } = {}) {
+  const search = new URLSearchParams();
+  if (jobName && String(jobName).trim()) search.set("jobName", String(jobName).trim());
+  if (query && String(query).trim()) search.set("query", String(query).trim());
+  const suffix = search.toString() ? `?${search.toString()}` : "";
+  return apiRequest(`/api/interview/catalog/skills${suffix}`, {
+    method: "GET",
+  });
+}
+
+export async function createInterviewCatalogSkill({ jobName, skillName }) {
+  return apiRequest("/api/interview/catalog/skills", {
+    method: "POST",
+    body: { jobName, skillName },
   });
 }
 
