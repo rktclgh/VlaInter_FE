@@ -20,7 +20,7 @@ export function isGeminiOverloadError(error) {
   const hasGeminiKeyword = GEMINI_KEYWORDS.some((keyword) => message.includes(keyword));
   const hasOverloadKeyword = OVERLOAD_KEYWORDS.some((keyword) => message.includes(keyword));
   if (status === 429 || status === 503) {
-    return hasGeminiKeyword && hasOverloadKeyword;
+    return true;
   }
   return hasGeminiKeyword && hasOverloadKeyword;
 }

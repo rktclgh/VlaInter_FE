@@ -37,7 +37,12 @@ const DocumentMetaChip = ({ label, ocrUsed }) => (
 );
 
 const PaidFallbackNoticeToast = ({ onClose }) => (
-  <div className="fixed bottom-4 right-4 z-[230] w-[min(360px,calc(100vw-32px))] rounded-2xl border border-[#d8dbe3] bg-white p-4 shadow-[0_18px_48px_rgba(15,23,42,0.16)]">
+  <div
+    role="status"
+    aria-live="polite"
+    aria-atomic="true"
+    className="fixed bottom-4 right-4 z-[230] w-[min(360px,calc(100vw-32px))] rounded-2xl border border-[#d8dbe3] bg-white p-4 shadow-[0_18px_48px_rgba(15,23,42,0.16)]"
+  >
     <div className="flex items-start justify-between gap-3">
       <div>
         <p className="text-[13px] font-semibold text-[#111827]">대체 AI API 사용</p>
@@ -179,8 +184,12 @@ export const InterviewSessionPage = () => {
 
   const isMockInterview = sessionMetadata.apiBasePath === "/api/interview/mock";
   const isQuestionSetPractice = Boolean(sessionMetadata.fromQuestionSet);
-  const sidebarActiveKey = isMockInterview ? "interview_start" : (isQuestionSetPractice ? "question_set" : "tech_practice");
-  const sessionHomePath = isMockInterview ? "/content/interview" : (isQuestionSetPractice ? "/content/question-sets" : "/content/tech-practice");
+  const sessionNavigation = isMockInterview
+    ? { activeKey: "interview_start", homePath: "/content/interview" }
+    : isQuestionSetPractice
+      ? { activeKey: "question_set", homePath: "/content/question-sets" }
+      : { activeKey: "tech_practice", homePath: "/content/tech-practice" };
+  const { activeKey: sidebarActiveKey, homePath: sessionHomePath } = sessionNavigation;
   const isLastQuestion = Boolean(
     currentQuestion &&
     Number(sessionMetadata.questionCount || 0) > 0 &&
