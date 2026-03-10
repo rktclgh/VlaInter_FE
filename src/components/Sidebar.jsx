@@ -31,7 +31,7 @@ export const Sidebar = ({
   };
 
   return (
-    <aside className="fixed left-0 top-[54px] z-20 flex h-[calc(100vh-54px)] w-[272px] flex-col border-r border-[#e8e8e8] bg-[#f8f8f8]">
+    <aside className="sticky top-[54px] z-20 flex h-[calc(100vh-54px)] w-[272px] flex-col border-r border-[#e8e8e8] bg-[#f8f8f8]">
       <div className="flex-1 overflow-y-auto px-4 pb-4 pt-6">
         {mainMenuSections.map((section) => (
           <div key={section.title} className="pt-0 first:pt-0">

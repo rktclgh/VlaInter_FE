@@ -347,6 +347,7 @@ export const MyPage = () => {
   const [hasGeminiApiKey, setHasGeminiApiKey] = useState(false);
   const [geminiApiKeyInput, setGeminiApiKeyInput] = useState("");
   const [geminiApiKeySubmitting, setGeminiApiKeySubmitting] = useState(false);
+  const [removingGeminiApiKey, setRemovingGeminiApiKey] = useState(false);
   const [geminiApiKeyMessage, setGeminiApiKeyMessage] = useState("");
   const [geminiApiKeyErrorMessage, setGeminiApiKeyErrorMessage] = useState("");
   const profileImageInputRef = useRef(null);
@@ -577,7 +578,7 @@ export const MyPage = () => {
   };
 
   const removeGeminiApiKey = async () => {
-    setGeminiApiKeySubmitting(true);
+    setRemovingGeminiApiKey(true);
     setGeminiApiKeyErrorMessage("");
     setGeminiApiKeyMessage("");
     try {
@@ -589,7 +590,7 @@ export const MyPage = () => {
     } catch (error) {
       setGeminiApiKeyErrorMessage(error?.message || "Gemini API 키 제거에 실패했습니다.");
     } finally {
-      setGeminiApiKeySubmitting(false);
+      setRemovingGeminiApiKey(false);
     }
   };
 
@@ -722,7 +723,7 @@ export const MyPage = () => {
                     <button
                       type="button"
                       onClick={submitGeminiApiKey}
-                      disabled={hasGeminiApiKey || geminiApiKeySubmitting}
+                        disabled={hasGeminiApiKey || geminiApiKeySubmitting || removingGeminiApiKey}
                       className="min-w-[88px] whitespace-nowrap rounded-[10px] border border-[#1f1f1f] bg-[#1f1f1f] px-3 py-2 text-[11px] text-white disabled:opacity-60 sm:text-[12px]"
                     >
                       {geminiApiKeySubmitting ? "저장 중..." : "저장"}
@@ -731,10 +732,10 @@ export const MyPage = () => {
                       <button
                         type="button"
                         onClick={removeGeminiApiKey}
-                        disabled={geminiApiKeySubmitting}
+                        disabled={geminiApiKeySubmitting || removingGeminiApiKey}
                         className="min-w-[88px] whitespace-nowrap rounded-[10px] border border-[#d84a4a] bg-[#fff1f1] px-3 py-2 text-[11px] font-semibold text-[#d84a4a] disabled:opacity-60 sm:text-[12px]"
                       >
-                        키 제거
+                        {removingGeminiApiKey ? "삭제 중..." : "키 제거"}
                       </button>
                     ) : null}
                   </div>

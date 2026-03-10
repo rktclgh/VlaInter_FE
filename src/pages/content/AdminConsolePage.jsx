@@ -396,6 +396,12 @@ export const AdminConsolePage = () => {
     });
   }, [categoryById, categoryDepth0Filter, categoryDepth1Filter, categoryDepth2Filter, sortedCategories]);
 
+  useEffect(() => {
+    if (!selectedCategoryId) return;
+    if (filteredCategoryList.some((item) => item.categoryId === selectedCategoryId)) return;
+    setSelectedCategoryId(filteredCategoryList[0]?.categoryId || null);
+  }, [filteredCategoryList, selectedCategoryId]);
+
   const newCategoryParentOptions = useMemo(() => {
     if (newCategoryDepth === "1") return depth0Categories;
     if (newCategoryDepth === "2") return depth1Categories;
@@ -657,11 +663,10 @@ export const AdminConsolePage = () => {
       if (normalizedParent !== selectedCategoryParentId) {
         await moveAdminInterviewCategory(selectedCategoryId, normalizedParent ? Number(normalizedParent) : null);
       }
-
-      await loadCategories();
     } catch (error) {
       setPageErrorMessage(error?.message || "카테고리 저장에 실패했습니다.");
     } finally {
+      await loadCategories();
       setSavingCategory(false);
     }
   };

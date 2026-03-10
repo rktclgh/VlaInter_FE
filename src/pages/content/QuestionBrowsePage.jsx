@@ -80,6 +80,16 @@ export const QuestionBrowsePage = () => {
   const [savingQuestionId, setSavingQuestionId] = useState(null);
   const [savedQuestionIds, setSavedQuestionIds] = useState([]);
 
+  useEffect(() => {
+    if (!isStartingSetLaunch) return undefined;
+    const handleBeforeUnload = (event) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [isStartingSetLaunch]);
+
   const loadPage = useCallback(async () => {
     const setList = await getGlobalInterviewSets();
     const normalizedSets = Array.isArray(setList) ? setList : [];
@@ -161,11 +171,13 @@ export const QuestionBrowsePage = () => {
   );
 
   const handleSidebarNavigate = (item) => {
+    if (isStartingSetLaunch) return;
     setIsMobileMenuOpen(false);
     if (item?.path) navigate(item.path);
   };
 
   const handleLogoutConfirm = async () => {
+    if (isStartingSetLaunch) return;
     try {
       await logout();
     } catch {
@@ -205,6 +217,7 @@ export const QuestionBrowsePage = () => {
           saveHistory: false,
           categoryName: (Array.isArray(setItem.skillNames) ? setItem.skillNames.join(", ") : setItem.skillName) || null,
           jobName: primaryJobName,
+          questionCount: Number(setItem.questionCount || (Array.isArray(setItem.questions) ? setItem.questions.length : 0) || 0),
         },
       });
       navigate("/content/interview/session");
@@ -393,6 +406,8 @@ export const QuestionBrowsePage = () => {
                       {(selectedSet.questions || []).map((question, index) => (
                         <article
                           key={question.questionId}
+                          tabIndex={0}
+                          role="button"
                           className="cursor-pointer rounded-[12px] border border-[#edf1f6] bg-[#fafcff] p-3"
                           onClick={() =>
                             setSelectedQuestion({
@@ -403,6 +418,18 @@ export const QuestionBrowsePage = () => {
                               categoryName: question.skillName || question.categoryName,
                             })
                           }
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter" || event.key === " ") {
+                              event.preventDefault();
+                              setSelectedQuestion({
+                                ...question,
+                                setId: selectedSet.setId,
+                                setTitle: selectedSet.title,
+                                createdAt: selectedSet.createdAt,
+                                categoryName: question.skillName || question.categoryName,
+                              });
+                            }
+                          }}
                         >
                           <p className="text-[11px] text-[#7a8190]">문답 {index + 1}</p>
                           <p className="mt-1 text-[13px] leading-[1.6] text-[#1f2937]">{question.questionText}</p>
@@ -445,6 +472,13 @@ export const QuestionBrowsePage = () => {
           </div>
         </main>
       </div>
+      {isStartingSetLaunch ? (
+        <div className="fixed inset-0 z-[130] flex items-center justify-center bg-black/35 px-4">
+          <div className="rounded-[18px] border border-[#d9dde5] bg-white px-5 py-4 shadow-[0_18px_40px_rgba(15,23,42,0.12)]">
+            <InlineSpinner label="연습 세션을 시작하고 있습니다. 잠시만 기다려 주세요." />
+          </div>
+        </div>
+      ) : null}
       {showLogoutModal ? <LogoutConfirmModal onCancel={() => setShowLogoutModal(false)} onConfirm={handleLogoutConfirm} /> : null}
       {showPointChargeModal ? (
         <PointChargeModal

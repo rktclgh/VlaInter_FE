@@ -341,7 +341,9 @@ export const InterviewStartPage = () => {
     const normalizedJobName = String(selectedJob?.displayName || selectedJob?.name || "").trim().toLowerCase();
     return myQuestionSets.filter((set) => {
       const setBranchName = String(set.branchName || set.jobName || "").trim().toLowerCase();
-      const setJobNames = Array.isArray(set.jobNames) ? set.jobNames.map((name) => String(name || "").trim().toLowerCase()) : [];
+      const setJobNames = Array.isArray(set.jobNames)
+        ? set.jobNames.map((name) => String(name || "").trim().toLowerCase()).filter(Boolean)
+        : [String(set.jobName || "").trim().toLowerCase()].filter(Boolean);
       if (normalizedBranchName && setBranchName !== normalizedBranchName) return false;
       if (!normalizedJobName) return true;
       return setJobNames.includes(normalizedJobName) || setJobNames.includes("공통");
@@ -455,6 +457,7 @@ export const InterviewStartPage = () => {
       ) || nextCategoryTree.find((item) => Number(item?.depth) === 2 && String(item?.parentId || "") === String(jobFilter)) || null;
       if (matched?.categoryId) {
         setSelectedCategoryIds((prev) => prioritizeCreatedSelection(prev, String(matched.categoryId)));
+        setSelectedQuestionSetId("");
       }
       setSkillQuery("");
     } catch (error) {

@@ -249,6 +249,10 @@ export const TechPracticePage = () => {
         questionCount: QUESTION_COUNT,
         difficulty: ratingToDifficulty(selectedRating),
       });
+      if (!response?.sessionId || !response?.currentQuestion) {
+        setPageErrorMessage("연습 세션은 생성되었지만 첫 질문을 불러오지 못했습니다.");
+        return;
+      }
       saveTechInterviewSession({
         sessionId: response.sessionId,
         currentQuestion: response.currentQuestion,
@@ -258,6 +262,7 @@ export const TechPracticePage = () => {
           apiBasePath: "/api/interview/tech",
           categoryName: category.name,
           difficultyLabel: ratingToDifficulty(selectedRating),
+          questionCount: QUESTION_COUNT,
           selectedDocuments: {},
         },
       });

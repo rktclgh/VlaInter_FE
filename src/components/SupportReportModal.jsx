@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { sendSupportReport } from "../lib/supportApi";
 
 const CATEGORY_OPTIONS = [
@@ -7,6 +7,9 @@ const CATEGORY_OPTIONS = [
 ];
 
 export const SupportReportModal = ({ open, onClose }) => {
+  const dialogRef = useRef(null);
+  const titleInputRef = useRef(null);
+  const lastFocusedElementRef = useRef(null);
   const [category, setCategory] = useState("BUG_REPORT");
   const [title, setTitle] = useState("");
   const [message, setMessage] = useState("");
@@ -17,6 +20,7 @@ export const SupportReportModal = ({ open, onClose }) => {
 
   useEffect(() => {
     if (!open) return;
+    lastFocusedElementRef.current = document.activeElement;
     setCategory("BUG_REPORT");
     setTitle("");
     setMessage("");
@@ -29,14 +33,36 @@ export const SupportReportModal = ({ open, onClose }) => {
   useEffect(() => {
     if (!open) return undefined;
 
+    titleInputRef.current?.focus();
+
     const handleKeyDown = (event) => {
       if (event.key === "Escape" && !sending) {
         onClose?.();
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const dialog = dialogRef.current;
+      if (!dialog) return;
+      const focusable = dialog.querySelectorAll(
+        'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+      );
+      if (!focusable.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
       }
     };
 
     document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+      lastFocusedElementRef.current?.focus?.();
+    };
   }, [open, onClose, sending]);
 
   const helperText = useMemo(() => (
@@ -82,11 +108,17 @@ export const SupportReportModal = ({ open, onClose }) => {
           if (!sending) onClose?.();
         }}
       />
-      <div className="relative z-10 w-full max-w-[640px] rounded-[26px] border border-[#e4e7ee] bg-white p-6 shadow-[0_30px_90px_rgba(15,23,42,0.22)]">
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="support-report-modal-title"
+        className="relative z-10 w-full max-w-[640px] rounded-[26px] border border-[#e4e7ee] bg-white p-6 shadow-[0_30px_90px_rgba(15,23,42,0.22)]"
+      >
         <div className="flex items-start justify-between gap-4">
           <div>
             <p className="text-[12px] font-semibold tracking-[0.12em] text-[#7a8190]">REPORT</p>
-            <h2 className="mt-2 text-[24px] font-semibold text-[#171b24]">버그 리포트 / 운영자에게 한마디</h2>
+            <h2 id="support-report-modal-title" className="mt-2 text-[24px] font-semibold text-[#171b24]">버그 리포트 / 운영자에게 한마디</h2>
             <p className="mt-2 text-[13px] leading-[1.7] text-[#5e6472]">{helperText}</p>
           </div>
           <button
@@ -118,6 +150,7 @@ export const SupportReportModal = ({ open, onClose }) => {
           <label className="grid gap-2">
             <span className="text-[12px] font-semibold text-[#4f5664]">제목</span>
             <input
+              ref={titleInputRef}
               value={title}
               onChange={(event) => setTitle(event.target.value)}
               maxLength={120}

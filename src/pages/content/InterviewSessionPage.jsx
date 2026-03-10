@@ -91,6 +91,7 @@ export const InterviewSessionPage = () => {
   const [pageErrorMessage, setPageErrorMessage] = useState("");
   const [submitErrorMessage, setSubmitErrorMessage] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [finalizingSession, setFinalizingSession] = useState(false);
   const [bookmarking, setBookmarking] = useState(false);
   const [sessionMetadata, setSessionMetadata] = useState({});
   const [sessionResults, setSessionResults] = useState(null);
@@ -158,10 +159,8 @@ export const InterviewSessionPage = () => {
     Number(sessionMetadata.questionCount || 0) > 0 &&
     currentQuestion.turnNo >= Number(sessionMetadata.questionCount || 0)
   );
-  const isFinalizingSession = Boolean(submitting && isLastQuestion);
-
   useEffect(() => {
-    if (!isFinalizingSession) return undefined;
+    if (!finalizingSession) return undefined;
 
     const handleBeforeUnload = (event) => {
       event.preventDefault();
@@ -170,7 +169,7 @@ export const InterviewSessionPage = () => {
 
     window.addEventListener("beforeunload", handleBeforeUnload);
     return () => window.removeEventListener("beforeunload", handleBeforeUnload);
-  }, [isFinalizingSession]);
+  }, [finalizingSession]);
 
   const selectedDocumentMetas = useMemo(
     () => Object.values(sessionMetadata.selectedDocuments || {}).map(normalizeSelectedDocumentMeta).filter(Boolean),
@@ -196,7 +195,7 @@ export const InterviewSessionPage = () => {
   }, [completed, loadSessionResults, sessionResults]);
 
   const handleSidebarNavigate = (item) => {
-    if (isFinalizingSession) return;
+    if (finalizingSession) return;
     setIsMobileMenuOpen(false);
     if (item?.path) {
       navigate(item.path);
@@ -227,21 +226,30 @@ export const InterviewSessionPage = () => {
 
     setSubmitting(true);
     setSubmitErrorMessage("");
+    let completedResponse = false;
+    let nextQuestionResponse = null;
     try {
       const response = await submitInterviewAnswer(sessionMetadata.apiBasePath || "/api/interview/tech", sessionId, answer.trim());
+      completedResponse = Boolean(response?.completed);
+      nextQuestionResponse = response?.nextQuestion || null;
       setAnswer("");
       setPendingResult(null);
-      if (response?.completed) {
+      if (completedResponse) {
+        setFinalizingSession(true);
         setCompleted(true);
         setCurrentQuestion(null);
         await loadSessionResults();
+        setFinalizingSession(false);
       } else {
         setCompleted(false);
-        setCurrentQuestion(response?.nextQuestion || null);
+        setCurrentQuestion(nextQuestionResponse);
       }
     } catch (error) {
       setSubmitErrorMessage(error?.message || "답변 제출에 실패했습니다.");
     } finally {
+      if (!completedResponse) {
+        setFinalizingSession(false);
+      }
       setSubmitting(false);
     }
   };
@@ -305,11 +313,11 @@ export const InterviewSessionPage = () => {
       <ContentTopNav
         point={formatPoint(userPoint)}
         onClickCharge={() => {
-          if (isFinalizingSession) return;
+          if (finalizingSession) return;
           setShowPointChargeModal(true);
         }}
         onOpenMenu={() => {
-          if (isFinalizingSession) return;
+          if (finalizingSession) return;
           setIsMobileMenuOpen(true);
         }}
       />
@@ -322,7 +330,7 @@ export const InterviewSessionPage = () => {
         userName={userName}
         profileImageUrl={profileImageUrl}
         onLogout={() => {
-          if (isFinalizingSession) return;
+          if (finalizingSession) return;
           setIsMobileMenuOpen(false);
           setShowLogoutModal(true);
         }}
@@ -336,7 +344,7 @@ export const InterviewSessionPage = () => {
             userName={userName}
             profileImageUrl={profileImageUrl}
             onLogout={() => {
-              if (isFinalizingSession) return;
+              if (finalizingSession) return;
               setShowLogoutModal(true);
             }}
           />
@@ -378,11 +386,11 @@ export const InterviewSessionPage = () => {
                   <button
                     type="button"
                     onClick={() => {
-                      if (isFinalizingSession) return;
+                      if (finalizingSession) return;
                       clearTechInterviewSession();
                       navigate(isQuestionSetPractice ? "/content/question-sets" : "/content/interview", { replace: true });
                     }}
-                    disabled={isFinalizingSession}
+                    disabled={finalizingSession}
                     className="rounded-[12px] border border-[#d8dde7] px-3 py-2 text-[12px] text-[#4f5664]"
                   >
                     시작 화면으로
@@ -552,7 +560,7 @@ export const InterviewSessionPage = () => {
       {showPointChargeSuccessModal ? (
         <PointChargeSuccessModal onClose={() => setShowPointChargeSuccessModal(false)} />
       ) : null}
-      {isFinalizingSession ? (
+      {finalizingSession ? (
         <div className="fixed inset-0 z-[220] flex items-center justify-center bg-[#0f172acc]">
           <div className="rounded-[18px] border border-[#334155] bg-[#111827] px-6 py-5 text-center">
             <div className="mx-auto h-7 w-7 animate-spin rounded-full border-2 border-[#64748b] border-t-white" />
