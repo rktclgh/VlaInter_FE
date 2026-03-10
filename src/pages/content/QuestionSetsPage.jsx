@@ -1360,11 +1360,16 @@ export const QuestionSetsPage = () => {
     setPageErrorMessage("");
     try {
       const primaryJobName = (Array.isArray(setItem.jobNames) ? setItem.jobNames : [setItem.jobName]).find((name) => name && name !== "공통") || setItem.jobName || null;
+      const resolvedQuestionCount = Math.max(
+        Number(setItem.questionCount || 0),
+        Array.isArray(setItem.questions) ? setItem.questions.length : 0,
+        1
+      );
       const response = await startTechInterview({
         setId: setItem.setId,
         jobName: primaryJobName,
         skillName: (Array.isArray(setItem.skillNames) ? setItem.skillNames[0] : setItem.skillName) || null,
-        questionCount: 5,
+        questionCount: resolvedQuestionCount,
         saveHistory: false,
       });
       if (!response?.sessionId || !response?.currentQuestion) {
@@ -1380,8 +1385,12 @@ export const QuestionSetsPage = () => {
           apiBasePath: "/api/interview/tech",
           fromQuestionSet: true,
           saveHistory: false,
+          questionCount: resolvedQuestionCount,
           categoryName: (Array.isArray(setItem.skillNames) ? setItem.skillNames.join(", ") : setItem.skillName) || null,
           jobName: primaryJobName,
+          providerUsed: response.providerUsed || null,
+          fallbackDepth: Number(response.fallbackDepth || 0),
+          paidFallbackPopupPending: String(response.providerUsed || "").toUpperCase() === "BEDROCK",
         },
       });
       navigate("/content/interview/session");

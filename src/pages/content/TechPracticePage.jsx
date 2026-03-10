@@ -270,6 +270,9 @@ export const TechPracticePage = () => {
           difficultyLabel: ratingToDifficulty(selectedRating),
           questionCount: QUESTION_COUNT,
           selectedDocuments: {},
+          providerUsed: response.providerUsed || null,
+          fallbackDepth: Number(response.fallbackDepth || 0),
+          paidFallbackPopupPending: String(response.providerUsed || "").toUpperCase() === "BEDROCK",
         },
       });
       navigate("/content/interview/session");
