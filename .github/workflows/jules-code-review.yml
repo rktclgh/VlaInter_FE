@@ -34,5 +34,5 @@ jobs:
             리뷰 결과를 바탕으로 개선된 코드가 있다면 직접 수정안을 제안해 주세요.
 
           # 매개변수 명칭을 언더바(_) 형식으로 모두 수정했습니다
-        automation_mode: "AUTO_CREATE_PR"
-        require_plan_approval: false
+          automation_mode: "AUTO_CREATE_PR"
+          require_plan_approval: false
