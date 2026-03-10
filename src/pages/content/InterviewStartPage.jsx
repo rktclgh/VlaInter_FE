@@ -12,7 +12,7 @@ import tempProfileImage from "../../assets/icon/temp.png";
 import { logout } from "../../lib/authApi";
 import { searchCategoryByText } from "../../lib/categoryPresentation";
 import { ratingToDifficulty } from "../../lib/difficultyRating";
-import { createInterviewCategory, createInterviewCatalogJob, createInterviewCatalogSkill, getInterviewCatalogJobs, getInterviewCatalogSkills, getInterviewCategories, getReadyMockDocuments, startMockInterview } from "../../lib/interviewApi";
+import { createInterviewCategory, getInterviewCategories, getReadyMockDocuments, startMockInterview } from "../../lib/interviewApi";
 import { saveTechInterviewSession } from "../../lib/interviewSessionFlow";
 import { consumePointChargeSuccessResult } from "../../lib/pointChargeFlow";
 import { extractProfile, formatPoint, parsePoint } from "../../lib/profileUtils";
@@ -130,6 +130,21 @@ const FilterChip = ({ label, active = false, onClick }) => (
   </button>
 );
 
+const toggleSkillSelection = (prev, nextId) => {
+  if (prev.includes(nextId)) {
+    return prev.filter((id) => id !== nextId);
+  }
+  if (prev.length >= 3) {
+    return prev;
+  }
+  return [...prev, nextId];
+};
+
+const prioritizeCreatedSelection = (prev, nextId, limit = 3) => {
+  const deduped = prev.filter((id) => id !== nextId);
+  return [...deduped.slice(-(limit - 1)), nextId];
+};
+
 export const InterviewStartPage = () => {
   const navigate = useNavigate();
   const [userName, setUserName] = useState("사용자");
@@ -140,9 +155,7 @@ export const InterviewStartPage = () => {
   const [showPointChargeSuccessModal, setShowPointChargeSuccessModal] = useState(false);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
 
-  const [jobItems, setJobItems] = useState([]);
   const [categoryTree, setCategoryTree] = useState([]);
-  const [skillItems, setSkillItems] = useState([]);
   const [filesByType, setFilesByType] = useState({ RESUME: [], INTRODUCE: [], PORTFOLIO: [] });
   const [selectedFiles, setSelectedFiles] = useState({ RESUME: "", INTRODUCE: "", PORTFOLIO: "" });
   const [branchFilter, setBranchFilter] = useState("");
@@ -150,7 +163,7 @@ export const InterviewStartPage = () => {
   const [jobFilter, setJobFilter] = useState("");
   const [jobQuery, setJobQuery] = useState("");
   const [skillQuery, setSkillQuery] = useState("");
-  const [selectedCategoryId, setSelectedCategoryId] = useState("");
+  const [selectedCategoryIds, setSelectedCategoryIds] = useState([]);
   const [selectedRating, setSelectedRating] = useState(3);
   const [selectedQuestionCount, setSelectedQuestionCount] = useState(5);
   const [loadingPage, setLoadingPage] = useState(true);
@@ -181,17 +194,19 @@ export const InterviewStartPage = () => {
     }
 
     try {
-      const [jobsPayload, filesPayload, categoriesPayload] = await Promise.all([
-        getInterviewCatalogJobs(),
+      const [filesPayload, categoriesPayload] = await Promise.all([
         getReadyMockDocuments(),
         getInterviewCategories(),
       ]);
-      const nextJobs = (Array.isArray(jobsPayload) ? jobsPayload : []).map((job) => ({
-        categoryId: Number(job?.jobId),
-        name: String(job?.name || "").trim(),
-        displayName: String(job?.name || "").trim(),
-      })).filter((job) => Number.isFinite(job.categoryId) && job.name);
       const nextCategoryTree = Array.isArray(categoriesPayload) ? categoriesPayload : [];
+      const nextJobs = nextCategoryTree
+        .filter((item) => Number(item?.depth) === 1 && Boolean(item?.categoryId))
+        .map((item) => ({
+          categoryId: Number(item.categoryId),
+          parentId: item.parentId ? Number(item.parentId) : null,
+          name: String(item?.name || "").trim(),
+          displayName: String(item?.name || "").trim(),
+        }));
       const rawFiles = extractFileList(filesPayload);
       const nextFilesByType = { RESUME: [], INTRODUCE: [], PORTFOLIO: [] };
 
@@ -210,16 +225,16 @@ export const InterviewStartPage = () => {
         ? nextJobs.find((item) => [item.displayName, item.name].filter(Boolean).some((name) => name.trim().toLowerCase() === profileJobName.toLowerCase()))
         : null;
       const defaultJob = matchedJob?.categoryId ? String(matchedJob.categoryId) : nextJobs[0]?.categoryId ? String(nextJobs[0].categoryId) : "";
+      const defaultBranch = matchedJob?.parentId ? String(matchedJob.parentId) : nextJobs[0]?.parentId ? String(nextJobs[0].parentId) : "";
 
-      setJobItems(nextJobs);
       setCategoryTree(nextCategoryTree);
-      setSkillItems([]);
       setFilesByType(nextFilesByType);
       setSelectedFiles({
         RESUME: String(nextFilesByType.RESUME[0]?.fileId || nextFilesByType.RESUME[0]?.file_id || ""),
         INTRODUCE: String(nextFilesByType.INTRODUCE[0]?.fileId || nextFilesByType.INTRODUCE[0]?.file_id || ""),
         PORTFOLIO: String(nextFilesByType.PORTFOLIO[0]?.fileId || nextFilesByType.PORTFOLIO[0]?.file_id || ""),
       });
+      setBranchFilter((prev) => prev || defaultBranch);
       setJobFilter((prev) => prev || defaultJob);
     } catch (error) {
       setPageErrorMessage(error?.message || "면접 설정 데이터를 불러오지 못했습니다.");
@@ -232,7 +247,18 @@ export const InterviewStartPage = () => {
     void loadPageData();
   }, [loadPageData]);
 
-  const jobs = useMemo(() => jobItems, [jobItems]);
+  const jobs = useMemo(
+    () => (categoryTree || [])
+      .filter((item) => Number(item.depth) === 1)
+      .map((item) => ({
+        ...item,
+        categoryId: Number(item.categoryId),
+        parentId: item.parentId ? Number(item.parentId) : null,
+        displayName: String(item.name || "").trim(),
+      }))
+      .sort((left, right) => String(left.name || "").localeCompare(String(right.name || ""), "ko")),
+    [categoryTree]
+  );
   const branchItems = useMemo(
     () => (categoryTree || []).filter((item) => Number(item.depth) === 0).sort((a, b) => String(a.name || "").localeCompare(String(b.name || ""), "ko")),
     [categoryTree]
@@ -240,27 +266,25 @@ export const InterviewStartPage = () => {
   const visibleBranches = useMemo(() => (
     branchItems.filter((branch) => searchCategoryByText(branch, branchQuery))
   ), [branchItems, branchQuery]);
-  const jobNameToBranchId = useMemo(() => {
-    const mapping = new Map();
-    (categoryTree || [])
-      .filter((item) => Number(item.depth) === 1)
-      .forEach((jobCategory) => {
-        const key = String(jobCategory.name || "").trim().toLowerCase();
-        if (!key) return;
-        const branchId = String(jobCategory.parentId || "");
-        if (!branchId) return;
-        mapping.set(key, branchId);
-      });
-    return mapping;
-  }, [categoryTree]);
   const visibleJobs = useMemo(() => {
     return jobs.filter((job) => {
       if (!searchCategoryByText(job, jobQuery)) return false;
-      if (!branchFilter) return true;
-      const jobKey = String(job.displayName || job.name || "").trim().toLowerCase();
-      return jobNameToBranchId.get(jobKey) === branchFilter;
+      return !branchFilter || String(job.parentId || "") === String(branchFilter);
     });
-  }, [branchFilter, jobQuery, jobNameToBranchId, jobs]);
+  }, [branchFilter, jobQuery, jobs]);
+  const skillItems = useMemo(
+    () => (categoryTree || [])
+      .filter((item) => Number(item.depth) === 2 && (!jobFilter || String(item.parentId || "") === String(jobFilter)))
+      .map((item) => ({
+        ...item,
+        categoryId: Number(item.categoryId),
+        parentId: item.parentId ? Number(item.parentId) : null,
+        displayName: String(item.name || "").trim(),
+        isLeaf: true,
+      }))
+      .sort((left, right) => String(left.name || "").localeCompare(String(right.name || ""), "ko")),
+    [categoryTree, jobFilter]
+  );
   const visibleSkills = useMemo(() => {
     const keyword = skillQuery.trim().toLowerCase();
     return skillItems
@@ -275,55 +299,31 @@ export const InterviewStartPage = () => {
     if (!jobFilter) return;
     if (visibleJobs.some((job) => String(job.categoryId) === String(jobFilter))) return;
     setJobFilter("");
-    setSelectedCategoryId("");
+    setSelectedCategoryIds([]);
   }, [jobFilter, visibleJobs]);
 
   useEffect(() => {
-    if (selectedCategoryId && !visibleSkills.some((item) => String(item.categoryId) === String(selectedCategoryId))) {
-      setSelectedCategoryId("");
-    }
-  }, [selectedCategoryId, visibleSkills]);
+    if (!selectedCategoryIds.length) return;
+    const availableIds = new Set(skillItems.map((item) => String(item.categoryId)));
+    setSelectedCategoryIds((prev) => prev.filter((id) => availableIds.has(String(id))));
+  }, [selectedCategoryIds.length, skillItems]);
 
-  const canCreateJob = Boolean(jobQuery.trim() && !visibleJobs.some((job) => (job.displayName || job.name || "").trim().toLowerCase() === jobQuery.trim().toLowerCase()));
+  const canCreateJob = Boolean(branchFilter && jobQuery.trim() && !visibleJobs.some((job) => (job.displayName || job.name || "").trim().toLowerCase() === jobQuery.trim().toLowerCase()));
   const canCreateBranch = Boolean(branchQuery.trim() && !branchItems.some((branch) => (branch.name || "").trim().toLowerCase() === branchQuery.trim().toLowerCase()));
-  const canCreateSkill = Boolean(jobFilter && skillQuery.trim() && !visibleSkills.some((skill) => skill.label.trim().toLowerCase() === skillQuery.trim().toLowerCase()));
+  const canCreateSkill = Boolean(jobFilter && skillQuery.trim() && !skillItems.some((skill) => (skill.displayName || skill.name || "").trim().toLowerCase() === skillQuery.trim().toLowerCase()));
+  const branchAlreadyExists = Boolean(branchQuery.trim() && !canCreateBranch);
+  const jobAlreadyExists = Boolean(jobQuery.trim() && !canCreateJob);
+  const skillAlreadyExists = Boolean(skillQuery.trim() && !canCreateSkill);
 
-  const selectedSkill = useMemo(() => skillItems.find((item) => String(item.categoryId) === String(selectedCategoryId)) || null, [skillItems, selectedCategoryId]);
+  const selectedSkills = useMemo(
+    () => skillItems.filter((item) => selectedCategoryIds.includes(String(item.categoryId))),
+    [selectedCategoryIds, skillItems]
+  );
   const selectedJob = useMemo(() => jobs.find((item) => String(item.categoryId) === String(jobFilter)) || null, [jobFilter, jobs]);
   const selectedFileObjects = useMemo(() => DOCUMENT_TYPES.reduce((acc, item) => {
     acc[item.key] = filesByType[item.key].find((file) => String(file?.fileId || file?.file_id || "") === String(selectedFiles[item.key] || "")) || null;
     return acc;
   }, {}), [filesByType, selectedFiles]);
-
-  useEffect(() => {
-    const loadSkills = async () => {
-      if (!jobFilter) {
-        setSkillItems([]);
-        return;
-      }
-      const targetJob = jobs.find((item) => String(item.categoryId) === String(jobFilter));
-      const jobName = (targetJob?.displayName || targetJob?.name || "").trim();
-      if (!jobName) {
-        setSkillItems([]);
-        return;
-      }
-      try {
-        const payload = await getInterviewCatalogSkills({ jobName, query: skillQuery.trim() });
-        const nextSkills = (Array.isArray(payload) ? payload : []).map((skill) => ({
-          categoryId: Number(skill?.skillId),
-          parentId: Number(skill?.jobId || targetJob?.categoryId || 0),
-          name: String(skill?.name || "").trim(),
-          displayName: String(skill?.name || "").trim(),
-          isLeaf: true,
-        })).filter((item) => Number.isFinite(item.categoryId) && item.name);
-        setSkillItems(nextSkills);
-      } catch (error) {
-        setPageErrorMessage(error?.message || "기술 목록을 불러오지 못했습니다.");
-      }
-    };
-
-    void loadSkills();
-  }, [jobFilter, jobs, skillQuery]);
 
   const handleSidebarNavigate = (item) => {
     if (startingInterview) return;
@@ -343,21 +343,26 @@ export const InterviewStartPage = () => {
   };
 
   const handleCreateJob = async () => {
-    if (!jobQuery.trim()) return;
+    if (!branchFilter || !jobQuery.trim()) return;
     setCreatingCategory(true);
     setPageErrorMessage("");
     try {
-      const created = await createInterviewCatalogJob(jobQuery.trim());
+      const created = await createInterviewCategory({
+        parentId: Number(branchFilter),
+        name: jobQuery.trim(),
+      });
       const displayName = (created?.name || jobQuery.trim()).trim();
-      const refreshed = await getInterviewCatalogJobs();
-      const nextJobs = (Array.isArray(refreshed) ? refreshed : []).map((job) => ({
-        categoryId: Number(job?.jobId),
-        name: String(job?.name || "").trim(),
-        displayName: String(job?.name || "").trim(),
-      })).filter((job) => Number.isFinite(job.categoryId) && job.name);
-      setJobItems(nextJobs);
-      const matched = nextJobs.find((job) => job.name.toLowerCase() === displayName.toLowerCase()) || nextJobs.at(0);
+      const refreshed = await getInterviewCategories();
+      const nextCategoryTree = Array.isArray(refreshed) ? refreshed : [];
+      setCategoryTree(nextCategoryTree);
+      const matched = nextCategoryTree.find(
+        (item) => Number(item?.depth) === 1
+          && String(item?.parentId || "") === String(branchFilter)
+          && String(item?.name || "").trim().toLowerCase() === displayName.toLowerCase()
+      ) || nextCategoryTree.find((item) => Number(item?.depth) === 1 && String(item?.parentId || "") === String(branchFilter)) || null;
       setJobFilter(matched?.categoryId ? String(matched.categoryId) : "");
+      setSelectedCategoryIds([]);
+      setSkillQuery("");
       setJobQuery(displayName);
     } catch (error) {
       setPageErrorMessage(error?.message || "직무 생성에 실패했습니다.");
@@ -383,6 +388,10 @@ export const InterviewStartPage = () => {
         (item) => Number(item?.depth) === 0 && String(item?.name || "").trim().toLowerCase() === displayName.toLowerCase()
       ) || nextCategoryTree.find((item) => Number(item?.depth) === 0) || null;
       setBranchFilter(matched?.categoryId ? String(matched.categoryId) : "");
+      setJobFilter("");
+      setSelectedCategoryIds([]);
+      setJobQuery("");
+      setSkillQuery("");
       setBranchQuery(displayName);
     } catch (error) {
       setPageErrorMessage(error?.message || "계열 생성에 실패했습니다.");
@@ -396,28 +405,23 @@ export const InterviewStartPage = () => {
     setCreatingCategory(true);
     setPageErrorMessage("");
     try {
-      const jobName = (selectedJob?.displayName || selectedJob?.name || jobQuery.trim()).trim();
-      if (!jobName) {
-        setPageErrorMessage("직무를 먼저 선택해 주세요.");
-        return;
-      }
-      const created = await createInterviewCatalogSkill({
-        jobName,
-        skillName: skillQuery.trim(),
+      const created = await createInterviewCategory({
+        parentId: Number(jobFilter),
+        name: skillQuery.trim(),
       });
       const displayName = (created?.name || skillQuery.trim()).trim();
-      const refreshed = await getInterviewCatalogSkills({ jobName });
-      const nextSkills = (Array.isArray(refreshed) ? refreshed : []).map((skill) => ({
-        categoryId: Number(skill?.skillId),
-        parentId: Number(skill?.jobId || selectedJob?.categoryId || 0),
-        name: String(skill?.name || "").trim(),
-        displayName: String(skill?.name || "").trim(),
-        isLeaf: true,
-      })).filter((item) => Number.isFinite(item.categoryId) && item.name);
-      setSkillItems(nextSkills);
-      const matched = nextSkills.find((item) => item.name.toLowerCase() === displayName.toLowerCase()) || nextSkills.at(0);
-      setSelectedCategoryId(matched?.categoryId ? String(matched.categoryId) : "");
-      setSkillQuery(displayName);
+      const refreshed = await getInterviewCategories();
+      const nextCategoryTree = Array.isArray(refreshed) ? refreshed : [];
+      setCategoryTree(nextCategoryTree);
+      const matched = nextCategoryTree.find(
+        (item) => Number(item?.depth) === 2
+          && String(item?.parentId || "") === String(jobFilter)
+          && String(item?.name || "").trim().toLowerCase() === displayName.toLowerCase()
+      ) || nextCategoryTree.find((item) => Number(item?.depth) === 2 && String(item?.parentId || "") === String(jobFilter)) || null;
+      if (matched?.categoryId) {
+        setSelectedCategoryIds((prev) => prioritizeCreatedSelection(prev, String(matched.categoryId)));
+      }
+      setSkillQuery("");
     } catch (error) {
       setPageErrorMessage(error?.message || "기술 카테고리 생성에 실패했습니다.");
     } finally {
@@ -438,13 +442,15 @@ export const InterviewStartPage = () => {
       return;
     }
     const resolvedJobName = (selectedJob?.displayName || selectedJob?.name || jobQuery.trim()).trim();
-    const resolvedSkillName = (selectedSkill?.displayName || selectedSkill?.name || skillQuery.trim()).trim();
+    const resolvedSkillNames = selectedSkills
+      .map((skill) => (skill.displayName || skill.name || "").trim())
+      .filter(Boolean);
     if (!resolvedJobName) {
       setPageErrorMessage("모의면접에는 직무 입력이 필요합니다.");
       return;
     }
-    if (!resolvedSkillName) {
-      setPageErrorMessage("모의면접에는 기술 입력이 필요합니다.");
+    if (!resolvedSkillNames.length) {
+      setPageErrorMessage("모의면접에는 기술 카테고리를 1개 이상 선택해 주세요.");
       return;
     }
 
@@ -453,8 +459,8 @@ export const InterviewStartPage = () => {
     try {
       const response = await startMockInterview({
         documentFileIds: selectedDocumentIds,
+        categoryIds: selectedCategoryIds.map((id) => Number(id)).filter(Number.isFinite),
         jobName: resolvedJobName,
-        skillName: resolvedSkillName,
         difficulty: ratingToDifficulty(selectedRating),
         questionCount: Math.max(5, Number(selectedQuestionCount) || 5),
       });
@@ -479,7 +485,7 @@ export const InterviewStartPage = () => {
           difficulty: ratingToDifficulty(selectedRating),
           difficultyRating: selectedRating,
           categoryId: null,
-          categoryName: resolvedSkillName,
+          categoryName: resolvedSkillNames.join(", "),
           jobName: resolvedJobName,
           questionCount: Math.max(5, Number(selectedQuestionCount) || 5),
         },
@@ -589,6 +595,11 @@ export const InterviewStartPage = () => {
                       ))}
                       {!visibleBranches.length && !loadingPage ? <span className="text-[12px] text-[#7a8190]">표시할 계열이 없습니다.</span> : null}
                     </div>
+                    <p className={`mt-3 text-[12px] ${branchAlreadyExists ? "text-[#d14343]" : "text-[#7a8190]"}`}>
+                      {branchAlreadyExists
+                        ? "같은 이름의 계열이 이미 있습니다. 중복/장난 입력은 관리자 확인 후 즉시 로그인 차단될 수 있습니다."
+                        : "없는 계열은 직접 추가할 수 있습니다. 장난성 입력은 관리자 확인 후 즉시 로그인 차단될 수 있습니다."}
+                    </p>
                   </CategoryCard>
 
                   <CategoryCard title="직무 선택" description="직무는 한글 기준으로 선택하시고, 없으면 바로 추가해 주세요.">
@@ -616,9 +627,14 @@ export const InterviewStartPage = () => {
                       ))}
                       {!visibleJobs.length && !loadingPage ? <span className="text-[12px] text-[#7a8190]">표시할 직무가 없습니다.</span> : null}
                     </div>
+                    <p className={`mt-3 text-[12px] ${jobAlreadyExists ? "text-[#d14343]" : "text-[#7a8190]"}`}>
+                      {jobAlreadyExists
+                        ? "같은 이름의 직무가 이미 있습니다. 중복/장난 입력은 관리자 확인 후 즉시 로그인 차단될 수 있습니다."
+                        : "새로 만든 직무는 바로 선택됩니다. 장난성 입력은 관리자 확인 후 즉시 로그인 차단될 수 있습니다."}
+                    </p>
                   </CategoryCard>
 
-                  <CategoryCard title="기술 카테고리 선택" description="모의면접에는 기술질문이 40% 비율로 포함됩니다. 직무를 먼저 고른 뒤 기술을 선택하거나 직접 추가해 주세요.">
+                  <CategoryCard title="기술 카테고리 선택" description="모의면접에는 기술질문이 40% 비율로 포함됩니다. 직무를 먼저 고른 뒤 기술을 여러 개 선택하거나 직접 추가해 주세요.">
                     <div className="grid gap-3 md:grid-cols-[1fr_auto]">
                       <input
                         value={skillQuery}
@@ -633,17 +649,47 @@ export const InterviewStartPage = () => {
                         </button>
                       ) : <div />}
                     </div>
+                    {selectedSkills.length ? (
+                      <div className="mt-4 flex flex-wrap gap-2 rounded-[14px] border border-[#eef1f5] bg-[#fafbfd] p-3">
+                        {selectedSkills.map((skill) => (
+                          <span key={`selected-skill-${skill.categoryId}`} className="inline-flex items-center gap-2 rounded-full border border-[#171b24] bg-[#171b24] px-3 py-1 text-[12px] text-white">
+                            <span>{skill.displayName || skill.name}</span>
+                            <button
+                              type="button"
+                              onClick={() => setSelectedCategoryIds((prev) => prev.filter((id) => id !== String(skill.categoryId)))}
+                              className="text-[11px] text-white/80"
+                            >
+                              제거
+                            </button>
+                          </span>
+                        ))}
+                      </div>
+                    ) : null}
                     <div className="mt-4 flex flex-wrap gap-2">
                       {visibleSkills.map((skill) => (
                         <FilterChip
                           key={skill.categoryId}
                           label={skill.label}
-                          active={String(skill.categoryId) === selectedCategoryId}
-                          onClick={() => setSelectedCategoryId(String(skill.categoryId))}
+                          active={selectedCategoryIds.includes(String(skill.categoryId))}
+                          onClick={() => {
+                            const nextId = String(skill.categoryId);
+                            if (!selectedCategoryIds.includes(nextId) && selectedCategoryIds.length >= 3) {
+                              setPageErrorMessage("기술 카테고리는 최대 3개까지 선택하실 수 있습니다.");
+                              return;
+                            }
+                            setPageErrorMessage("");
+                            setSelectedCategoryIds((prev) => toggleSkillSelection(prev, nextId));
+                          }}
                         />
                       ))}
                       {!visibleSkills.length && jobFilter ? <span className="text-[12px] text-[#7a8190]">현재 직무에 등록된 기술이 없습니다. 직접 추가하시면 바로 사용하실 수 있습니다.</span> : null}
                     </div>
+                    <p className={`mt-3 text-[12px] ${skillAlreadyExists ? "text-[#d14343]" : "text-[#7a8190]"}`}>
+                      {skillAlreadyExists
+                        ? "같은 이름의 기술이 이미 있습니다. 중복/장난 입력은 관리자 확인 후 즉시 로그인 차단될 수 있습니다."
+                        : "새로 만든 기술은 바로 선택됩니다. 장난성 입력은 관리자 확인 후 즉시 로그인 차단될 수 있습니다."}
+                    </p>
+                    <p className="mt-3 text-[12px] text-[#7a8190]">최대 3개까지 선택하실 수 있으며, 선택한 기술 전체에서 질문 후보를 한 번에 생성한 뒤 품질 통과분만 섞어 출제합니다.</p>
                   </CategoryCard>
 
                   <CategoryCard title="서류 선택" description="AI 분석이 끝난 서류만 노출됩니다. 이력서와 자기소개서는 필수이며, 포트폴리오는 선택 사항입니다. OCR fallback이 사용된 문서는 배지를 함께 표시합니다.">
@@ -732,9 +778,15 @@ export const InterviewStartPage = () => {
                   <CategoryCard title="선택 요약" description="세션 상단에 그대로 표시되는 메타 정보입니다.">
                     <div className="flex flex-wrap gap-2">
                       {selectedJob ? <span className="rounded-full border border-[#d8dde7] bg-white px-3 py-1 text-[12px] text-[#4f5664]">{selectedJob.displayName || selectedJob.name}</span> : null}
-                      <span className="rounded-full border border-[#d8dde7] bg-white px-3 py-1 text-[12px] text-[#4f5664]">
-                        {selectedSkill?.displayName || selectedSkill?.name || "기술 미선택"}
-                      </span>
+                      {selectedSkills.length ? selectedSkills.map((skill) => (
+                        <span key={`summary-skill-${skill.categoryId}`} className="rounded-full border border-[#d8dde7] bg-white px-3 py-1 text-[12px] text-[#4f5664]">
+                          {skill.displayName || skill.name}
+                        </span>
+                      )) : (
+                        <span className="rounded-full border border-[#d8dde7] bg-white px-3 py-1 text-[12px] text-[#4f5664]">
+                          기술 미선택
+                        </span>
+                      )}
                       <span className="rounded-full border border-[#d8dde7] bg-white px-3 py-1 text-[12px] text-[#4f5664]">문항 {selectedQuestionCount}개</span>
                       {DOCUMENT_TYPES.map((type) => {
                         const file = selectedFileObjects[type.key];

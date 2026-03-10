@@ -13,7 +13,7 @@ import { getCategoryDisplayName, searchCategoryByText } from "../../lib/category
 import { ratingToDifficulty } from "../../lib/difficultyRating";
 import { saveTechInterviewSession } from "../../lib/interviewSessionFlow";
 import { consumePointChargeSuccessResult } from "../../lib/pointChargeFlow";
-import { createInterviewCatalogJob, createInterviewCatalogSkill, getInterviewCatalogJobs, getInterviewCatalogSkills, startTechInterview } from "../../lib/interviewApi";
+import { createInterviewCategory, getInterviewCategories, startTechInterview } from "../../lib/interviewApi";
 import { isGeminiOverloadError } from "../../lib/geminiErrorUtils";
 import { getMyProfile, getMyProfileImageUrl } from "../../lib/userApi";
 
@@ -75,6 +75,8 @@ export const TechPracticePage = () => {
   const [loading, setLoading] = useState(true);
   const [startingCategoryId, setStartingCategoryId] = useState(null);
   const [categories, setCategories] = useState([]);
+  const [branchFilter, setBranchFilter] = useState("");
+  const [branchQuery, setBranchQuery] = useState("");
   const [jobFilter, setJobFilter] = useState("");
   const [jobQuery, setJobQuery] = useState("");
   const [categoryQuery, setCategoryQuery] = useState("");
@@ -84,60 +86,48 @@ export const TechPracticePage = () => {
   const [creatingCategory, setCreatingCategory] = useState(false);
   const isStartingPractice = startingCategoryId !== null;
 
-  const loadCatalog = async ({ preferredJobName = "", preferredSkillName = "" } = {}) => {
-    const jobsPayload = await getInterviewCatalogJobs();
-    const normalizedJobs = (Array.isArray(jobsPayload) ? jobsPayload : [])
-      .map((job) => ({
-        categoryId: Number(job?.jobId),
-        parentId: null,
-        name: String(job?.name || "").trim(),
-        displayName: String(job?.name || "").trim(),
-        depth: 1,
-        isLeaf: false,
-      }))
-      .filter((job) => Number.isFinite(job.categoryId) && job.name);
-
-    const skillsByJob = await Promise.all(
-      normalizedJobs.map(async (job) => {
-        const payload = await getInterviewCatalogSkills({ jobName: job.name });
-        return (Array.isArray(payload) ? payload : []).map((skill) => ({
-          categoryId: Number(skill?.skillId),
-          parentId: Number(skill?.jobId || job.categoryId),
-          name: String(skill?.name || "").trim(),
-          displayName: String(skill?.name || "").trim(),
-          depth: 2,
-          isLeaf: true,
-        }));
-      })
-    );
-    const normalizedSkills = skillsByJob.flat().filter((skill) => Number.isFinite(skill.categoryId) && Number.isFinite(skill.parentId) && skill.name);
-
-    const nextCategories = [...normalizedJobs, ...normalizedSkills];
+  const loadCatalog = async ({ preferredBranchName = "", preferredJobName = "", preferredSkillName = "" } = {}) => {
+    const payload = await getInterviewCategories();
+    const nextCategories = Array.isArray(payload) ? payload : [];
     setCategories(nextCategories);
+
+    const branches = nextCategories.filter((item) => Number(item?.depth) === 0);
+    const jobs = nextCategories.filter((item) => Number(item?.depth) === 1);
+    const skills = nextCategories.filter((item) => Number(item?.depth) === 2);
+
+    const normalizedPreferredBranchName = String(preferredBranchName || "").trim().toLowerCase();
+    const matchedBranch = normalizedPreferredBranchName
+      ? branches.find((branch) => String(branch?.name || "").trim().toLowerCase() === normalizedPreferredBranchName)
+      : null;
+    const nextBranchFilter = matchedBranch?.categoryId ? String(matchedBranch.categoryId) : "";
+    if (nextBranchFilter) {
+      setBranchFilter(nextBranchFilter);
+    } else {
+      setBranchFilter((prev) => {
+        if (prev && branches.some((branch) => String(branch.categoryId) === String(prev))) return prev;
+        return "";
+      });
+    }
 
     const normalizedPreferredJobName = String(preferredJobName || "").trim().toLowerCase();
     const matchedJob = normalizedPreferredJobName
-      ? normalizedJobs.find((job) => (job.displayName || job.name).trim().toLowerCase() === normalizedPreferredJobName)
+      ? jobs.find((job) => String(job?.name || "").trim().toLowerCase() === normalizedPreferredJobName)
       : null;
-
     const nextJobFilter = matchedJob?.categoryId ? String(matchedJob.categoryId) : "";
     if (nextJobFilter) {
       setJobFilter(nextJobFilter);
     } else {
       setJobFilter((prev) => {
-        if (prev && normalizedJobs.some((job) => String(job.categoryId) === String(prev))) return prev;
+        if (prev && jobs.some((job) => String(job.categoryId) === String(prev))) return prev;
         return "";
       });
     }
 
     const normalizedPreferredSkillName = String(preferredSkillName || "").trim().toLowerCase();
     if (normalizedPreferredSkillName) {
-      const skillMatches = normalizedSkills.filter((skill) => (skill.displayName || skill.name).trim().toLowerCase() === normalizedPreferredSkillName);
-      const preferredSkill = nextJobFilter
-        ? skillMatches.find((skill) => String(skill.parentId) === String(nextJobFilter)) || skillMatches[0]
-        : skillMatches[0];
+      const preferredSkill = skills.find((skill) => String(skill?.name || "").trim().toLowerCase() === normalizedPreferredSkillName);
       if (preferredSkill) {
-        setCategoryQuery(preferredSkill.displayName || preferredSkill.name);
+        setCategoryQuery(String(preferredSkill.name || "").trim());
       }
     }
   };
@@ -174,10 +164,15 @@ export const TechPracticePage = () => {
     void load();
   }, [navigate]);
 
+  const branchItems = useMemo(() => categories.filter((item) => Number(item.depth) === 0), [categories]);
+  const visibleBranches = useMemo(() => branchItems.filter((branch) => searchCategoryByText(branch, branchQuery)), [branchItems, branchQuery]);
   const jobs = useMemo(() => categories.filter((item) => Number(item.depth) === 1), [categories]);
   const visibleJobs = useMemo(() => {
-    return jobs.filter((job) => searchCategoryByText(job, jobQuery));
-  }, [jobQuery, jobs]);
+    return jobs.filter((job) => {
+      if (!searchCategoryByText(job, jobQuery)) return false;
+      return !branchFilter || String(job.parentId || "") === String(branchFilter);
+    });
+  }, [branchFilter, jobQuery, jobs]);
   const leafCategories = useMemo(() => categories.filter((item) => item?.isLeaf), [categories]);
   const categoryCards = useMemo(() => {
     const keyword = categoryQuery.trim().toLowerCase();
@@ -193,8 +188,20 @@ export const TechPracticePage = () => {
       }));
   }, [categoryQuery, jobFilter, jobs, leafCategories]);
 
-  const canCreateJob = Boolean(jobQuery.trim() && !visibleJobs.some((job) => (job.displayName || job.name).toLowerCase() === jobQuery.trim().toLowerCase()));
+  const canCreateBranch = Boolean(branchQuery.trim() && !branchItems.some((branch) => (branch.name || "").trim().toLowerCase() === branchQuery.trim().toLowerCase()));
+  const canCreateJob = Boolean(branchFilter && jobQuery.trim() && !visibleJobs.some((job) => (job.displayName || job.name).toLowerCase() === jobQuery.trim().toLowerCase()));
   const canCreateCategory = Boolean(categoryQuery.trim() && jobFilter && !categoryCards.some((item) => item.name.toLowerCase() === categoryQuery.trim().toLowerCase()));
+  const branchAlreadyExists = Boolean(branchQuery.trim() && !canCreateBranch);
+  const jobAlreadyExists = Boolean(jobQuery.trim() && !canCreateJob);
+  const categoryAlreadyExists = Boolean(categoryQuery.trim() && !canCreateCategory);
+  const selectedBranch = useMemo(() => branchItems.find((item) => String(item.categoryId) === String(branchFilter)) || null, [branchFilter, branchItems]);
+  const selectedJob = useMemo(() => jobs.find((item) => String(item.categoryId) === String(jobFilter)) || null, [jobFilter, jobs]);
+
+  useEffect(() => {
+    if (!branchFilter) return;
+    if (visibleJobs.some((job) => String(job.categoryId) === String(jobFilter))) return;
+    setJobFilter("");
+  }, [branchFilter, jobFilter, visibleJobs]);
 
   const handleSidebarNavigate = (item) => {
     if (isStartingPractice) return;
@@ -220,9 +227,7 @@ export const TechPracticePage = () => {
     setPageErrorMessage("");
     try {
       const response = await startTechInterview({
-        categoryId: null,
-        jobName: category.jobName || null,
-        skillName: category.name || null,
+        categoryId: category.categoryId || null,
         questionCount: QUESTION_COUNT,
         difficulty: ratingToDifficulty(selectedRating),
       });
@@ -256,18 +261,16 @@ export const TechPracticePage = () => {
     setCreatingCategory(true);
     setPageErrorMessage("");
     try {
-      const selectedJob = jobs.find((job) => String(job.categoryId) === String(jobFilter));
-      const jobName = (selectedJob?.displayName || selectedJob?.name || jobQuery.trim()).trim();
-      if (!jobName) {
-        setPageErrorMessage("직무를 먼저 선택해 주세요.");
-        return;
-      }
-      const created = await createInterviewCatalogSkill({
-        jobName,
-        skillName: categoryQuery.trim(),
+      const created = await createInterviewCategory({
+        parentId: Number(jobFilter),
+        name: categoryQuery.trim(),
       });
       const displayName = (created?.name || categoryQuery.trim()).trim();
-      await loadCatalog({ preferredJobName: jobName, preferredSkillName: displayName });
+      await loadCatalog({
+        preferredBranchName: selectedBranch?.name || "",
+        preferredJobName: selectedJob?.name || "",
+        preferredSkillName: displayName,
+      });
     } catch (error) {
       setPageErrorMessage(error?.message || "카테고리 생성에 실패했습니다.");
     } finally {
@@ -276,16 +279,41 @@ export const TechPracticePage = () => {
   };
 
   const handleCreateJob = async () => {
-    if (!jobQuery.trim()) return;
+    if (!branchFilter || !jobQuery.trim()) return;
     setCreatingCategory(true);
     setPageErrorMessage("");
     try {
-      const created = await createInterviewCatalogJob(jobQuery.trim());
+      const created = await createInterviewCategory({
+        parentId: Number(branchFilter),
+        name: jobQuery.trim(),
+      });
       const displayName = (created?.name || jobQuery.trim()).trim();
-      await loadCatalog({ preferredJobName: displayName });
+      await loadCatalog({ preferredBranchName: selectedBranch?.name || "", preferredJobName: displayName });
       setJobQuery(displayName);
+      setCategoryQuery("");
     } catch (error) {
       setPageErrorMessage(error?.message || "직무 생성에 실패했습니다.");
+    } finally {
+      setCreatingCategory(false);
+    }
+  };
+
+  const handleCreateBranch = async () => {
+    if (!branchQuery.trim()) return;
+    setCreatingCategory(true);
+    setPageErrorMessage("");
+    try {
+      const created = await createInterviewCategory({
+        parentId: null,
+        name: branchQuery.trim(),
+      });
+      const displayName = (created?.name || branchQuery.trim()).trim();
+      await loadCatalog({ preferredBranchName: displayName });
+      setBranchQuery(displayName);
+      setJobQuery("");
+      setCategoryQuery("");
+    } catch (error) {
+      setPageErrorMessage(error?.message || "계열 생성에 실패했습니다.");
     } finally {
       setCreatingCategory(false);
     }
@@ -311,18 +339,38 @@ export const TechPracticePage = () => {
             </section>
 
             <section className="mt-5 rounded-[24px] border border-[#e4e7ee] bg-white p-5 sm:p-6">
-              <div className="grid gap-3 xl:grid-cols-[180px_1fr]">
+              <div className="grid gap-3 xl:grid-cols-[1fr_auto]">
+                <input value={branchQuery} onChange={(event) => setBranchQuery(event.target.value)} placeholder="계열 검색 또는 새 계열 입력" className="rounded-[14px] border border-[#dfe3eb] px-4 py-3 text-[13px] outline-none focus:border-[#8aa2e8]" />
+                {canCreateBranch ? <button type="button" disabled={creatingCategory} onClick={handleCreateBranch} className="rounded-[14px] border border-[#171b24] px-4 py-2.5 text-[13px] font-semibold text-[#171b24] disabled:opacity-60">{creatingCategory ? "생성 중..." : "계열 추가"}</button> : <div />}
+              </div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <DifficultyChip label="전체 계열" active={!branchFilter} onClick={() => setBranchFilter("")} />
+                {visibleBranches.map((branch) => (
+                  <DifficultyChip key={branch.categoryId} label={branch.name} active={branchFilter === String(branch.categoryId)} onClick={() => setBranchFilter(String(branch.categoryId))} />
+                ))}
+              </div>
+              <p className={`mt-3 text-[12px] ${branchAlreadyExists ? "text-[#d14343]" : "text-[#7a8190]"}`}>
+                {branchAlreadyExists
+                  ? "같은 이름의 계열이 이미 있습니다. 중복/장난 입력은 관리자 확인 후 즉시 로그인 차단될 수 있습니다."
+                  : "새로 만든 계열은 바로 선택됩니다. 장난성 입력은 관리자 확인 후 즉시 로그인 차단될 수 있습니다."}
+              </p>
+              <div className="mt-3 grid gap-3 xl:grid-cols-[180px_1fr]">
                 <select value={jobFilter} onChange={(event) => setJobFilter(event.target.value)} className="rounded-[14px] border border-[#dfe3eb] px-4 py-3 text-[13px] outline-none focus:border-[#8aa2e8]">
                   <option value="">전체 직무</option>
                   {visibleJobs.map((job) => <option key={job.categoryId} value={String(job.categoryId)}>{job.displayName || getCategoryDisplayName(job)}</option>)}
                 </select>
-                <input value={categoryQuery} onChange={(event) => setCategoryQuery(event.target.value)} placeholder="기술 카테고리 검색 또는 새 카테고리 입력" className="rounded-[14px] border border-[#dfe3eb] px-4 py-3 text-[13px] outline-none focus:border-[#8aa2e8]" />
+                <input value={categoryQuery} onChange={(event) => setCategoryQuery(event.target.value)} placeholder={jobFilter ? "기술 카테고리 검색 또는 새 카테고리 입력" : "직무를 먼저 선택해 주세요"} disabled={!jobFilter} className="rounded-[14px] border border-[#dfe3eb] px-4 py-3 text-[13px] outline-none focus:border-[#8aa2e8] disabled:bg-[#f3f5f8]" />
               </div>
               <div className="mt-3 grid gap-3 xl:grid-cols-[180px_auto_1fr]">
-                <input value={jobQuery} onChange={(event) => setJobQuery(event.target.value)} placeholder="직무 검색 또는 새 직무 입력" className="rounded-[14px] border border-[#dfe3eb] px-4 py-3 text-[13px] outline-none focus:border-[#8aa2e8]" />
+                <input value={jobQuery} onChange={(event) => setJobQuery(event.target.value)} placeholder={branchFilter ? "직무 검색 또는 새 직무 입력" : "계열을 먼저 선택해 주세요"} disabled={!branchFilter} className="rounded-[14px] border border-[#dfe3eb] px-4 py-3 text-[13px] outline-none focus:border-[#8aa2e8] disabled:bg-[#f3f5f8]" />
                 {canCreateJob ? <button type="button" disabled={creatingCategory} onClick={handleCreateJob} className="rounded-[14px] border border-[#171b24] px-4 py-2.5 text-[13px] font-semibold text-[#171b24] disabled:opacity-60">{creatingCategory ? "생성 중..." : "직무 추가"}</button> : <div />}
                 <div />
               </div>
+              <p className={`mt-3 text-[12px] ${jobAlreadyExists ? "text-[#d14343]" : "text-[#7a8190]"}`}>
+                {jobAlreadyExists
+                  ? "같은 이름의 직무가 이미 있습니다. 중복/장난 입력은 관리자 확인 후 즉시 로그인 차단될 수 있습니다."
+                  : "새로 만든 직무는 바로 선택됩니다. 장난성 입력은 관리자 확인 후 즉시 로그인 차단될 수 있습니다."}
+              </p>
 
               <div className="mt-3 flex flex-wrap gap-2">
                 {[1, 2, 3, 4, 5].map((rating) => <DifficultyChip key={rating} label={<StarIcons rating={rating} sizeClass="text-[11px]" />} active={selectedRating === rating} onClick={() => setSelectedRating(rating)} />)}
@@ -330,13 +378,18 @@ export const TechPracticePage = () => {
 
               {canCreateCategory ? (
                 <div className="mt-4 flex items-center justify-between gap-3 rounded-[18px] border border-dashed border-[#d7dce5] bg-[#fafbfd] p-4">
-                  <div>
-                    <p className="text-[13px] font-semibold text-[#171b24]">`{categoryQuery.trim()}` 카테고리가 아직 없습니다.</p>
-                    <p className="mt-1 text-[12px] text-[#5e6472]">직무를 고른 뒤 새 카테고리를 만드시면 바로 기술질문 연습에 사용하실 수 있습니다.</p>
-                  </div>
-                  <button type="button" disabled={creatingCategory} onClick={handleCreateCategory} className="rounded-[14px] border border-[#171b24] px-4 py-2.5 text-[13px] font-semibold text-[#171b24] disabled:opacity-60">{creatingCategory ? "생성 중..." : "카테고리 추가"}</button>
+                <div>
+                  <p className="text-[13px] font-semibold text-[#171b24]">`{categoryQuery.trim()}` 카테고리가 아직 없습니다.</p>
+                  <p className="mt-1 text-[12px] text-[#5e6472]">직무를 고른 뒤 새 카테고리를 만드시면 바로 기술질문 연습에 사용하실 수 있습니다.</p>
                 </div>
+                <button type="button" disabled={creatingCategory} onClick={handleCreateCategory} className="rounded-[14px] border border-[#171b24] px-4 py-2.5 text-[13px] font-semibold text-[#171b24] disabled:opacity-60">{creatingCategory ? "생성 중..." : "카테고리 추가"}</button>
+              </div>
               ) : null}
+              <p className={`mt-3 text-[12px] ${categoryAlreadyExists ? "text-[#d14343]" : "text-[#7a8190]"}`}>
+                {categoryAlreadyExists
+                  ? "같은 이름의 기술 카테고리가 이미 있습니다. 중복/장난 입력은 관리자 확인 후 즉시 로그인 차단될 수 있습니다."
+                  : "새로 만든 기술은 목록에 바로 반영됩니다. 장난성 입력은 관리자 확인 후 즉시 로그인 차단될 수 있습니다."}
+              </p>
             </section>
 
             <section className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
