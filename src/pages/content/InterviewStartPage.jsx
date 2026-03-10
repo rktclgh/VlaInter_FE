@@ -317,7 +317,13 @@ export const InterviewStartPage = () => {
   useEffect(() => {
     if (!selectedCategoryIds.length) return;
     const availableIds = new Set(skillItems.map((item) => String(item.categoryId)));
-    setSelectedCategoryIds((prev) => prev.filter((id) => availableIds.has(String(id))));
+    setSelectedCategoryIds((prev) => {
+      const next = prev.filter((id) => availableIds.has(String(id)));
+      if (next.length === prev.length && next.every((id, index) => id === prev[index])) {
+        return prev;
+      }
+      return next;
+    });
   }, [selectedCategoryIds, skillItems]);
 
   const canCreateJob = Boolean(branchFilter && jobQuery.trim() && !visibleJobs.some((job) => (job.displayName || job.name || "").trim().toLowerCase() === jobQuery.trim().toLowerCase()));
@@ -531,6 +537,9 @@ export const InterviewStartPage = () => {
           requestedQuestionCount: Math.max(5, Number(selectedQuestionCount) || 5),
           includeSelfIntroduction,
           questionSetId: selectedQuestionSet ? Number(selectedQuestionSet.setId) : null,
+          providerUsed: response.providerUsed || null,
+          fallbackDepth: Number(response.fallbackDepth || 0),
+          paidFallbackPopupPending: String(response.providerUsed || "").toUpperCase() === "BEDROCK",
         },
       });
 

@@ -228,6 +228,9 @@ export const QuestionBrowsePage = () => {
           categoryName: (Array.isArray(setItem.skillNames) ? setItem.skillNames.join(", ") : setItem.skillName) || null,
           jobName: primaryJobName,
           questionCount: Math.max(Number(setItem.questionCount || 0), Array.isArray(setItem.questions) ? setItem.questions.length : 0, 5),
+          providerUsed: response.providerUsed || null,
+          fallbackDepth: Number(response.fallbackDepth || 0),
+          paidFallbackPopupPending: String(response.providerUsed || "").toUpperCase() === "BEDROCK",
         },
       });
       navigate("/content/interview/session");
