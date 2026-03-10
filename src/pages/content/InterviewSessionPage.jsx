@@ -631,7 +631,7 @@ export const InterviewSessionPage = () => {
         <PaidFallbackNoticeToast
           onClose={() => {
             setShowPaidFallbackNotice(false);
-            setSessionMetadata((prev) => ({ ...prev, paidFallbackPopupPending: false, paidFallbackNoticeDismissed: true }));
+            setSessionMetadata((prev) => ({ ...prev, paidFallbackNoticeDismissed: true }));
           }}
         />
       ) : null}

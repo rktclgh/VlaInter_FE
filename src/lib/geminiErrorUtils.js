@@ -5,8 +5,6 @@ const GEMINI_KEYWORDS = [
 ];
 
 const OVERLOAD_KEYWORDS = [
-  "429",
-  "503",
   "unavailable",
   "high demand",
   "read timed out",
@@ -22,7 +20,7 @@ export function isGeminiOverloadError(error) {
   const hasGeminiKeyword = GEMINI_KEYWORDS.some((keyword) => message.includes(keyword));
   const hasOverloadKeyword = OVERLOAD_KEYWORDS.some((keyword) => message.includes(keyword));
   if (status === 429 || status === 503) {
-    return hasGeminiKeyword || hasOverloadKeyword;
+    return hasGeminiKeyword && hasOverloadKeyword;
   }
   return hasGeminiKeyword && hasOverloadKeyword;
 }
