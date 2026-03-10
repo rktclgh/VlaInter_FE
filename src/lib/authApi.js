@@ -1,4 +1,5 @@
 import { apiRequest } from "./apiClient";
+import { resetMyProfileCache } from "./userApi";
 
 export async function login(payload) {
   return apiRequest("/api/auth/login", {
@@ -36,9 +37,13 @@ export async function kakaoLogin(payload) {
 }
 
 export async function logout() {
-  return apiRequest("/api/auth/logout", {
-    method: "POST",
-  });
+  try {
+    return await apiRequest("/api/auth/logout", {
+      method: "POST",
+    });
+  } finally {
+    resetMyProfileCache();
+  }
 }
 
 export async function sendTemporaryPassword(email, name) {

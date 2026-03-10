@@ -11,6 +11,8 @@ import { InterviewHistoryPage } from './pages/content/InterviewHistoryPage'
 import { PracticeHistoryPage } from './pages/content/PracticeHistoryPage'
 import { SavedQuestionsPage } from './pages/content/SavedQuestionsPage'
 import { QuestionSetsPage } from './pages/content/QuestionSetsPage'
+import { QuestionBrowsePage } from './pages/content/QuestionBrowsePage'
+import { AdminConsolePage } from './pages/content/AdminConsolePage'
 import { PointChargeCallbackPage } from './pages/content/PointChargeCallbackPage'
 import { FileUploadPage } from './pages/content/FileUploadPage'
 import { MyPage } from './pages/content/MyPage'
@@ -40,9 +42,11 @@ function App() {
         <Route path="/content/interview/session" element={<InterviewSessionPage />} />
         <Route path="/content/saved-questions" element={<SavedQuestionsPage />} />
         <Route path="/content/question-sets" element={<QuestionSetsPage />} />
+        <Route path="/content/question-browse" element={<QuestionBrowsePage />} />
         <Route path="/content/files" element={<FileUploadPage />} />
         <Route path="/content/point-charge" element={<MyPage />} />
       </Route>
+      <Route path="/content/admin" element={<AdminConsolePage />} />
       <Route path="/content/mypage" element={<MyPage />} />
       <Route path="/content/point-charge/callback" element={<PointChargeCallbackPage />} />
       <Route path="/errors/403" element={<ErrorPage code={403} />} />

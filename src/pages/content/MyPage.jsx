@@ -347,6 +347,7 @@ export const MyPage = () => {
   const [hasGeminiApiKey, setHasGeminiApiKey] = useState(false);
   const [geminiApiKeyInput, setGeminiApiKeyInput] = useState("");
   const [geminiApiKeySubmitting, setGeminiApiKeySubmitting] = useState(false);
+  const [removingGeminiApiKey, setRemovingGeminiApiKey] = useState(false);
   const [geminiApiKeyMessage, setGeminiApiKeyMessage] = useState("");
   const [geminiApiKeyErrorMessage, setGeminiApiKeyErrorMessage] = useState("");
   const profileImageInputRef = useRef(null);
@@ -577,7 +578,7 @@ export const MyPage = () => {
   };
 
   const removeGeminiApiKey = async () => {
-    setGeminiApiKeySubmitting(true);
+    setRemovingGeminiApiKey(true);
     setGeminiApiKeyErrorMessage("");
     setGeminiApiKeyMessage("");
     try {
@@ -589,7 +590,7 @@ export const MyPage = () => {
     } catch (error) {
       setGeminiApiKeyErrorMessage(error?.message || "Gemini API 키 제거에 실패했습니다.");
     } finally {
-      setGeminiApiKeySubmitting(false);
+      setRemovingGeminiApiKey(false);
     }
   };
 
@@ -641,7 +642,6 @@ export const MyPage = () => {
         onNavigate={onSelectSidebar}
         userName={userName}
         profileImageUrl={profileImageUrl}
-        fallbackProfileImageUrl={tempProfileImage}
         onLogout={() => {
           setIsMobileMenuOpen(false);
           requestLogout();
@@ -655,7 +655,6 @@ export const MyPage = () => {
             onNavigate={onSelectSidebar}
             userName={userName}
             profileImageUrl={profileImageUrl}
-            fallbackProfileImageUrl={tempProfileImage}
             onLogout={requestLogout}
           />
         </div>
@@ -679,10 +678,6 @@ export const MyPage = () => {
                         src={profileImageUrl}
                         alt="프로필"
                         className="h-16 w-16 rounded-full border border-[#dddddd] object-cover sm:h-20 sm:w-20"
-                        onError={(event) => {
-                          event.currentTarget.onerror = null;
-                          event.currentTarget.src = tempProfileImage;
-                        }}
                       />
                       <span className="absolute bottom-[-2px] right-[-2px] inline-flex h-7 w-7 items-center justify-center rounded-full border border-[#d5d8de] bg-white text-[#5f6670] shadow-[0_2px_5px_rgba(0,0,0,0.16)]">
                         <svg viewBox="0 0 24 24" aria-hidden="true" className="h-4 w-4 fill-current">
@@ -720,15 +715,16 @@ export const MyPage = () => {
                     type="password"
                     value={geminiApiKeyInput}
                     onChange={(event) => setGeminiApiKeyInput(event.target.value)}
-                    placeholder="Gemini API 키 입력"
-                    className="h-[40px] w-full rounded-[10px] border border-[#d8d8d8] px-3 text-[13px] text-[#202020] outline-none focus:border-[#9a9a9a]"
+                    disabled={hasGeminiApiKey || geminiApiKeySubmitting}
+                    placeholder={hasGeminiApiKey ? "API 키가 등록되어 있습니다." : "Gemini API 키 입력"}
+                    className="h-[40px] w-full rounded-[10px] border border-[#d8d8d8] px-3 text-[13px] text-[#202020] outline-none focus:border-[#9a9a9a] disabled:bg-[#f3f5f8] disabled:text-[#7a7a7a]"
                   />
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 sm:shrink-0">
                     <button
                       type="button"
                       onClick={submitGeminiApiKey}
-                      disabled={geminiApiKeySubmitting}
-                      className="rounded-[10px] border border-[#1f1f1f] bg-[#1f1f1f] px-4 py-2 text-[12px] text-white disabled:opacity-60"
+                        disabled={hasGeminiApiKey || geminiApiKeySubmitting || removingGeminiApiKey}
+                      className="min-w-[88px] whitespace-nowrap rounded-[10px] border border-[#1f1f1f] bg-[#1f1f1f] px-3 py-2 text-[11px] text-white disabled:opacity-60 sm:text-[12px]"
                     >
                       {geminiApiKeySubmitting ? "저장 중..." : "저장"}
                     </button>
@@ -736,10 +732,10 @@ export const MyPage = () => {
                       <button
                         type="button"
                         onClick={removeGeminiApiKey}
-                        disabled={geminiApiKeySubmitting}
-                        className="rounded-[10px] border border-[#d6d6d6] px-4 py-2 text-[12px] text-[#555] disabled:opacity-60"
+                        disabled={geminiApiKeySubmitting || removingGeminiApiKey}
+                        className="min-w-[88px] whitespace-nowrap rounded-[10px] border border-[#d84a4a] bg-[#fff1f1] px-3 py-2 text-[11px] font-semibold text-[#d84a4a] disabled:opacity-60 sm:text-[12px]"
                       >
-                        키 제거
+                        {removingGeminiApiKey ? "삭제 중..." : "키 제거"}
                       </button>
                     ) : null}
                   </div>

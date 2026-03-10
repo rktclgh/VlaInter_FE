@@ -1,16 +1,20 @@
-import { MAIN_MENU_ITEMS, MY_MENU_ITEMS } from "./sidebarMenuItems";
-
-const FINAL_PROFILE_FALLBACK =
-  "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==";
+import { useMemo } from "react";
+import { useAdminStatus } from "../hooks/useAdminStatus";
+import { getMainMenuSections, MY_MENU_ITEMS } from "./sidebarMenuItems";
 
 export const Sidebar = ({
   activeKey = "interview_start",
   onNavigate,
   userName = "송치호",
   profileImageUrl = "",
-  fallbackProfileImageUrl = "",
+  isAdmin = null,
   onLogout,
 }) => {
+  const resolvedIsAdmin = useAdminStatus(isAdmin);
+  const hasProfileImage = typeof profileImageUrl === "string" && profileImageUrl.trim().length > 0;
+
+  const mainMenuSections = useMemo(() => getMainMenuSections({ isAdmin: resolvedIsAdmin }), [resolvedIsAdmin]);
+
   const renderMenuButton = (item) => {
     const active = item.key === activeKey;
     return (
@@ -28,14 +32,17 @@ export const Sidebar = ({
   };
 
   return (
-    <aside className="sticky top-0 flex h-[calc(100vh-54px)] w-full flex-col border-r border-[#e8e8e8] bg-[#f8f8f8]">
+    <aside className="sticky top-[54px] z-20 flex h-[calc(100vh-54px)] w-[272px] flex-col border-r border-[#e8e8e8] bg-[#f8f8f8]">
       <div className="flex-1 overflow-y-auto px-4 pb-4 pt-6">
-        <div>
-          <p className="mb-2 text-[12px] font-medium text-[#b1b1b1]">Main</p>
-          <div className="space-y-1.5">{MAIN_MENU_ITEMS.map(renderMenuButton)}</div>
-        </div>
+        {mainMenuSections.map((section) => (
+          <div key={section.title} className="pt-0 first:pt-0">
+            <p className="mb-2 text-[12px] font-medium text-[#b1b1b1]">{section.title}</p>
+            <div className="space-y-1.5">{section.items.map(renderMenuButton)}</div>
+            <div className="h-4" />
+          </div>
+        ))}
 
-        <div className="pt-6">
+        <div className="pt-2">
           <p className="mb-2 text-[12px] font-medium text-[#b1b1b1]">My</p>
           <div className="space-y-1">{MY_MENU_ITEMS.map(renderMenuButton)}</div>
         </div>
@@ -43,29 +50,20 @@ export const Sidebar = ({
 
       <div className="border-t border-[#e8e8e8] bg-[#f8f8f8] px-4 py-4">
         <div className="flex items-center gap-2">
-          <img
-            key={profileImageUrl || fallbackProfileImageUrl || "sidebar-profile-image"}
-            src={profileImageUrl}
-            alt="프로필"
-            className="h-8 w-8 rounded-full border border-[#d7d7d7] object-cover"
-            onLoad={(event) => {
-              event.currentTarget.dataset.fallbackTried = "false";
-            }}
-            onError={(event) => {
-              const target = event.currentTarget;
-              const alreadyTriedFallback = target.dataset.fallbackTried === "true";
-              if (!alreadyTriedFallback && fallbackProfileImageUrl && target.src !== fallbackProfileImageUrl) {
-                target.dataset.fallbackTried = "true";
-                event.currentTarget.src = fallbackProfileImageUrl;
-                return;
-              }
-              if (target.src !== FINAL_PROFILE_FALLBACK) {
-                target.src = FINAL_PROFILE_FALLBACK;
-                return;
-              }
-              target.style.display = "none";
-            }}
-          />
+          {hasProfileImage ? (
+            <img
+              key={profileImageUrl || "sidebar-profile-image"}
+              src={profileImageUrl}
+              alt="프로필"
+              className="h-8 w-8 rounded-full border border-[#d7d7d7] object-cover"
+            />
+          ) : (
+            <div
+              key="sidebar-profile-image"
+              aria-hidden="true"
+              className="h-8 w-8 rounded-full border border-[#d7d7d7] bg-[#eceff4]"
+            />
+          )}
           <span className="min-w-0 flex-1 truncate text-[13px] text-[#1f1f1f]">{userName}</span>
           <button
             type="button"

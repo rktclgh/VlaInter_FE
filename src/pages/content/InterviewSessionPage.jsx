@@ -20,6 +20,7 @@ import {
 } from "../../lib/interviewSessionFlow";
 import { consumePointChargeSuccessResult } from "../../lib/pointChargeFlow";
 import { extractProfile, formatPoint, parsePoint } from "../../lib/profileUtils";
+import { isAlreadySavedQuestionError } from "../../lib/savedQuestionUtils";
 import { getMyProfile, getMyProfileImageUrl } from "../../lib/userApi";
 
 const QuestionMetaChip = ({ label }) => (
@@ -90,6 +91,7 @@ export const InterviewSessionPage = () => {
   const [pageErrorMessage, setPageErrorMessage] = useState("");
   const [submitErrorMessage, setSubmitErrorMessage] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [finalizingSession, setFinalizingSession] = useState(false);
   const [bookmarking, setBookmarking] = useState(false);
   const [sessionMetadata, setSessionMetadata] = useState({});
   const [sessionResults, setSessionResults] = useState(null);
@@ -152,12 +154,22 @@ export const InterviewSessionPage = () => {
 
   const isMockInterview = sessionMetadata.apiBasePath === "/api/interview/mock";
   const isQuestionSetPractice = Boolean(sessionMetadata.fromQuestionSet);
-  const isLastMockQuestion = Boolean(
-    isMockInterview &&
+  const isLastQuestion = Boolean(
     currentQuestion &&
     Number(sessionMetadata.questionCount || 0) > 0 &&
     currentQuestion.turnNo >= Number(sessionMetadata.questionCount || 0)
   );
+  useEffect(() => {
+    if (!finalizingSession) return undefined;
+
+    const handleBeforeUnload = (event) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [finalizingSession]);
 
   const selectedDocumentMetas = useMemo(
     () => Object.values(sessionMetadata.selectedDocuments || {}).map(normalizeSelectedDocumentMeta).filter(Boolean),
@@ -167,6 +179,7 @@ export const InterviewSessionPage = () => {
   const loadSessionResults = useCallback(async () => {
     if (!sessionId) return;
     setLoadingResults(true);
+    setPageErrorMessage("");
     try {
       const result = await getInterviewSessionResults(sessionMetadata.apiBasePath || "/api/interview/tech", sessionId);
       setSessionResults(result);
@@ -178,11 +191,16 @@ export const InterviewSessionPage = () => {
   }, [sessionId, sessionMetadata.apiBasePath]);
 
   useEffect(() => {
-    if (!completed || !isMockInterview || sessionResults) return;
+    if (!completed || sessionResults) return;
     void loadSessionResults();
-  }, [completed, isMockInterview, loadSessionResults, sessionResults]);
+  }, [completed, loadSessionResults, sessionResults]);
+
+  const handleRetryResults = () => {
+    void loadSessionResults();
+  };
 
   const handleSidebarNavigate = (item) => {
+    if (finalizingSession) return;
     setIsMobileMenuOpen(false);
     if (item?.path) {
       navigate(item.path);
@@ -213,53 +231,35 @@ export const InterviewSessionPage = () => {
 
     setSubmitting(true);
     setSubmitErrorMessage("");
+    let completedResponse = false;
+    let nextQuestionResponse = null;
     try {
       const response = await submitInterviewAnswer(sessionMetadata.apiBasePath || "/api/interview/tech", sessionId, answer.trim());
-      if (isMockInterview) {
-        setAnswer("");
-        setPendingResult(null);
-        if (response?.completed) {
-          setCompleted(true);
-          setCurrentQuestion(null);
-          await loadSessionResults();
-        } else {
-          setCompleted(false);
-          setCurrentQuestion(response?.nextQuestion || null);
-        }
-        return;
-      }
-
-      setPendingResult({
-        answeredTurnId: response?.answeredTurnId,
-        answeredQuestion: currentQuestion,
-        submittedAnswer: response?.submittedAnswer || answer.trim(),
-        evaluation: response?.evaluation || null,
-        nextQuestion: response?.nextQuestion || null,
-        completed: Boolean(response?.completed),
-        bookmarked: false,
-      });
+      completedResponse = Boolean(response?.completed);
+      nextQuestionResponse = response?.nextQuestion || null;
       setAnswer("");
-      if (response?.completed) {
+      setPendingResult(null);
+      if (completedResponse) {
+        setFinalizingSession(true);
         setCompleted(true);
         setCurrentQuestion(null);
+        try {
+          await loadSessionResults();
+        } finally {
+          setFinalizingSession(false);
+        }
+      } else {
+        setCompleted(false);
+        setCurrentQuestion(nextQuestionResponse);
       }
     } catch (error) {
       setSubmitErrorMessage(error?.message || "답변 제출에 실패했습니다.");
     } finally {
+      if (!completedResponse) {
+        setFinalizingSession(false);
+      }
       setSubmitting(false);
     }
-  };
-
-  const handleMoveNext = () => {
-    if (!pendingResult?.nextQuestion) {
-      clearTechInterviewSession();
-      navigate("/content/interview", { replace: true });
-      return;
-    }
-
-    setCurrentQuestion(pendingResult.nextQuestion);
-    setPendingResult(null);
-    setCompleted(false);
   };
 
   const resolveTurnId = (value) => {
@@ -294,6 +294,18 @@ export const InterviewSessionPage = () => {
           : prev
       );
     } catch (error) {
+      if (isAlreadySavedQuestionError(error)) {
+        setPendingResult((prev) => (prev?.answeredTurnId === turnId ? { ...prev, bookmarked: true } : prev));
+        setSessionResults((prev) =>
+          prev
+            ? {
+                ...prev,
+                turns: prev.turns.map((item) => (item.turnId === turnId ? { ...item, bookmarked: true } : item)),
+              }
+            : prev
+        );
+        return;
+      }
       setPageErrorMessage(error?.message || "질문 저장에 실패했습니다.");
     } finally {
       setBookmarking(false);
@@ -308,8 +320,14 @@ export const InterviewSessionPage = () => {
     <div className="min-h-screen overflow-x-hidden bg-white pt-[54px]">
       <ContentTopNav
         point={formatPoint(userPoint)}
-        onClickCharge={() => setShowPointChargeModal(true)}
-        onOpenMenu={() => setIsMobileMenuOpen(true)}
+        onClickCharge={() => {
+          if (finalizingSession) return;
+          setShowPointChargeModal(true);
+        }}
+        onOpenMenu={() => {
+          if (finalizingSession) return;
+          setIsMobileMenuOpen(true);
+        }}
       />
 
       <MobileSidebarDrawer
@@ -319,8 +337,8 @@ export const InterviewSessionPage = () => {
         onNavigate={handleSidebarNavigate}
         userName={userName}
         profileImageUrl={profileImageUrl}
-        fallbackProfileImageUrl={tempProfileImage}
         onLogout={() => {
+          if (finalizingSession) return;
           setIsMobileMenuOpen(false);
           setShowLogoutModal(true);
         }}
@@ -333,8 +351,10 @@ export const InterviewSessionPage = () => {
             onNavigate={handleSidebarNavigate}
             userName={userName}
             profileImageUrl={profileImageUrl}
-            fallbackProfileImageUrl={tempProfileImage}
-            onLogout={() => setShowLogoutModal(true)}
+            onLogout={() => {
+              if (finalizingSession) return;
+              setShowLogoutModal(true);
+            }}
           />
         </div>
 
@@ -367,16 +387,18 @@ export const InterviewSessionPage = () => {
                       {isMockInterview
                         ? "모의면접 중에는 다음 문제에 집중하시고, 종료 후 질문·답변·평가를 한 번에 확인하실 수 있습니다."
                         : isQuestionSetPractice
-                          ? "내 질문 세트 연습은 질문, 내 답변, 모범답안을 중심으로 확인합니다."
-                          : "답변 제출 후 피드백과 모범 답안을 바로 확인하실 수 있습니다."}
+                          ? "내 질문 세트 연습은 종료 후 질문, 내 답변, 모범답안을 한 번에 확인합니다."
+                          : "답변별 즉시 평가 대신, 종료 후 전체 결과를 한 번에 정리해 보여드립니다."}
                     </p>
                   </div>
                   <button
                     type="button"
                     onClick={() => {
+                      if (finalizingSession) return;
                       clearTechInterviewSession();
                       navigate(isQuestionSetPractice ? "/content/question-sets" : "/content/interview", { replace: true });
                     }}
+                    disabled={finalizingSession}
                     className="rounded-[12px] border border-[#d8dde7] px-3 py-2 text-[12px] text-[#4f5664]"
                   >
                     시작 화면으로
@@ -417,7 +439,7 @@ export const InterviewSessionPage = () => {
 
                         <div className="mt-4 flex items-center justify-between gap-3">
                           {submitting ? (
-                            <InlineSpinner label={isMockInterview ? (isLastMockQuestion ? "면접 결과를 정리하고 있습니다." : "다음 질문을 준비하고 있습니다.") : "답변을 평가하고 있습니다."} />
+                            <InlineSpinner label={isLastQuestion ? "면접 결과를 정리하고 있습니다." : "다음 질문을 준비하고 있습니다."} />
                           ) : (
                             <span />
                           )}
@@ -427,7 +449,7 @@ export const InterviewSessionPage = () => {
                             disabled={submitting}
                             className="rounded-[14px] bg-[#171b24] px-4 py-2.5 text-[13px] font-semibold text-white disabled:opacity-60"
                           >
-                            {submitting ? (isMockInterview ? (isLastMockQuestion ? "결과 정리 중..." : "다음 문제 준비 중..." ) : "제출 중...") : isMockInterview ? "다음 문제" : "답변 제출"}
+                            {submitting ? (isLastQuestion ? "결과 정리 중..." : "다음 문제 준비 중...") : isMockInterview ? "다음 문제" : "답변 제출"}
                           </button>
                         </div>
                       </div>
@@ -435,72 +457,7 @@ export const InterviewSessionPage = () => {
                   </>
                 ) : null}
 
-                {pendingResult && !isMockInterview ? (
-                  <div className="mt-5 rounded-[18px] border border-[#dfe3eb] bg-white px-5 py-6">
-                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                      <div>
-                        <p className="text-[13px] font-medium text-[#7a8190]">AI 피드백</p>
-                        <div className="mt-1 flex items-center gap-3">
-                          <h2 className="text-[24px] font-semibold text-[#171b24]">
-                            점수 {pendingResult.evaluation?.score ?? 0}
-                          </h2>
-                          <StarRating score={pendingResult.evaluation?.score} />
-                        </div>
-                      </div>
-                      {!isQuestionSetPractice ? (
-                        <button
-                          type="button"
-                          onClick={() => handleBookmark()}
-                          disabled={bookmarking || pendingResult.bookmarked}
-                          className="rounded-[12px] border border-[#d8dde7] px-3 py-2 text-[12px] text-[#4f5664] disabled:opacity-60"
-                        >
-                          {pendingResult.bookmarked ? "저장 완료" : bookmarking ? "저장 중..." : "질문 저장"}
-                        </button>
-                      ) : null}
-                    </div>
-
-                    <div className="mt-5 grid gap-4 lg:grid-cols-2">
-                      <section className="rounded-[16px] bg-[#f6f8fb] p-4">
-                        <p className="text-[12px] font-semibold text-[#5d6676]">내 답변</p>
-                        <p className="mt-2 whitespace-pre-wrap text-[13px] leading-[1.7] text-[#252b36]">
-                          {pendingResult.submittedAnswer || "-"}
-                        </p>
-                      </section>
-                      <section className="rounded-[16px] bg-[#f6f8fb] p-4">
-                        <p className="text-[12px] font-semibold text-[#5d6676]">모범답안</p>
-                        <p className="mt-2 whitespace-pre-wrap text-[13px] leading-[1.7] text-[#252b36]">
-                          {pendingResult.evaluation?.modelAnswer || "모범답안을 생성하지 못했습니다."}
-                        </p>
-                      </section>
-                      <section className="rounded-[16px] bg-[#f6f8fb] p-4">
-                        <p className="text-[12px] font-semibold text-[#5d6676]">피드백</p>
-                        <p className="mt-2 whitespace-pre-wrap text-[13px] leading-[1.7] text-[#252b36]">
-                          {pendingResult.evaluation?.feedback || "-"}
-                        </p>
-                      </section>
-                      {!isQuestionSetPractice && pendingResult.evaluation?.bestPractice?.trim() ? (
-                        <section className="rounded-[16px] bg-[#f6f8fb] p-4">
-                          <p className="text-[12px] font-semibold text-[#5d6676]">모범 답안 가이드</p>
-                          <p className="mt-2 whitespace-pre-wrap text-[13px] leading-[1.7] text-[#252b36]">
-                            {pendingResult.evaluation?.bestPractice}
-                          </p>
-                        </section>
-                      ) : null}
-                    </div>
-
-                    <div className="mt-5 flex justify-end">
-                      <button
-                        type="button"
-                        onClick={handleMoveNext}
-                        className="rounded-[14px] bg-[#171b24] px-4 py-2.5 text-[13px] font-semibold text-white"
-                      >
-                        {pendingResult.completed ? "면접 종료" : "다음 질문"}
-                      </button>
-                    </div>
-                  </div>
-                ) : null}
-
-                {completed && isMockInterview ? (
+                {completed && sessionResults ? (
                   <div className="mt-5 rounded-[18px] border border-[#dfe3eb] bg-white px-5 py-6">
                     <div className="flex items-center justify-between gap-3">
                       <div>
@@ -513,6 +470,17 @@ export const InterviewSessionPage = () => {
 
                     {loadingResults ? (
                       <p className="mt-5 text-[13px] text-[#5e6472]">평가 결과를 정리하고 있습니다...</p>
+                    ) : !sessionResults ? (
+                      <div className="mt-5 rounded-[14px] border border-[#e4e7ee] bg-[#fbfcfe] p-4">
+                        <p className="text-[13px] text-[#5e6472]">평가 결과를 불러오지 못했습니다. 다시 시도해 주세요.</p>
+                        <button
+                          type="button"
+                          onClick={handleRetryResults}
+                          className="mt-3 rounded-[12px] border border-[#171b24] px-3 py-2 text-[12px] font-semibold text-[#171b24]"
+                        >
+                          결과 다시 불러오기
+                        </button>
+                      </div>
                     ) : (
                       <div className="mt-5 grid gap-4">
                         {(sessionResults?.turns || []).map((turn) => (
@@ -524,14 +492,18 @@ export const InterviewSessionPage = () => {
                                   {turn.questionText}
                                 </p>
                               </div>
-                              <button
-                                type="button"
-                                onClick={() => handleBookmark(turn.turnId)}
-                                disabled={bookmarking || turn.bookmarked}
-                                className="rounded-[12px] border border-[#d8dde7] px-3 py-2 text-[12px] text-[#4f5664] disabled:opacity-60"
-                              >
-                                {turn.bookmarked ? "저장 완료" : bookmarking ? "저장 중..." : "질문 저장"}
-                              </button>
+                              {!isQuestionSetPractice ? (
+                                turn.sourceTag === "INTRO" ? null : (
+                                <button
+                                  type="button"
+                                  onClick={() => handleBookmark(turn.turnId)}
+                                  disabled={bookmarking || turn.bookmarked}
+                                  className="rounded-[12px] border border-[#d8dde7] px-3 py-2 text-[12px] text-[#4f5664] disabled:opacity-60"
+                                >
+                                  {turn.bookmarked ? "저장됨" : bookmarking ? "저장 중..." : "질문 저장"}
+                                </button>
+                                )
+                              ) : null}
                             </div>
 
                             <div className="mt-4 grid gap-4 lg:grid-cols-[1.3fr_1fr]">
@@ -573,7 +545,7 @@ export const InterviewSessionPage = () => {
                   </div>
                 ) : null}
 
-                {completed && !pendingResult && !isMockInterview ? (
+                {completed && !pendingResult && !loadingResults && !sessionResults ? (
                   <div className="mt-5 rounded-[18px] border border-[#dfe3eb] bg-white px-5 py-6">
                     <p className="text-[16px] font-medium text-[#171b24]">면접이 종료되었습니다.</p>
                     <p className="mt-2 text-[13px] leading-[1.7] text-[#5e6472]">
@@ -606,6 +578,15 @@ export const InterviewSessionPage = () => {
       ) : null}
       {showPointChargeSuccessModal ? (
         <PointChargeSuccessModal onClose={() => setShowPointChargeSuccessModal(false)} />
+      ) : null}
+      {finalizingSession ? (
+        <div className="fixed inset-0 z-[220] flex items-center justify-center bg-[#0f172acc]">
+          <div className="rounded-[18px] border border-[#334155] bg-[#111827] px-6 py-5 text-center">
+            <div className="mx-auto h-7 w-7 animate-spin rounded-full border-2 border-[#64748b] border-t-white" />
+            <p className="mt-3 text-[14px] font-medium text-white">세션 평가를 마무리하는 중입니다</p>
+            <p className="mt-1 text-[12px] text-[#cbd5e1]">완료될 때까지 다른 화면으로 이동할 수 없습니다.</p>
+          </div>
+        </div>
       ) : null}
     </div>
   );
