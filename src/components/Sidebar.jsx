@@ -1,6 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
-import { extractProfile } from "../lib/profileUtils";
-import { getMyProfile } from "../lib/userApi";
+import { useMemo } from "react";
+import { useAdminStatus } from "../hooks/useAdminStatus";
 import { getMainMenuSections, MY_MENU_ITEMS } from "./sidebarMenuItems";
 
 const FINAL_PROFILE_FALLBACK =
@@ -15,31 +14,7 @@ export const Sidebar = ({
   isAdmin = null,
   onLogout,
 }) => {
-  const [fetchedIsAdmin, setFetchedIsAdmin] = useState(false);
-  const resolvedIsAdmin = typeof isAdmin === "boolean" ? isAdmin : fetchedIsAdmin;
-
-  useEffect(() => {
-    if (typeof isAdmin === "boolean") return;
-
-    let cancelled = false;
-    const loadRole = async () => {
-      try {
-        const payload = await getMyProfile();
-        if (cancelled) return;
-        const profile = extractProfile(payload);
-        setFetchedIsAdmin(String(profile?.role || "").toUpperCase() === "ADMIN");
-      } catch {
-        if (!cancelled) {
-          setFetchedIsAdmin(false);
-        }
-      }
-    };
-
-    void loadRole();
-    return () => {
-      cancelled = true;
-    };
-  }, [isAdmin]);
+  const resolvedIsAdmin = useAdminStatus(isAdmin);
 
   const mainMenuSections = useMemo(() => getMainMenuSections({ isAdmin: resolvedIsAdmin }), [resolvedIsAdmin]);
 

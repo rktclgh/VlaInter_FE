@@ -426,14 +426,15 @@ export const InterviewStartPage = () => {
   };
 
   const handleStartInterview = async () => {
+    const hasRequiredDocuments = Boolean(selectedFileObjects.RESUME && selectedFileObjects.INTRODUCE);
     const selectedDocumentIds = DOCUMENT_TYPES
       .map((item) => selectedFiles[item.key])
       .filter((value, index, array) => value && array.indexOf(value) === index)
       .map((value) => Number(value));
 
-    if (selectedDocumentIds.length === 0) {
+    if (!hasRequiredDocuments) {
       setShowPrereqGuideModal(true);
-      setPageErrorMessage("");
+      setPageErrorMessage("이력서와 자기소개서를 모두 선택해 주세요.");
       return;
     }
     const resolvedJobName = (selectedJob?.displayName || selectedJob?.name || jobQuery.trim()).trim();
@@ -645,7 +646,7 @@ export const InterviewStartPage = () => {
                     </div>
                   </CategoryCard>
 
-                  <CategoryCard title="서류 선택" description="AI 분석이 끝난 서류만 노출됩니다. 포트폴리오는 선택 사항이며, 문서가 1개 이상이면 시작하실 수 있습니다. OCR fallback이 사용된 문서는 배지를 함께 표시합니다.">
+                  <CategoryCard title="서류 선택" description="AI 분석이 끝난 서류만 노출됩니다. 이력서와 자기소개서는 필수이며, 포트폴리오는 선택 사항입니다. OCR fallback이 사용된 문서는 배지를 함께 표시합니다.">
                     <div className="grid gap-4 md:grid-cols-3">
                       {DOCUMENT_TYPES.map((documentType) => {
                         const files = filesByType[documentType.key] || [];

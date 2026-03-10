@@ -69,10 +69,20 @@ export const QuestionBrowsePage = () => {
     const setList = await getGlobalInterviewSets();
     const normalizedSets = Array.isArray(setList) ? setList : [];
     const details = await Promise.all(
-      normalizedSets.map(async (set) => ({
-        ...set,
-        questions: (await getInterviewSetQuestions(set.setId)) || [],
-      }))
+      normalizedSets.map(async (set) => {
+        try {
+          return {
+            ...set,
+            questions: (await getInterviewSetQuestions(set.setId)) || [],
+          };
+        } catch (error) {
+          console.error(`질문 세트 문항 로딩에 실패했습니다. setId=${set.setId}`, error);
+          return {
+            ...set,
+            questions: [],
+          };
+        }
+      })
     );
     setSets(details);
     setSelectedSetId((prev) => {
@@ -157,6 +167,10 @@ export const QuestionBrowsePage = () => {
         questionCount: 5,
         saveHistory: false,
       });
+      if (!response?.sessionId || !response?.currentQuestion) {
+        setPageErrorMessage("연습 세션을 시작했지만 첫 질문을 불러오지 못했습니다.");
+        return;
+      }
       saveTechInterviewSession({
         sessionId: response.sessionId,
         currentQuestion: response.currentQuestion,
@@ -228,9 +242,9 @@ export const QuestionBrowsePage = () => {
           <div className="mx-auto w-full max-w-[1280px]">
             <section className="rounded-[24px] border border-[#e4e7ee] bg-[linear-gradient(180deg,#ffffff_0%,#f7f9fc_100%)] p-6">
               <p className="text-[12px] font-semibold tracking-[0.08em] text-[#7a8190]">CERTIFIED Q&A SETS</p>
-              <h1 className="mt-2 text-[30px] font-semibold tracking-[-0.02em] text-[#161a22] sm:text-[40px]">공인 질문 찾아보기</h1>
+              <h1 className="mt-2 text-[30px] font-semibold tracking-[-0.02em] text-[#161a22] sm:text-[40px]">공개 질문 찾아보기</h1>
               <p className="mt-3 text-[14px] leading-[1.7] text-[#5e6472]">
-                운영자가 공용으로 승격한 공인 질문 세트만 모아 제공합니다.
+                운영자가 인증한 공인 세트와 사용자가 공유한 공개 세트를 함께 확인하실 수 있습니다.
               </p>
             </section>
 
@@ -262,7 +276,9 @@ export const QuestionBrowsePage = () => {
                         <div className="min-w-0">
                           <div className="flex items-center gap-2">
                             <p className="truncate text-[13px] font-semibold text-[#1f2937]">{setItem.title}</p>
-                            <span className="rounded-full bg-[#e7f4ff] px-2 py-0.5 text-[10px] font-semibold text-[#0b69b7]">공인</span>
+                            <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${setItem.certified ? "bg-[#e7f4ff] text-[#0b69b7]" : "bg-[#eef2f8] text-[#556070]"}`}>
+                              {setItem.certified ? "공인" : "공유"}
+                            </span>
                             {setItem.aiGenerated ? (
                               <span className="rounded-full bg-[#f3ecff] px-2 py-0.5 text-[10px] font-semibold text-[#6d3bb6]">AI</span>
                             ) : null}

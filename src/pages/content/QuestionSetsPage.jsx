@@ -96,6 +96,13 @@ const DifficultyChip = ({ label, active = false, onClick }) => (
   </button>
 );
 
+const handleCardKeyDown = (event, action) => {
+  if (event.key === "Enter" || event.key === " ") {
+    event.preventDefault();
+    action();
+  }
+};
+
 const CreateQuestionSetModal = ({
   categories,
   onClose,
@@ -486,10 +493,20 @@ export const QuestionSetsPage = () => {
     const normalizedCategories = Array.isArray(categoryList) ? categoryList : [];
 
     const details = await Promise.all(
-      normalizedSets.map(async (set) => ({
-        ...set,
-        questions: (await getInterviewSetQuestions(set.setId)) || [],
-      }))
+      normalizedSets.map(async (set) => {
+        try {
+          return {
+            ...set,
+            questions: (await getInterviewSetQuestions(set.setId)) || [],
+          };
+        } catch (error) {
+          console.error(`질문 세트 문항 로딩에 실패했습니다. setId=${set.setId}`, error);
+          return {
+            ...set,
+            questions: [],
+          };
+        }
+      })
     );
 
     setCategories(normalizedCategories);
@@ -669,6 +686,22 @@ export const QuestionSetsPage = () => {
         setModalErrorMessage("기술을 선택하거나 입력해 주세요.");
         return;
       }
+      if (!category && rawName) {
+        const createdCategory = await createInterviewCategory({
+          parentId: Number(selectedJobId),
+          name: rawName,
+        });
+        categoryId = Number(createdCategory?.categoryId || 0) || null;
+        category = categoryId
+          ? {
+              ...createdCategory,
+              categoryId,
+              name: String(createdCategory?.name || rawName).trim(),
+              displayName: String(createdCategory?.name || rawName).trim(),
+            }
+          : null;
+      }
+
       const skillName = (category?.displayName || category?.name || rawName).trim();
       if (!skillName) {
         setModalErrorMessage("기술을 선택하거나 입력해 주세요.");
@@ -708,6 +741,11 @@ export const QuestionSetsPage = () => {
       }
 
       if (failedRows.length > 0) {
+        try {
+          await deleteInterviewSet(createdSet.setId);
+        } catch (rollbackError) {
+          console.error(`부분 생성된 질문 세트 롤백에 실패했습니다. setId=${createdSet.setId}`, rollbackError);
+        }
         const failedSummary = failedRows
           .map((failed) => `문답 ${failed.rowNo}: ${failed.questionText.slice(0, 24)}... (${failed.reason})`)
           .join(" / ");
@@ -811,6 +849,10 @@ export const QuestionSetsPage = () => {
         questionCount: 5,
         saveHistory: false,
       });
+      if (!response?.sessionId || !response?.currentQuestion) {
+        setPageErrorMessage("연습 세션을 시작했지만 첫 질문을 불러오지 못했습니다.");
+        return;
+      }
       saveTechInterviewSession({
         sessionId: response.sessionId,
         currentQuestion: response.currentQuestion,
@@ -1060,6 +1102,9 @@ export const QuestionSetsPage = () => {
                           <article
                             key={question.questionId}
                             className="cursor-pointer rounded-[12px] border border-[#edf1f6] bg-[#fafcff] p-3"
+                            tabIndex={0}
+                            role="button"
+                            aria-label={`문답 ${index + 1} 상세 보기`}
                             onClick={() =>
                               setSelectedQuestion({
                                 ...question,
@@ -1068,6 +1113,17 @@ export const QuestionSetsPage = () => {
                                 createdAt: selectedSet.createdAt,
                                 categoryName: question.skillName || question.categoryName,
                               })
+                            }
+                            onKeyDown={(event) =>
+                              handleCardKeyDown(event, () =>
+                                setSelectedQuestion({
+                                  ...question,
+                                  setId: selectedSet.setId,
+                                  setTitle: selectedSet.title,
+                                  createdAt: selectedSet.createdAt,
+                                  categoryName: question.skillName || question.categoryName,
+                                })
+                              )
                             }
                           >
                             <p className="text-[11px] text-[#7a8190]">문답 {index + 1}</p>

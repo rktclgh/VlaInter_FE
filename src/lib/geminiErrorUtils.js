@@ -18,9 +18,10 @@ export function isGeminiOverloadError(error) {
   const status = Number(error?.status || 0);
   const message = String(error?.message || "").toLowerCase();
 
-  if (status === 503) return true;
-
   const hasGeminiKeyword = GEMINI_KEYWORDS.some((keyword) => message.includes(keyword));
   const hasOverloadKeyword = OVERLOAD_KEYWORDS.some((keyword) => message.includes(keyword));
+  if (status === 503) {
+    return hasGeminiKeyword || hasOverloadKeyword;
+  }
   return hasGeminiKeyword && hasOverloadKeyword;
 }

@@ -66,6 +66,14 @@ const toInt = (value, fallback = 0) => {
   return Number.isFinite(parsed) ? parsed : fallback;
 };
 
+const handleRowKeyDown = (event, action) => {
+  if (event.target !== event.currentTarget) return;
+  if (event.key === "Enter" || event.key === " ") {
+    event.preventDefault();
+    action();
+  }
+};
+
 export const AdminConsolePage = () => {
   const navigate = useNavigate();
   const [userName, setUserName] = useState("관리자");
@@ -451,6 +459,12 @@ export const AdminConsolePage = () => {
     setPageErrorMessage("");
     try {
       await softDeleteAdminMember(selectedMemberId);
+      try {
+        const refreshed = await getAdminMemberDetail(selectedMemberId);
+        setSelectedMemberDetail(refreshed);
+      } catch {
+        setSelectedMemberDetail(null);
+      }
       await loadMembers(memberPage);
     } catch (error) {
       setPageErrorMessage(error?.message || "회원 소프트 삭제 처리에 실패했습니다.");
@@ -711,6 +725,9 @@ export const AdminConsolePage = () => {
                           <tr
                             key={member.memberId}
                             onClick={() => setSelectedMemberId(member.memberId)}
+                            onKeyDown={(event) => handleRowKeyDown(event, () => setSelectedMemberId(member.memberId))}
+                            tabIndex={0}
+                            role="button"
                             className={`cursor-pointer border-b border-[#f2f4f8] ${selected ? "bg-[#f1f5ff]" : "hover:bg-[#fafbfd]"}`}
                           >
                             <td className="px-2 py-2">{member.memberId}</td>
@@ -849,6 +866,9 @@ export const AdminConsolePage = () => {
                       <div
                         key={set.setId}
                         onClick={() => setSelectedSetId(set.setId)}
+                        onKeyDown={(event) => handleRowKeyDown(event, () => setSelectedSetId(set.setId))}
+                        tabIndex={0}
+                        role="button"
                         className={`cursor-pointer rounded-[14px] border px-3 py-3 ${selected ? "border-[#9eb1dd] bg-[#f5f8ff]" : "border-[#edf1f6] hover:bg-[#fafbfd]"}`}
                       >
                         <div className="flex items-start justify-between gap-3">
@@ -857,9 +877,9 @@ export const AdminConsolePage = () => {
                               <p className="truncate text-[13px] font-semibold text-[#1f2937]">{set.title}</p>
                               {set.certified ? (
                                 <span className="rounded-full bg-[#e7f4ff] px-2 py-0.5 text-[10px] font-semibold text-[#0b69b7]">공인</span>
-                              ) : (
+                              ) : !set.aiGenerated ? (
                                 <span className="rounded-full bg-[#e8f7ef] px-2 py-0.5 text-[10px] font-semibold text-[#18784a]">사용자 생성</span>
-                              )}
+                              ) : null}
                               {set.aiGenerated ? (
                                 <span className="rounded-full bg-[#f3ecff] px-2 py-0.5 text-[10px] font-semibold text-[#6d3bb6]">AI</span>
                               ) : null}
@@ -1046,6 +1066,9 @@ export const AdminConsolePage = () => {
                       <div
                         key={category.categoryId}
                         onClick={() => setSelectedCategoryId(category.categoryId)}
+                        onKeyDown={(event) => handleRowKeyDown(event, () => setSelectedCategoryId(category.categoryId))}
+                        tabIndex={0}
+                        role="button"
                         className={`cursor-pointer rounded-[12px] border px-3 py-2 ${selected ? "border-[#9eb1dd] bg-[#f5f8ff]" : "border-[#edf1f6] hover:bg-[#fafbfd]"}`}
                       >
                         <p style={{ paddingLeft: `${indent}px` }} className="text-[13px] font-medium text-[#1f2937]">
