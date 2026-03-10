@@ -1,17 +1,10 @@
 import { apiRequest, refreshAuthSession } from "./apiClient";
 import defaultProfileImage from "../assets/icon/temp.png";
+import { extractProfile } from "./profileUtils";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8080";
 const myProfileCache = {
   hasProfileImage: false,
-};
-
-const extractProfile = (payload) => {
-  if (!payload || typeof payload !== "object") return {};
-  if (payload.data && typeof payload.data === "object" && !Array.isArray(payload.data)) return payload.data;
-  if (payload.result && typeof payload.result === "object" && !Array.isArray(payload.result)) return payload.result;
-  if (payload.user && typeof payload.user === "object" && !Array.isArray(payload.user)) return payload.user;
-  return payload;
 };
 
 export function getMyProfileImageUrl(cacheBust = true) {

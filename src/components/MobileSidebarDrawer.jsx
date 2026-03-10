@@ -13,6 +13,7 @@ export const MobileSidebarDrawer = ({
   onLogout,
 }) => {
   const resolvedIsAdmin = useAdminStatus(isAdmin);
+  const hasProfileImage = typeof profileImageUrl === "string" && profileImageUrl.trim().length > 0;
 
   const mainMenuSections = useMemo(() => getMainMenuSections({ isAdmin: resolvedIsAdmin }), [resolvedIsAdmin]);
 
@@ -78,12 +79,20 @@ export const MobileSidebarDrawer = ({
         </div>
 
         <div className="flex items-center gap-2 border-t border-[#e8e8e8] px-4 py-4">
-          <img
-            key={profileImageUrl || "mobile-profile-image"}
-            src={profileImageUrl}
-            alt="프로필"
-            className="h-8 w-8 rounded-full border border-[#d7d7d7] object-cover"
-          />
+          {hasProfileImage ? (
+            <img
+              key={profileImageUrl || "mobile-profile-image"}
+              src={profileImageUrl}
+              alt="프로필"
+              className="h-8 w-8 rounded-full border border-[#d7d7d7] object-cover"
+            />
+          ) : (
+            <div
+              key="mobile-profile-image"
+              aria-hidden="true"
+              className="h-8 w-8 rounded-full border border-[#d7d7d7] bg-[#eceff4]"
+            />
+          )}
           <span className="text-[13px] text-[#1f1f1f]">{userName}</span>
           <button
             type="button"

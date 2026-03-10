@@ -82,12 +82,22 @@ export const QuestionBrowsePage = () => {
 
   useEffect(() => {
     if (!isStartingSetLaunch) return undefined;
+    const currentUrl = window.location.href;
+    window.history.pushState(null, "", currentUrl);
     const handleBeforeUnload = (event) => {
       event.preventDefault();
       event.returnValue = "";
     };
+    const handlePopState = () => {
+      window.history.pushState(null, "", currentUrl);
+      setPageErrorMessage("세트 연습 시작이 끝날 때까지 이동할 수 없습니다.");
+    };
     window.addEventListener("beforeunload", handleBeforeUnload);
-    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+    window.addEventListener("popstate", handlePopState);
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+      window.removeEventListener("popstate", handlePopState);
+    };
   }, [isStartingSetLaunch]);
 
   const loadPage = useCallback(async () => {
@@ -217,7 +227,7 @@ export const QuestionBrowsePage = () => {
           saveHistory: false,
           categoryName: (Array.isArray(setItem.skillNames) ? setItem.skillNames.join(", ") : setItem.skillName) || null,
           jobName: primaryJobName,
-          questionCount: Number(setItem.questionCount || (Array.isArray(setItem.questions) ? setItem.questions.length : 0) || 0),
+          questionCount: Math.max(Number(setItem.questionCount || 0), Array.isArray(setItem.questions) ? setItem.questions.length : 0, 5),
         },
       });
       navigate("/content/interview/session");
@@ -254,15 +264,30 @@ export const QuestionBrowsePage = () => {
 
   return (
     <div className="min-h-screen overflow-x-hidden bg-white pt-[54px]">
-      <ContentTopNav point={formatPoint(userPoint)} onClickCharge={() => setShowPointChargeModal(true)} onOpenMenu={() => setIsMobileMenuOpen(true)} />
+      <ContentTopNav
+        point={formatPoint(userPoint)}
+        interactionDisabled={isStartingSetLaunch}
+        onClickCharge={() => {
+          if (isStartingSetLaunch) return;
+          setShowPointChargeModal(true);
+        }}
+        onOpenMenu={() => {
+          if (isStartingSetLaunch) return;
+          setIsMobileMenuOpen(true);
+        }}
+      />
       <MobileSidebarDrawer
         open={isMobileMenuOpen}
         activeKey="question_browse"
-        onClose={() => setIsMobileMenuOpen(false)}
+        onClose={() => {
+          if (isStartingSetLaunch) return;
+          setIsMobileMenuOpen(false);
+        }}
         onNavigate={handleSidebarNavigate}
         userName={userName}
         profileImageUrl={profileImageUrl}
         onLogout={() => {
+          if (isStartingSetLaunch) return;
           setIsMobileMenuOpen(false);
           setShowLogoutModal(true);
         }}
@@ -274,7 +299,10 @@ export const QuestionBrowsePage = () => {
             onNavigate={handleSidebarNavigate}
             userName={userName}
             profileImageUrl={profileImageUrl}
-            onLogout={() => setShowLogoutModal(true)}
+            onLogout={() => {
+              if (isStartingSetLaunch) return;
+              setShowLogoutModal(true);
+            }}
           />
         </div>
         <main className="flex min-w-0 flex-1 flex-col px-4 pb-8 pt-6 sm:px-5 md:px-8 md:pt-10">
@@ -419,6 +447,7 @@ export const QuestionBrowsePage = () => {
                             })
                           }
                           onKeyDown={(event) => {
+                            if (event.currentTarget !== event.target) return;
                             if (event.key === "Enter" || event.key === " ") {
                               event.preventDefault();
                               setSelectedQuestion({
@@ -482,8 +511,12 @@ export const QuestionBrowsePage = () => {
       {showLogoutModal ? <LogoutConfirmModal onCancel={() => setShowLogoutModal(false)} onConfirm={handleLogoutConfirm} /> : null}
       {showPointChargeModal ? (
         <PointChargeModal
-          onClose={() => setShowPointChargeModal(false)}
+          onClose={() => {
+            if (isStartingSetLaunch) return;
+            setShowPointChargeModal(false);
+          }}
           onCharged={(result) => {
+            if (isStartingSetLaunch) return;
             setUserPoint(parsePoint(result?.currentPoint));
             setShowPointChargeModal(false);
             setShowPointChargeSuccessModal(true);

@@ -37,11 +37,13 @@ export async function kakaoLogin(payload) {
 }
 
 export async function logout() {
-  const result = await apiRequest("/api/auth/logout", {
-    method: "POST",
-  });
-  resetMyProfileCache();
-  return result;
+  try {
+    return await apiRequest("/api/auth/logout", {
+      method: "POST",
+    });
+  } finally {
+    resetMyProfileCache();
+  }
 }
 
 export async function sendTemporaryPassword(email, name) {

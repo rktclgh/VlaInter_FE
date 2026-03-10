@@ -15,6 +15,7 @@ import { saveTechInterviewSession } from "../../lib/interviewSessionFlow";
 import { consumePointChargeSuccessResult } from "../../lib/pointChargeFlow";
 import { createInterviewCategory, getInterviewCategories, startTechInterview } from "../../lib/interviewApi";
 import { isGeminiOverloadError } from "../../lib/geminiErrorUtils";
+import { extractProfile } from "../../lib/profileUtils";
 import { getMyProfile, getMyProfileImageUrl } from "../../lib/userApi";
 
 const QUESTION_COUNT = 5;
@@ -30,14 +31,6 @@ const parsePoint = (rawValue) => {
   }
   return 0;
 };
-const extractProfile = (payload) => {
-  if (!payload || typeof payload !== "object") return {};
-  if (payload.data && typeof payload.data === "object" && !Array.isArray(payload.data)) return payload.data;
-  if (payload.result && typeof payload.result === "object" && !Array.isArray(payload.result)) return payload.result;
-  if (payload.user && typeof payload.user === "object" && !Array.isArray(payload.user)) return payload.user;
-  return payload;
-};
-
 const LogoutConfirmModal = ({ onCancel, onConfirm }) => (
   <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/35 px-4">
     <div className="w-full max-w-[420px] rounded-[16px] border border-[#d9d9d9] bg-white p-5">
@@ -111,8 +104,10 @@ export const TechPracticePage = () => {
     }
 
     const normalizedPreferredJobName = String(preferredJobName || "").trim().toLowerCase();
+    const scopedJobs = nextBranchFilter ? jobs.filter((job) => String(job.parentId || "") === String(nextBranchFilter)) : jobs;
     const matchedJob = normalizedPreferredJobName
-      ? jobs.find((job) => String(job?.name || "").trim().toLowerCase() === normalizedPreferredJobName)
+      ? scopedJobs.find((job) => String(job?.name || "").trim().toLowerCase() === normalizedPreferredJobName)
+        || jobs.find((job) => String(job?.name || "").trim().toLowerCase() === normalizedPreferredJobName)
       : null;
     const nextJobFilter = matchedJob?.categoryId ? String(matchedJob.categoryId) : "";
     if (nextJobFilter) {
@@ -126,7 +121,9 @@ export const TechPracticePage = () => {
 
     const normalizedPreferredSkillName = String(preferredSkillName || "").trim().toLowerCase();
     if (normalizedPreferredSkillName) {
-      const preferredSkill = skills.find((skill) => String(skill?.name || "").trim().toLowerCase() === normalizedPreferredSkillName);
+      const scopedSkills = nextJobFilter ? skills.filter((skill) => String(skill.parentId || "") === String(nextJobFilter)) : skills;
+      const preferredSkill = scopedSkills.find((skill) => String(skill?.name || "").trim().toLowerCase() === normalizedPreferredSkillName)
+        || skills.find((skill) => String(skill?.name || "").trim().toLowerCase() === normalizedPreferredSkillName);
       if (preferredSkill) {
         setCategoryQuery(String(preferredSkill.name || "").trim());
         setSelectedSkillId(String(preferredSkill.categoryId || ""));
@@ -201,25 +198,34 @@ export const TechPracticePage = () => {
   const canCreateCategory = Boolean(
     categoryQuery.trim() &&
       jobFilter &&
-      !skillCategories.some((item) => (item.displayName || item.name || "").trim().toLowerCase() === categoryQuery.trim().toLowerCase()),
+      !skillCategories
+        .filter((item) => String(item.parentId || "") === String(jobFilter))
+        .some((item) => (item.displayName || item.name || "").trim().toLowerCase() === categoryQuery.trim().toLowerCase()),
   );
   const branchAlreadyExists = Boolean(branchQuery.trim() && !canCreateBranch);
   const jobAlreadyExists = Boolean(jobQuery.trim() && !canCreateJob);
   const categoryAlreadyExists = Boolean(categoryQuery.trim() && !canCreateCategory);
   const selectedBranch = useMemo(() => branchItems.find((item) => String(item.categoryId) === String(branchFilter)) || null, [branchFilter, branchItems]);
   const selectedJob = useMemo(() => jobs.find((item) => String(item.categoryId) === String(jobFilter)) || null, [jobFilter, jobs]);
+  const availableJobsForBranch = useMemo(() => jobs.filter((job) => !branchFilter || String(job.parentId || "") === String(branchFilter)), [branchFilter, jobs]);
+  const availableSkillsForJob = useMemo(() => filterSkillCategoriesByBranchAndJob({
+    categories,
+    branchId: branchFilter,
+    jobId: jobFilter,
+    keyword: "",
+  }), [branchFilter, categories, jobFilter]);
   useEffect(() => {
     if (!branchFilter) return;
-    if (visibleJobs.some((job) => String(job.categoryId) === String(jobFilter))) return;
+    if (availableJobsForBranch.some((job) => String(job.categoryId) === String(jobFilter))) return;
     setJobFilter("");
     setSelectedSkillId("");
-  }, [branchFilter, jobFilter, visibleJobs]);
+  }, [availableJobsForBranch, branchFilter, jobFilter]);
 
   useEffect(() => {
     if (!selectedSkillId) return;
-    if (visibleSkills.some((skill) => String(skill.categoryId) === String(selectedSkillId))) return;
+    if (availableSkillsForJob.some((skill) => String(skill.categoryId) === String(selectedSkillId))) return;
     setSelectedSkillId("");
-  }, [selectedSkillId, visibleSkills]);
+  }, [availableSkillsForJob, selectedSkillId]);
 
   const handleSidebarNavigate = (item) => {
     if (isStartingPractice) return;
@@ -425,7 +431,7 @@ export const TechPracticePage = () => {
                   <p className="text-[12px] font-semibold tracking-[0.08em] text-[#7a8190]">3. 기술 선택</p>
                   <div className="mt-3 grid gap-3 xl:grid-cols-[1fr_auto]">
                     <input value={categoryQuery} onChange={(event) => setCategoryQuery(event.target.value)} placeholder={jobFilter ? "기술 검색 또는 새 기술 입력" : "직무를 먼저 선택해 주세요"} disabled={!jobFilter} className="rounded-[14px] border border-[#dfe3eb] bg-white px-4 py-3 text-[13px] outline-none focus:border-[#8aa2e8] disabled:bg-[#f3f5f8]" />
-                    {canCreateCategory ? <button type="button" disabled={creatingCategory} onClick={handleCreateCategory} className="rounded-[14px] border border-[#171b24] bg-white px-4 py-2.5 text-[13px] font-semibold text-[#171b24] disabled:opacity-60">{creatingCategory ? "생성 중..." : "기술 추가"}</button> : <div />}
+                    <div />
                   </div>
                   {canCreateCategory ? (
                     <div className="mt-4 flex items-center justify-between gap-3 rounded-[18px] border border-dashed border-[#d7dce5] bg-white p-4">

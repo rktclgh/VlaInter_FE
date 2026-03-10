@@ -261,12 +261,14 @@ export const AdminConsolePage = () => {
     let cancelled = false;
     const loadMemberDetail = async () => {
       setLoadingMemberDetail(true);
+      setSelectedMemberDetail(null);
       try {
         const payload = await getAdminMemberDetail(selectedMemberId);
         if (cancelled) return;
         setSelectedMemberDetail(payload);
       } catch (error) {
         if (!cancelled) {
+          setSelectedMemberDetail(null);
           setPageErrorMessage(error?.message || "회원 상세 정보를 불러오지 못했습니다.");
         }
       } finally {
@@ -291,12 +293,14 @@ export const AdminConsolePage = () => {
     let cancelled = false;
     const loadSetQuestions = async () => {
       setLoadingSetQuestions(true);
+      setSelectedSetQuestions([]);
       try {
         const payload = await getInterviewSetQuestions(selectedSetId);
         if (cancelled) return;
         setSelectedSetQuestions(Array.isArray(payload) ? payload : []);
       } catch (error) {
         if (!cancelled) {
+          setSelectedSetQuestions([]);
           setPageErrorMessage(error?.message || "질문 세트 문항을 불러오지 못했습니다.");
         }
       } finally {

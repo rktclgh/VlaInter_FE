@@ -179,6 +179,7 @@ export const InterviewSessionPage = () => {
   const loadSessionResults = useCallback(async () => {
     if (!sessionId) return;
     setLoadingResults(true);
+    setPageErrorMessage("");
     try {
       const result = await getInterviewSessionResults(sessionMetadata.apiBasePath || "/api/interview/tech", sessionId);
       setSessionResults(result);
@@ -193,6 +194,10 @@ export const InterviewSessionPage = () => {
     if (!completed || sessionResults) return;
     void loadSessionResults();
   }, [completed, loadSessionResults, sessionResults]);
+
+  const handleRetryResults = () => {
+    void loadSessionResults();
+  };
 
   const handleSidebarNavigate = (item) => {
     if (finalizingSession) return;
@@ -238,8 +243,11 @@ export const InterviewSessionPage = () => {
         setFinalizingSession(true);
         setCompleted(true);
         setCurrentQuestion(null);
-        await loadSessionResults();
-        setFinalizingSession(false);
+        try {
+          await loadSessionResults();
+        } finally {
+          setFinalizingSession(false);
+        }
       } else {
         setCompleted(false);
         setCurrentQuestion(nextQuestionResponse);
@@ -462,6 +470,17 @@ export const InterviewSessionPage = () => {
 
                     {loadingResults ? (
                       <p className="mt-5 text-[13px] text-[#5e6472]">평가 결과를 정리하고 있습니다...</p>
+                    ) : !sessionResults ? (
+                      <div className="mt-5 rounded-[14px] border border-[#e4e7ee] bg-[#fbfcfe] p-4">
+                        <p className="text-[13px] text-[#5e6472]">평가 결과를 불러오지 못했습니다. 다시 시도해 주세요.</p>
+                        <button
+                          type="button"
+                          onClick={handleRetryResults}
+                          className="mt-3 rounded-[12px] border border-[#171b24] px-3 py-2 text-[12px] font-semibold text-[#171b24]"
+                        >
+                          결과 다시 불러오기
+                        </button>
+                      </div>
                     ) : (
                       <div className="mt-5 grid gap-4">
                         {(sessionResults?.turns || []).map((turn) => (

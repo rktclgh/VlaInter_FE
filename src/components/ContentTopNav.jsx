@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { SupportReportModal } from "./SupportReportModal";
 
-export const ContentTopNav = ({ point = "0P", onClickCharge, onOpenMenu }) => {
+export const ContentTopNav = ({ point = "0P", onClickCharge, onOpenMenu, interactionDisabled = false }) => {
   const [showReportModal, setShowReportModal] = useState(false);
 
   return (
@@ -11,6 +11,7 @@ export const ContentTopNav = ({ point = "0P", onClickCharge, onOpenMenu }) => {
           <button
             type="button"
             onClick={onOpenMenu}
+            disabled={interactionDisabled}
             className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-[#dddddd] text-[16px] text-[#4b4b4b] md:hidden"
             aria-label="메뉴 열기"
           >
@@ -24,7 +25,11 @@ export const ContentTopNav = ({ point = "0P", onClickCharge, onOpenMenu }) => {
           <div className="ml-auto inline-flex max-w-[calc(100vw-152px)] items-center gap-1.5 sm:gap-2">
             <button
               type="button"
-              onClick={() => setShowReportModal(true)}
+              onClick={() => {
+                if (interactionDisabled) return;
+                setShowReportModal(true);
+              }}
+              disabled={interactionDisabled}
               className="inline-flex h-7 items-center justify-center rounded-[10px] border border-[#cfcfcf] px-2 text-[10px] font-semibold leading-none text-black sm:text-[11px]"
               aria-label="버그 리포트 및 운영자 문의"
             >
@@ -33,6 +38,7 @@ export const ContentTopNav = ({ point = "0P", onClickCharge, onOpenMenu }) => {
             <button
               type="button"
               onClick={onClickCharge}
+              disabled={interactionDisabled}
               className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-[10px] border border-[#cfcfcf] text-[15px] font-semibold leading-none text-black"
               aria-label="포인트 충전 페이지 이동"
             >
@@ -44,7 +50,13 @@ export const ContentTopNav = ({ point = "0P", onClickCharge, onOpenMenu }) => {
           </div>
         </div>
       </header>
-      <SupportReportModal open={showReportModal} onClose={() => setShowReportModal(false)} />
+      <SupportReportModal
+        open={showReportModal}
+        onClose={() => {
+          if (interactionDisabled) return;
+          setShowReportModal(false);
+        }}
+      />
     </>
   );
 };

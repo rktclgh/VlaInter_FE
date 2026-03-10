@@ -11,6 +11,7 @@ export const Sidebar = ({
   onLogout,
 }) => {
   const resolvedIsAdmin = useAdminStatus(isAdmin);
+  const hasProfileImage = typeof profileImageUrl === "string" && profileImageUrl.trim().length > 0;
 
   const mainMenuSections = useMemo(() => getMainMenuSections({ isAdmin: resolvedIsAdmin }), [resolvedIsAdmin]);
 
@@ -49,12 +50,20 @@ export const Sidebar = ({
 
       <div className="border-t border-[#e8e8e8] bg-[#f8f8f8] px-4 py-4">
         <div className="flex items-center gap-2">
-          <img
-            key={profileImageUrl || "sidebar-profile-image"}
-            src={profileImageUrl}
-            alt="프로필"
-            className="h-8 w-8 rounded-full border border-[#d7d7d7] object-cover"
-          />
+          {hasProfileImage ? (
+            <img
+              key={profileImageUrl || "sidebar-profile-image"}
+              src={profileImageUrl}
+              alt="프로필"
+              className="h-8 w-8 rounded-full border border-[#d7d7d7] object-cover"
+            />
+          ) : (
+            <div
+              key="sidebar-profile-image"
+              aria-hidden="true"
+              className="h-8 w-8 rounded-full border border-[#d7d7d7] bg-[#eceff4]"
+            />
+          )}
           <span className="min-w-0 flex-1 truncate text-[13px] text-[#1f1f1f]">{userName}</span>
           <button
             type="button"

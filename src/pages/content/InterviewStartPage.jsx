@@ -318,7 +318,7 @@ export const InterviewStartPage = () => {
     if (!selectedCategoryIds.length) return;
     const availableIds = new Set(skillItems.map((item) => String(item.categoryId)));
     setSelectedCategoryIds((prev) => prev.filter((id) => availableIds.has(String(id))));
-  }, [selectedCategoryIds.length, skillItems]);
+  }, [selectedCategoryIds, skillItems]);
 
   const canCreateJob = Boolean(branchFilter && jobQuery.trim() && !visibleJobs.some((job) => (job.displayName || job.name || "").trim().toLowerCase() === jobQuery.trim().toLowerCase()));
   const canCreateBranch = Boolean(branchQuery.trim() && !branchItems.some((branch) => (branch.name || "").trim().toLowerCase() === branchQuery.trim().toLowerCase()));
@@ -340,7 +340,7 @@ export const InterviewStartPage = () => {
     const normalizedBranchName = String(branchItems.find((item) => String(item.categoryId) === String(branchFilter))?.name || "").trim().toLowerCase();
     const normalizedJobName = String(selectedJob?.displayName || selectedJob?.name || "").trim().toLowerCase();
     return myQuestionSets.filter((set) => {
-      const setBranchName = String(set.branchName || set.jobName || "").trim().toLowerCase();
+      const setBranchName = String(set.branchName || "").trim().toLowerCase();
       const setJobNames = Array.isArray(set.jobNames)
         ? set.jobNames.map((name) => String(name || "").trim().toLowerCase()).filter(Boolean)
         : [String(set.jobName || "").trim().toLowerCase()].filter(Boolean);
