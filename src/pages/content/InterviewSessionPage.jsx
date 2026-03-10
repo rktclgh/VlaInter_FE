@@ -36,6 +36,35 @@ const DocumentMetaChip = ({ label, ocrUsed }) => (
   </span>
 );
 
+const PaidFallbackNoticeToast = ({ onClose }) => (
+  <div
+    role="status"
+    aria-live="polite"
+    aria-atomic="true"
+    className="fixed bottom-4 right-4 z-[230] w-[min(360px,calc(100vw-32px))] rounded-2xl border border-[#d8dbe3] bg-white p-4 shadow-[0_18px_48px_rgba(15,23,42,0.16)]"
+  >
+    <div className="flex items-start justify-between gap-3">
+      <div>
+        <p className="text-[13px] font-semibold text-[#111827]">대체 AI API 사용</p>
+        <p className="mt-1 text-[12px] leading-[1.65] text-[#4b5563]">
+          개발자의 돈으로 호출된 API입니다 ㅜㅜ
+        </p>
+        <p className="mt-1 text-[12px] leading-[1.65] text-[#6b7280]">
+          Gemini 오류로 인해 이번 세션은 다른 AI API로 처리했습니다.
+        </p>
+      </div>
+      <button
+        type="button"
+        onClick={onClose}
+        aria-label="안내 닫기"
+        className="rounded-full border border-[#d8dde7] px-2 py-1 text-[11px] text-[#4f5664]"
+      >
+        닫기
+      </button>
+    </div>
+  </div>
+);
+
 const scoreToStars = (score) => {
   const numeric = Number(score);
   if (!Number.isFinite(numeric) || numeric <= 0) return 1;
@@ -96,6 +125,7 @@ export const InterviewSessionPage = () => {
   const [sessionMetadata, setSessionMetadata] = useState({});
   const [sessionResults, setSessionResults] = useState(null);
   const [loadingResults, setLoadingResults] = useState(false);
+  const [showPaidFallbackNotice, setShowPaidFallbackNotice] = useState(false);
 
   useEffect(() => {
     const charged = consumePointChargeSuccessResult();
@@ -147,18 +177,36 @@ export const InterviewSessionPage = () => {
   }, [navigate]);
 
   const currentQuestionTitle = useMemo(() => {
-    if (completed) return "면접이 종료되었습니다";
+    if (completed && !currentQuestion) return "면접이 종료되었습니다";
     if (!currentQuestion) return "진행 중인 질문을 찾을 수 없습니다";
     return `질문 ${currentQuestion.turnNo}`;
   }, [completed, currentQuestion]);
 
   const isMockInterview = sessionMetadata.apiBasePath === "/api/interview/mock";
   const isQuestionSetPractice = Boolean(sessionMetadata.fromQuestionSet);
+  const sessionNavigation = isMockInterview
+    ? { activeKey: "interview_start", homePath: "/content/interview" }
+    : isQuestionSetPractice
+      ? { activeKey: "question_set", homePath: "/content/question-sets" }
+      : { activeKey: "tech_practice", homePath: "/content/tech-practice" };
+  const { activeKey: sidebarActiveKey, homePath: sessionHomePath } = sessionNavigation;
   const isLastQuestion = Boolean(
     currentQuestion &&
     Number(sessionMetadata.questionCount || 0) > 0 &&
     currentQuestion.turnNo >= Number(sessionMetadata.questionCount || 0)
   );
+  const usedBedrockAtStart = String(sessionMetadata?.providerUsed || "").toUpperCase() === "BEDROCK";
+  const usedBedrockInResults = useMemo(
+    () => Boolean((sessionResults?.turns || []).some((turn) => String(turn?.evaluation?.providerUsed || "").toUpperCase() === "BEDROCK")),
+    [sessionResults]
+  );
+
+  useEffect(() => {
+    if (sessionMetadata?.paidFallbackNoticeDismissed) return;
+    if (!usedBedrockAtStart && !usedBedrockInResults) return;
+    setShowPaidFallbackNotice(true);
+  }, [sessionMetadata?.paidFallbackNoticeDismissed, usedBedrockAtStart, usedBedrockInResults]);
+
   useEffect(() => {
     if (!finalizingSession) return undefined;
 
@@ -332,7 +380,7 @@ export const InterviewSessionPage = () => {
 
       <MobileSidebarDrawer
         open={isMobileMenuOpen}
-        activeKey="interview_start"
+        activeKey={sidebarActiveKey}
         onClose={() => setIsMobileMenuOpen(false)}
         onNavigate={handleSidebarNavigate}
         userName={userName}
@@ -347,7 +395,7 @@ export const InterviewSessionPage = () => {
       <div className="flex min-h-[calc(100vh-54px)]">
         <div className="hidden w-[272px] shrink-0 md:block">
           <Sidebar
-            activeKey="interview_start"
+            activeKey={sidebarActiveKey}
             onNavigate={handleSidebarNavigate}
             userName={userName}
             profileImageUrl={profileImageUrl}
@@ -396,7 +444,7 @@ export const InterviewSessionPage = () => {
                     onClick={() => {
                       if (finalizingSession) return;
                       clearTechInterviewSession();
-                      navigate(isQuestionSetPractice ? "/content/question-sets" : "/content/interview", { replace: true });
+                      navigate(sessionHomePath, { replace: true });
                     }}
                     disabled={finalizingSession}
                     className="rounded-[12px] border border-[#d8dde7] px-3 py-2 text-[12px] text-[#4f5664]"
@@ -587,6 +635,14 @@ export const InterviewSessionPage = () => {
             <p className="mt-1 text-[12px] text-[#cbd5e1]">완료될 때까지 다른 화면으로 이동할 수 없습니다.</p>
           </div>
         </div>
+      ) : null}
+      {showPaidFallbackNotice ? (
+        <PaidFallbackNoticeToast
+          onClose={() => {
+            setShowPaidFallbackNotice(false);
+            setSessionMetadata((prev) => ({ ...prev, paidFallbackNoticeDismissed: true }));
+          }}
+        />
       ) : null}
     </div>
   );
