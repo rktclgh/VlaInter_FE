@@ -9,6 +9,7 @@ import { logout } from "../../lib/authApi";
 import {
   activateAdminMember,
   createAdminInterviewCategory,
+  deleteAdminInterviewCategory,
   deactivateAdminMember,
   getAdminInterviewCategories,
   getAdminInterviewSets,
@@ -16,6 +17,7 @@ import {
   getAdminMembers,
   deleteAdminInterviewSet,
   hardDeleteAdminMember,
+  mergeAdminInterviewCategory,
   moveAdminInterviewCategory,
   promoteAdminInterviewSet,
   softDeleteAdminMember,
@@ -116,7 +118,11 @@ export const AdminConsolePage = () => {
   const [loadingCategories, setLoadingCategories] = useState(false);
   const [creatingCategory, setCreatingCategory] = useState(false);
   const [savingCategory, setSavingCategory] = useState(false);
+  const [deletingCategory, setDeletingCategory] = useState(false);
+  const [mergingCategory, setMergingCategory] = useState(false);
+  const [blockingCategoryCreator, setBlockingCategoryCreator] = useState(false);
   const [selectedCategoryId, setSelectedCategoryId] = useState(null);
+  const [mergeTargetCategoryId, setMergeTargetCategoryId] = useState("");
   const [newCategoryForm, setNewCategoryForm] = useState({
     parentId: "",
     name: "",
@@ -310,6 +316,7 @@ export const AdminConsolePage = () => {
       isActive: Boolean(selectedCategory.isActive),
       isLeaf: Boolean(selectedCategory.isLeaf),
     });
+    setMergeTargetCategoryId("");
   }, [categories, selectedCategoryId]);
 
   const totalMemberPages = Math.max(1, Math.ceil(memberTotalCount / memberSize));
@@ -393,6 +400,13 @@ export const AdminConsolePage = () => {
     if (depth === 2) return depth1Categories;
     return [];
   }, [depth0Categories, depth1Categories, selectedCategory]);
+
+  const selectedCategoryMergeOptions = useMemo(() => {
+    if (!selectedCategory) return [];
+    return sortedCategories.filter((category) =>
+      category.categoryId !== selectedCategory.categoryId && Number(category.depth) === Number(selectedCategory.depth)
+    );
+  }, [selectedCategory, sortedCategories]);
 
   const handleSidebarNavigate = (item) => {
     setIsMobileMenuOpen(false);
@@ -631,6 +645,66 @@ export const AdminConsolePage = () => {
       setPageErrorMessage(error?.message || "카테고리 저장에 실패했습니다.");
     } finally {
       setSavingCategory(false);
+    }
+  };
+
+  const handleDeleteCategory = async () => {
+    if (!selectedCategoryId || !selectedCategory) return;
+    const confirmed = window.confirm(`'${selectedCategory.name}' 카테고리를 삭제하시겠습니까? 하위 카테고리도 함께 삭제됩니다.`);
+    if (!confirmed) return;
+
+    setDeletingCategory(true);
+    setPageErrorMessage("");
+    try {
+      await deleteAdminInterviewCategory(selectedCategoryId);
+      await loadCategories();
+    } catch (error) {
+      setPageErrorMessage(error?.message || "카테고리 삭제에 실패했습니다.");
+    } finally {
+      setDeletingCategory(false);
+    }
+  };
+
+  const handleMergeCategory = async () => {
+    if (!selectedCategoryId || !selectedCategory) return;
+    if (!mergeTargetCategoryId) {
+      setPageErrorMessage("통합할 대상 카테고리를 선택해 주세요.");
+      return;
+    }
+
+    const targetCategory = categoryById.get(String(mergeTargetCategoryId));
+    const confirmed = window.confirm(
+      `'${selectedCategory.name}' 카테고리를 '${targetCategory?.name || "선택한 카테고리"}'로 통합하시겠습니까? 참조 질문과 하위 카테고리도 함께 이동됩니다.`
+    );
+    if (!confirmed) return;
+
+    setMergingCategory(true);
+    setPageErrorMessage("");
+    try {
+      await mergeAdminInterviewCategory(selectedCategoryId, Number(mergeTargetCategoryId));
+      await loadCategories();
+      setSelectedCategoryId(Number(mergeTargetCategoryId));
+    } catch (error) {
+      setPageErrorMessage(error?.message || "카테고리 통합에 실패했습니다.");
+    } finally {
+      setMergingCategory(false);
+    }
+  };
+
+  const handleBlockCategoryCreator = async () => {
+    if (!selectedCategory?.createdByUserId) return;
+    const confirmed = window.confirm(`'${selectedCategory.createdByName || "알 수 없는 사용자"}' 계정의 로그인을 차단하시겠습니까?`);
+    if (!confirmed) return;
+
+    setBlockingCategoryCreator(true);
+    setPageErrorMessage("");
+    try {
+      await deactivateAdminMember(selectedCategory.createdByUserId);
+      await loadCategories();
+    } catch (error) {
+      setPageErrorMessage(error?.message || "생성자 로그인 차단에 실패했습니다.");
+    } finally {
+      setBlockingCategoryCreator(false);
     }
   };
 
@@ -1151,6 +1225,29 @@ export const AdminConsolePage = () => {
                       <p className="rounded-[10px] border border-[#e5e7eb] bg-[#f8fafc] px-3 py-2 text-[12px] text-[#4b5563]">
                         현재 depth: {selectedCategory?.depthLabel || selectedCategory?.depth}
                       </p>
+                      <div className="rounded-[12px] border border-[#e5e7eb] bg-[#fbfcfe] px-3 py-3 text-[12px] text-[#4b5563]">
+                        <p className="font-semibold text-[#1f2937]">생성자 정보</p>
+                        <p className="mt-2">ID: <strong className="text-[#111827]">{selectedCategory?.createdByUserId ?? "-"}</strong></p>
+                        <p className="mt-1">이름: <strong className="text-[#111827]">{selectedCategory?.createdByName || "-"}</strong></p>
+                        <p className="mt-1">이메일: <strong className="text-[#111827]">{selectedCategory?.createdByEmail || "-"}</strong></p>
+                        <p className="mt-1">상태: <strong className="text-[#111827]">{selectedCategory?.createdByStatus || "-"}</strong></p>
+                        {selectedCategory?.createdByUserId ? (
+                          <div className="mt-3">
+                            <button
+                              type="button"
+                              disabled={blockingCategoryCreator || selectedCategory?.createdByStatus === "BLOCKED"}
+                              onClick={() => void handleBlockCategoryCreator()}
+                              className="rounded-[10px] border border-[#d9dde5] px-3 py-1.5 text-[12px] text-[#334155] disabled:opacity-60"
+                            >
+                              {selectedCategory?.createdByStatus === "BLOCKED"
+                                ? "이미 로그인 차단됨"
+                                : blockingCategoryCreator
+                                  ? "차단 중..."
+                                  : "생성자 로그인 차단"}
+                            </button>
+                          </div>
+                        ) : null}
+                      </div>
                       <select
                         value={categoryForm.parentId}
                         onChange={(event) => setCategoryForm((prev) => ({ ...prev, parentId: event.target.value }))}
@@ -1206,11 +1303,45 @@ export const AdminConsolePage = () => {
                       </div>
                       <button
                         type="button"
-                        disabled={savingCategory}
+                        disabled={savingCategory || deletingCategory || mergingCategory}
                         onClick={() => void handleSaveCategory()}
                         className="rounded-[10px] bg-[#111827] px-3 py-1.5 text-[12px] font-semibold text-white disabled:opacity-60"
                       >
                         {savingCategory ? "저장 중..." : "카테고리 저장"}
+                      </button>
+                      <div className="rounded-[12px] border border-[#e5e7eb] bg-[#fbfcfe] px-3 py-3">
+                        <p className="text-[12px] font-semibold text-[#1f2937]">카테고리 통합</p>
+                        <p className="mt-1 text-[11px] leading-[1.6] text-[#6b7280]">
+                          같은 depth 카테고리로 통합할 수 있습니다. 현재 카테고리의 질문 참조와 하위 카테고리가 대상 카테고리로 이동됩니다.
+                        </p>
+                        <select
+                          value={mergeTargetCategoryId}
+                          onChange={(event) => setMergeTargetCategoryId(event.target.value)}
+                          className="mt-3 w-full rounded-[12px] border border-[#d9dde5] px-3 py-2 text-[12px] outline-none focus:border-[#9aa9cd]"
+                        >
+                          <option value="">통합 대상 카테고리 선택</option>
+                          {selectedCategoryMergeOptions.map((category) => (
+                            <option key={category.categoryId} value={String(category.categoryId)}>
+                              {category.name}
+                            </option>
+                          ))}
+                        </select>
+                        <button
+                          type="button"
+                          disabled={savingCategory || deletingCategory || mergingCategory || !mergeTargetCategoryId}
+                          onClick={() => void handleMergeCategory()}
+                          className="mt-3 rounded-[10px] border border-[#d6b96b] bg-[#fff7e6] px-3 py-1.5 text-[12px] font-semibold text-[#8a6116] disabled:opacity-60"
+                        >
+                          {mergingCategory ? "통합 중..." : "선택한 카테고리로 통합"}
+                        </button>
+                      </div>
+                      <button
+                        type="button"
+                        disabled={savingCategory || deletingCategory || mergingCategory}
+                        onClick={() => void handleDeleteCategory()}
+                        className="rounded-[10px] border border-[#ef9a9a] px-3 py-1.5 text-[12px] font-semibold text-[#c62828] disabled:opacity-60"
+                      >
+                        {deletingCategory ? "삭제 중..." : "카테고리 삭제"}
                       </button>
                     </div>
                   ) : (

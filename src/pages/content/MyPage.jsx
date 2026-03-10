@@ -738,7 +738,7 @@ export const MyPage = () => {
                         type="button"
                         onClick={removeGeminiApiKey}
                         disabled={geminiApiKeySubmitting}
-                        className="min-w-[88px] whitespace-nowrap rounded-[10px] border border-[#d6d6d6] px-3 py-2 text-[11px] text-[#555] disabled:opacity-60 sm:text-[12px]"
+                        className="min-w-[88px] whitespace-nowrap rounded-[10px] border border-[#d84a4a] bg-[#fff1f1] px-3 py-2 text-[11px] font-semibold text-[#d84a4a] disabled:opacity-60 sm:text-[12px]"
                       >
                         키 제거
                       </button>

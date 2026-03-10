@@ -102,3 +102,16 @@ export async function moveAdminInterviewCategory(categoryId, parentId) {
     body: { parentId },
   });
 }
+
+export async function mergeAdminInterviewCategory(categoryId, targetCategoryId) {
+  return apiRequest(`/api/admin/interview/categories/${encodeURIComponent(categoryId)}/merge`, {
+    method: "PATCH",
+    body: { targetCategoryId },
+  });
+}
+
+export async function deleteAdminInterviewCategory(categoryId) {
+  return apiRequest(`/api/admin/interview/categories/${encodeURIComponent(categoryId)}`, {
+    method: "DELETE",
+  });
+}
