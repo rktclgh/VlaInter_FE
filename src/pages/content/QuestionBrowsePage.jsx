@@ -23,6 +23,19 @@ const formatDate = (value) => {
   return new Intl.DateTimeFormat("ko-KR", { year: "numeric", month: "2-digit", day: "2-digit" }).format(date);
 };
 
+const getDistinctJobNames = (set) => {
+  const branchName = String(set?.branchName || "").trim().toLowerCase();
+  return (Array.isArray(set?.jobNames) ? set.jobNames : [set?.jobName])
+    .filter(Boolean)
+    .map((jobName) => String(jobName).trim())
+    .filter((jobName, index, all) => {
+      const normalized = jobName.toLowerCase();
+      if (!normalized) return false;
+      if (branchName && normalized === branchName) return false;
+      return all.findIndex((candidate) => String(candidate).trim().toLowerCase() === normalized) === index;
+    });
+};
+
 const InlineSpinner = ({ label }) => (
   <div className="inline-flex items-center gap-2 text-[12px] text-[#5e6472]">
     <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-[#cbd5e1] border-t-[#171b24]" />
@@ -127,7 +140,14 @@ export const QuestionBrowsePage = () => {
     const keyword = query.trim().toLowerCase();
     return sets.filter((set) => {
       if (!keyword) return true;
-      return [set.title, set.description, set.jobName, set.skillName, set.ownerName]
+      return [
+        set.title,
+        set.description,
+        set.branchName,
+        ...getDistinctJobNames(set),
+        ...(Array.isArray(set.skillNames) ? set.skillNames : [set.skillName]),
+        set.ownerName,
+      ]
         .filter(Boolean)
         .join(" ")
         .toLowerCase()
@@ -162,10 +182,11 @@ export const QuestionBrowsePage = () => {
     setStartingSetId(setItem.setId);
     setPageErrorMessage("");
     try {
+      const primaryJobName = getDistinctJobNames(setItem).find((name) => name && name !== "공통") || setItem.jobName || null;
       const response = await startTechInterview({
         setId: setItem.setId,
-        jobName: setItem.jobName || null,
-        skillName: setItem.skillName || null,
+        jobName: primaryJobName,
+        skillName: (Array.isArray(setItem.skillNames) ? setItem.skillNames[0] : setItem.skillName) || null,
         questionCount: 5,
         saveHistory: false,
       });
@@ -182,8 +203,8 @@ export const QuestionBrowsePage = () => {
           apiBasePath: "/api/interview/tech",
           fromQuestionSet: true,
           saveHistory: false,
-          categoryName: setItem.skillName || null,
-          jobName: setItem.jobName || null,
+          categoryName: (Array.isArray(setItem.skillNames) ? setItem.skillNames.join(", ") : setItem.skillName) || null,
+          jobName: primaryJobName,
         },
       });
       navigate("/content/interview/session");
@@ -228,7 +249,6 @@ export const QuestionBrowsePage = () => {
         onNavigate={handleSidebarNavigate}
         userName={userName}
         profileImageUrl={profileImageUrl}
-        fallbackProfileImageUrl={tempProfileImage}
         onLogout={() => {
           setIsMobileMenuOpen(false);
           setShowLogoutModal(true);
@@ -241,7 +261,6 @@ export const QuestionBrowsePage = () => {
             onNavigate={handleSidebarNavigate}
             userName={userName}
             profileImageUrl={profileImageUrl}
-            fallbackProfileImageUrl={tempProfileImage}
             onLogout={() => setShowLogoutModal(true)}
           />
         </div>
@@ -259,7 +278,7 @@ export const QuestionBrowsePage = () => {
               <input
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
-                placeholder="세트 제목, 직무, 기술, owner 검색"
+                placeholder="세트 제목, 계열, 직무, 기술 검색"
                 className="w-full rounded-[14px] border border-[#dfe3eb] px-4 py-3 text-[13px] outline-none focus:border-[#8aa2e8]"
               />
             </section>
@@ -272,31 +291,70 @@ export const QuestionBrowsePage = () => {
                 </div>
                 <div className="mt-3 space-y-2">
                   {!loading && filteredSets.length === 0 ? <p className="text-[12px] text-[#6b7280]">공인 세트가 없습니다.</p> : null}
-                  {filteredSets.map((setItem) => (
-                    <button
-                      key={setItem.setId}
-                      type="button"
-                      onClick={() => setSelectedSetId(setItem.setId)}
-                      className={`w-full rounded-[14px] border p-3 text-left ${setItem.setId === selectedSet?.setId ? "border-[#9eb1dd] bg-[#f5f8ff]" : "border-[#edf1f6] hover:bg-[#fafbfd]"}`}
-                    >
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-2">
-                            <p className="truncate text-[13px] font-semibold text-[#1f2937]">{setItem.title}</p>
-                            <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${setItem.certified ? "bg-[#e7f4ff] text-[#0b69b7]" : "bg-[#eef2f8] text-[#556070]"}`}>
-                              {setItem.certified ? "공인" : "공유"}
-                            </span>
-                            {setItem.aiGenerated ? (
-                              <span className="rounded-full bg-[#f3ecff] px-2 py-0.5 text-[10px] font-semibold text-[#6d3bb6]">AI</span>
-                            ) : null}
+                  {filteredSets.map((setItem) => {
+                    const jobNames = getDistinctJobNames(setItem)
+                      .sort((left, right) => {
+                        const leftCommon = String(left).trim() === "공통" ? 0 : 1;
+                        const rightCommon = String(right).trim() === "공통" ? 0 : 1;
+                        if (leftCommon !== rightCommon) return leftCommon - rightCommon;
+                        return String(left).localeCompare(String(right), "ko");
+                      });
+                    const skillSummaries = Array.from(
+                      new Map(
+                        (setItem.questions || []).map((question) => [
+                          String(question.skillName || question.categoryName || "").trim().toLowerCase(),
+                          {
+                            label: String(question.skillName || question.categoryName || "").trim(),
+                            isCommon: String(question.jobName || "").trim() === "공통",
+                          },
+                        ])
+                      ).values()
+                    )
+                      .filter((item) => item.label)
+                      .sort((left, right) => {
+                        const leftCommon = left.isCommon ? 0 : 1;
+                        const rightCommon = right.isCommon ? 0 : 1;
+                        if (leftCommon !== rightCommon) return leftCommon - rightCommon;
+                        return left.label.localeCompare(right.label, "ko");
+                      });
+                    return (
+                      <button
+                        key={setItem.setId}
+                        type="button"
+                        onClick={() => setSelectedSetId(setItem.setId)}
+                        className={`w-full rounded-[14px] border p-3 text-left ${setItem.setId === selectedSet?.setId ? "border-[#9eb1dd] bg-[#f5f8ff]" : "border-[#edf1f6] hover:bg-[#fafbfd]"}`}
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2">
+                              <p className="truncate text-[13px] font-semibold text-[#1f2937]">{setItem.title}</p>
+                              <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${setItem.certified ? "bg-[#e7f4ff] text-[#0b69b7]" : "bg-[#eef2f8] text-[#556070]"}`}>
+                                {setItem.certified ? "공인" : "공유"}
+                              </span>
+                              {setItem.aiGenerated ? (
+                                <span className="rounded-full bg-[#f3ecff] px-2 py-0.5 text-[10px] font-semibold text-[#6d3bb6]">AI</span>
+                              ) : null}
+                            </div>
+                            <div className="mt-2 flex flex-wrap gap-1.5">
+                              {setItem.branchName ? <span className="rounded-full bg-[#eef2f8] px-2 py-0.5 text-[10px] text-[#556070]">{setItem.branchName}</span> : null}
+                              {jobNames.slice(0, 3).map((jobName) => (
+                                <span key={`${setItem.setId}-job-${jobName}`} className={`rounded-full px-2 py-0.5 text-[10px] ${jobName === "공통" ? "bg-[#ebf8ff] text-[#2b6cb0]" : "bg-[#f4f6fb] text-[#556070]"}`}>
+                                  {jobName}
+                                </span>
+                              ))}
+                              {skillSummaries.slice(0, 4).map((skill) => (
+                                <span key={`${setItem.setId}-${skill.label}`} className={`rounded-full px-2 py-0.5 text-[10px] ${skill.isCommon ? "bg-[#ebf8ff] text-[#2b6cb0]" : "bg-[#eef2f8] text-[#556070]"}`}>
+                                  {skill.label}
+                                </span>
+                              ))}
+                            </div>
+                            <p className="mt-2 text-[11px] text-[#8b95a7]">제작자: {setItem.ownerName || "-"}</p>
                           </div>
-                          <p className="mt-1 text-[11px] text-[#6b7280]">{setItem.jobName || "-"} / {setItem.skillName || "-"}</p>
-                          <p className="mt-1 text-[11px] text-[#8b95a7]">제작자: {setItem.ownerName || "-"}</p>
+                          <span className="rounded-full border border-[#d9dde5] px-2 py-0.5 text-[10px] font-semibold text-[#334155]">{(setItem.questions || []).length}</span>
                         </div>
-                        <span className="rounded-full border border-[#d9dde5] px-2 py-0.5 text-[10px] font-semibold text-[#334155]">{(setItem.questions || []).length}</span>
-                      </div>
-                    </button>
-                  ))}
+                      </button>
+                    );
+                  })}
                 </div>
               </article>
 
@@ -304,9 +362,22 @@ export const QuestionBrowsePage = () => {
                 {selectedSet ? (
                   <>
                     <h2 className="text-[16px] font-semibold text-[#1f2937]">{selectedSet.title}</h2>
-                    <p className="mt-1 text-[12px] text-[#6b7280]">
-                      {selectedSet.jobName || "-"} / {selectedSet.skillName || "-"} · {formatDate(selectedSet.createdAt)}
-                    </p>
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {selectedSet.branchName ? <span className="rounded-full bg-[#eef2f8] px-2 py-0.5 text-[10px] text-[#556070]">{selectedSet.branchName}</span> : null}
+                      {getDistinctJobNames(selectedSet)
+                        .sort((left, right) => {
+                          const leftCommon = String(left).trim() === "공통" ? 0 : 1;
+                          const rightCommon = String(right).trim() === "공통" ? 0 : 1;
+                          if (leftCommon !== rightCommon) return leftCommon - rightCommon;
+                          return String(left).localeCompare(String(right), "ko");
+                        })
+                        .map((jobName) => (
+                          <span key={`selected-job-${jobName}`} className={`rounded-full px-2 py-0.5 text-[10px] ${jobName === "공통" ? "bg-[#ebf8ff] text-[#2b6cb0]" : "bg-[#f4f6fb] text-[#556070]"}`}>
+                            {jobName}
+                          </span>
+                        ))}
+                    </div>
+                    <p className="mt-2 text-[12px] text-[#6b7280]">{formatDate(selectedSet.createdAt)}</p>
                     <p className="mt-2 text-[12px] leading-[1.7] text-[#5e6472]">{selectedSet.description || "세트 설명이 없습니다."}</p>
                     <div className="mt-3 flex justify-end">
                       <button
@@ -335,6 +406,18 @@ export const QuestionBrowsePage = () => {
                         >
                           <p className="text-[11px] text-[#7a8190]">문답 {index + 1}</p>
                           <p className="mt-1 text-[13px] leading-[1.6] text-[#1f2937]">{question.questionText}</p>
+                          <div className="mt-2 flex flex-wrap gap-1.5">
+                            {question.jobName ? (
+                              <span className={`rounded-full px-2 py-0.5 text-[10px] ${question.jobName === "공통" ? "bg-[#ebf8ff] text-[#2b6cb0]" : "bg-[#f4f6fb] text-[#556070]"}`}>
+                                {question.jobName}
+                              </span>
+                            ) : null}
+                            {question.skillName || question.categoryName ? (
+                              <span className={`rounded-full px-2 py-0.5 text-[10px] ${question.jobName === "공통" ? "bg-[#ebf8ff] text-[#2b6cb0]" : "bg-[#eef2f8] text-[#556070]"}`}>
+                                {question.skillName || question.categoryName}
+                              </span>
+                            ) : null}
+                          </div>
                           <div className="mt-2 flex justify-end">
                             <button
                               type="button"

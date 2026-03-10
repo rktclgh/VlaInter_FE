@@ -329,7 +329,6 @@ export const PointChargePage = () => {
         onNavigate={onSelectSidebar}
         userName={userName}
         profileImageUrl={profileImageUrl}
-        fallbackProfileImageUrl={tempProfileImage}
         onLogout={() => {
           setIsMobileMenuOpen(false);
           requestLogout();
@@ -343,7 +342,6 @@ export const PointChargePage = () => {
             onNavigate={onSelectSidebar}
             userName={userName}
             profileImageUrl={profileImageUrl}
-            fallbackProfileImageUrl={tempProfileImage}
             onLogout={requestLogout}
           />
         </div>

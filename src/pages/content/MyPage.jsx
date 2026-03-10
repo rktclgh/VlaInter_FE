@@ -641,7 +641,6 @@ export const MyPage = () => {
         onNavigate={onSelectSidebar}
         userName={userName}
         profileImageUrl={profileImageUrl}
-        fallbackProfileImageUrl={tempProfileImage}
         onLogout={() => {
           setIsMobileMenuOpen(false);
           requestLogout();
@@ -655,7 +654,6 @@ export const MyPage = () => {
             onNavigate={onSelectSidebar}
             userName={userName}
             profileImageUrl={profileImageUrl}
-            fallbackProfileImageUrl={tempProfileImage}
             onLogout={requestLogout}
           />
         </div>
@@ -679,10 +677,6 @@ export const MyPage = () => {
                         src={profileImageUrl}
                         alt="프로필"
                         className="h-16 w-16 rounded-full border border-[#dddddd] object-cover sm:h-20 sm:w-20"
-                        onError={(event) => {
-                          event.currentTarget.onerror = null;
-                          event.currentTarget.src = tempProfileImage;
-                        }}
                       />
                       <span className="absolute bottom-[-2px] right-[-2px] inline-flex h-7 w-7 items-center justify-center rounded-full border border-[#d5d8de] bg-white text-[#5f6670] shadow-[0_2px_5px_rgba(0,0,0,0.16)]">
                         <svg viewBox="0 0 24 24" aria-hidden="true" className="h-4 w-4 fill-current">

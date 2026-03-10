@@ -354,7 +354,6 @@ export const SessionHistoryTemplate = ({ title, description, apiBasePath, active
         onNavigate={handleSidebarNavigate}
         userName={userName}
         profileImageUrl={profileImageUrl}
-        fallbackProfileImageUrl={tempProfileImage}
         onLogout={() => {
           setIsMobileMenuOpen(false);
           setShowLogoutModal(true);
@@ -363,7 +362,7 @@ export const SessionHistoryTemplate = ({ title, description, apiBasePath, active
 
       <div className="flex min-h-[calc(100vh-54px)]">
         <div className="hidden w-[272px] shrink-0 md:block">
-          <Sidebar activeKey={activeKey} onNavigate={handleSidebarNavigate} userName={userName} profileImageUrl={profileImageUrl} fallbackProfileImageUrl={tempProfileImage} onLogout={() => setShowLogoutModal(true)} />
+          <Sidebar activeKey={activeKey} onNavigate={handleSidebarNavigate} userName={userName} profileImageUrl={profileImageUrl} onLogout={() => setShowLogoutModal(true)} />
         </div>
 
         <main className="flex min-w-0 flex-1 flex-col">

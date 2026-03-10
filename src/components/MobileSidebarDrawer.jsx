@@ -9,7 +9,6 @@ export const MobileSidebarDrawer = ({
   onNavigate,
   userName = "사용자",
   profileImageUrl = "",
-  fallbackProfileImageUrl = "",
   isAdmin = null,
   onLogout,
 }) => {
@@ -80,21 +79,10 @@ export const MobileSidebarDrawer = ({
 
         <div className="flex items-center gap-2 border-t border-[#e8e8e8] px-4 py-4">
           <img
-            key={profileImageUrl || fallbackProfileImageUrl || "mobile-profile-image"}
+            key={profileImageUrl || "mobile-profile-image"}
             src={profileImageUrl}
             alt="프로필"
             className="h-8 w-8 rounded-full border border-[#d7d7d7] object-cover"
-            onLoad={(event) => {
-              event.currentTarget.dataset.fallbackTried = "false";
-            }}
-            onError={(event) => {
-              const target = event.currentTarget;
-              const alreadyTriedFallback = target.dataset.fallbackTried === "true";
-              if (!alreadyTriedFallback && fallbackProfileImageUrl && target.src !== fallbackProfileImageUrl) {
-                target.dataset.fallbackTried = "true";
-                event.currentTarget.src = fallbackProfileImageUrl;
-              }
-            }}
           />
           <span className="text-[13px] text-[#1f1f1f]">{userName}</span>
           <button

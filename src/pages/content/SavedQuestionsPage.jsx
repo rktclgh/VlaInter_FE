@@ -9,7 +9,18 @@ import { Sidebar } from "../../components/Sidebar";
 import { DifficultyStars, StarIcons } from "../../components/DifficultyStars";
 import tempProfileImage from "../../assets/icon/temp.png";
 import { logout } from "../../lib/authApi";
-import { buildVisibleCategories, getCategoryDisplayName, sanitizeQuestionTag, searchCategoryByText } from "../../lib/categoryPresentation";
+import {
+  buildCategoryMap,
+  buildVisibleCategories,
+  filterSkillCategoriesByBranchAndJob,
+  getBranchDisplayName,
+  getCategoryDisplayName,
+  getJobDisplayName,
+  getSkillDisplayName,
+  isCommonJobCategory,
+  sanitizeQuestionTag,
+  searchCategoryByText,
+} from "../../lib/categoryPresentation";
 import { ratingToDifficulty } from "../../lib/difficultyRating";
 import { consumePointChargeSuccessResult } from "../../lib/pointChargeFlow";
 import {
@@ -188,24 +199,34 @@ export const SavedQuestionsPage = () => {
 
   const leafCategories = useMemo(() => categories.filter((item) => item?.isLeaf), [categories]);
   const jobs = useMemo(() => categories.filter((item) => Number(item?.depth) === 1), [categories]);
-  const categoryMap = useMemo(() => new Map(categories.map((item) => [item.categoryId, item])), [categories]);
+  const categoryMap = useMemo(() => buildCategoryMap(categories), [categories]);
+  const selectedJob = useMemo(() => jobs.find((job) => String(job.categoryId) === String(jobFilter)) || null, [jobFilter, jobs]);
+  const selectedJobBranchId = useMemo(() => String(selectedJob?.parentId || ""), [selectedJob?.parentId]);
+  const selectedJobBranchName = useMemo(
+    () => (selectedJob ? getBranchDisplayName(categoryMap, selectedJob.categoryId) : ""),
+    [categoryMap, selectedJob]
+  );
 
   const visibleCategories = useMemo(() => {
     const keyword = categoryQuery.trim().toLowerCase();
-    const matched = leafCategories.filter((category) => {
-      if (jobFilter && String(category.parentId) !== jobFilter) return false;
-      return searchCategoryByText(category, keyword);
-    });
+    const matched = jobFilter
+      ? filterSkillCategoriesByBranchAndJob({
+          categories,
+          branchId: selectedJobBranchId,
+          jobId: jobFilter,
+          keyword,
+        })
+      : leafCategories.filter((category) => searchCategoryByText(category, keyword));
     return showAllCategories ? matched : matched.slice(0, 8);
-  }, [leafCategories, categoryQuery, jobFilter, showAllCategories]);
+  }, [categories, categoryQuery, jobFilter, leafCategories, selectedJobBranchId, showAllCategories]);
 
   const enrichedItems = useMemo(() => items.map((item) => {
-    const category = categoryMap.get(item.categoryId);
-    const job = categoryMap.get(category?.parentId);
     return {
       ...item,
-      categoryName: item.category || getCategoryDisplayName(category) || "미분류",
-      jobName: getCategoryDisplayName(job) || "기타",
+      branchName: item.branchName || getBranchDisplayName(categoryMap, item.categoryId) || "기타",
+      jobName: item.jobName || getJobDisplayName(categoryMap, item.categoryId) || "기타",
+      skillName: item.skillName || getSkillDisplayName(categoryMap, item.categoryId) || "미분류",
+      categoryName: item.category || item.skillName || getSkillDisplayName(categoryMap, item.categoryId) || "미분류",
     };
   }), [items, categoryMap]);
 
@@ -213,7 +234,13 @@ export const SavedQuestionsPage = () => {
     const keyword = query.trim().toLowerCase();
     return enrichedItems.filter((item) => {
       const createdDateKey = normalizeDateInput(item.createdAt);
-      if (jobFilter && String(categoryMap.get(item.categoryId)?.parentId || "") !== jobFilter) return false;
+      if (jobFilter) {
+        const itemJobName = String(item.jobName || "").trim();
+        const itemBranchName = String(item.branchName || "").trim();
+        const targetJobName = String(selectedJob?.name || "").trim();
+        if (!itemBranchName || itemBranchName !== selectedJobBranchName) return false;
+        if (itemJobName !== targetJobName && itemJobName !== "공통") return false;
+      }
       if (selectedCategoryId && String(item.categoryId || "") !== selectedCategoryId) return false;
       if (selectedRating && item.difficulty !== ratingToDifficulty(selectedRating)) return false;
       if (dateFrom && createdDateKey < dateFrom) return false;
@@ -221,7 +248,7 @@ export const SavedQuestionsPage = () => {
       if (!keyword) return true;
       return [item.questionText, item.categoryName, item.modelAnswer, item.canonicalAnswer, item.bestPractice, item.feedback, item.answerText, ...(item.tags || [])].filter(Boolean).join(" ").toLowerCase().includes(keyword);
     });
-  }, [categoryMap, dateFrom, dateTo, enrichedItems, jobFilter, query, selectedCategoryId, selectedRating]);
+  }, [dateFrom, dateTo, enrichedItems, jobFilter, query, selectedCategoryId, selectedJob?.name, selectedJobBranchName, selectedRating]);
 
   const selectedItems = useMemo(
     () => enrichedItems.filter((item) => selectedSavedIds.includes(item.savedQuestionId)),
@@ -233,9 +260,9 @@ export const SavedQuestionsPage = () => {
     [selectedItems]
   );
 
-  const selectedJobNames = useMemo(() => {
+  const selectedBranchNames = useMemo(() => {
     const keys = new Set(
-      selectableSelectedItems.map((item) => String(item.jobName || "").trim()).filter(Boolean)
+      selectableSelectedItems.map((item) => String(item.branchName || "").trim()).filter(Boolean)
     );
     return [...keys];
   }, [selectableSelectedItems]);
@@ -243,8 +270,9 @@ export const SavedQuestionsPage = () => {
   const selectedGroupSummary = useMemo(() => {
     if (!selectableSelectedItems.length) return "";
     const first = selectableSelectedItems[0];
-    const skillNames = [...new Set(selectableSelectedItems.map((item) => String(item.categoryName || "").trim()).filter(Boolean))];
-    return `${first.jobName} · ${skillNames.slice(0, 3).join(", ")}${skillNames.length > 3 ? ` 외 ${skillNames.length - 3}개` : ""}`;
+    const jobNames = [...new Set(selectableSelectedItems.map((item) => String(item.jobName || "").trim()).filter(Boolean))];
+    const skillNames = [...new Set(selectableSelectedItems.map((item) => String(item.skillName || item.categoryName || "").trim()).filter(Boolean))];
+    return `${first.branchName} · ${jobNames.slice(0, 2).join(", ")} · ${skillNames.slice(0, 3).join(", ")}${skillNames.length > 3 ? ` 외 ${skillNames.length - 3}개` : ""}`;
   }, [selectableSelectedItems]);
 
   useEffect(() => {
@@ -295,9 +323,26 @@ export const SavedQuestionsPage = () => {
   };
 
   const handleToggleSavedQuestion = (savedQuestionId) => {
-    setSelectedSavedIds((prev) => (
-      prev.includes(savedQuestionId) ? prev.filter((id) => id !== savedQuestionId) : [...prev, savedQuestionId]
-    ));
+    const target = enrichedItems.find((item) => item.savedQuestionId === savedQuestionId);
+    if (!target) return;
+    setSelectedSavedIds((prev) => {
+      if (prev.includes(savedQuestionId)) {
+        return prev.filter((id) => id !== savedQuestionId);
+      }
+      const currentBranches = new Set(
+        enrichedItems
+          .filter((item) => prev.includes(item.savedQuestionId))
+          .map((item) => String(item.branchName || "").trim())
+          .filter(Boolean)
+      );
+      const nextBranchName = String(target.branchName || "").trim();
+      if (currentBranches.size > 0 && nextBranchName && !currentBranches.has(nextBranchName)) {
+        setPageErrorMessage("새 문답 세트에는 같은 계열의 저장 질문만 함께 담을 수 있습니다.");
+        return prev;
+      }
+      setPageErrorMessage("");
+      return [...prev, savedQuestionId];
+    });
   };
 
   const handleOpenCreateSetModal = () => {
@@ -328,8 +373,8 @@ export const SavedQuestionsPage = () => {
       setCreateSetErrorMessage("문서 질문은 아직 세트에 함께 담을 수 없습니다. 기술 질문만 선택해 주세요.");
       return;
     }
-    if (selectedJobNames.length !== 1) {
-      setCreateSetErrorMessage("하나의 문답 세트에는 같은 직무의 저장 질문만 담을 수 있습니다.");
+    if (selectedBranchNames.length !== 1) {
+      setCreateSetErrorMessage("하나의 문답 세트에는 같은 계열의 저장 질문만 담을 수 있습니다.");
       return;
     }
 
@@ -339,7 +384,7 @@ export const SavedQuestionsPage = () => {
     try {
       const createdSet = await createInterviewSet({
         title: normalizedTitle,
-        jobName: base.jobName,
+        branchName: base.branchName,
         description: `저장된 질문 ${selectableSelectedItems.length}개로 만든 세트`,
         visibility: "PRIVATE",
       });
@@ -352,7 +397,7 @@ export const SavedQuestionsPage = () => {
             canonicalAnswer: item.canonicalAnswer || item.modelAnswer || "",
             categoryId: item.categoryId,
             jobName: item.jobName,
-            skillName: item.categoryName,
+            skillName: item.skillName || item.categoryName,
             difficulty: item.difficulty || "MEDIUM",
             tags: item.tags || [],
           });
@@ -384,9 +429,9 @@ export const SavedQuestionsPage = () => {
   return (
     <div className="min-h-screen overflow-x-hidden bg-white pt-[54px]">
       <ContentTopNav point={formatPoint(userPoint)} onClickCharge={() => setShowPointChargeModal(true)} onOpenMenu={() => setIsMobileMenuOpen(true)} />
-      <MobileSidebarDrawer open={isMobileMenuOpen} activeKey="saved_question" onClose={() => setIsMobileMenuOpen(false)} onNavigate={handleSidebarNavigate} userName={userName} profileImageUrl={profileImageUrl} fallbackProfileImageUrl={tempProfileImage} onLogout={() => { setIsMobileMenuOpen(false); setShowLogoutModal(true); }} />
+      <MobileSidebarDrawer open={isMobileMenuOpen} activeKey="saved_question" onClose={() => setIsMobileMenuOpen(false)} onNavigate={handleSidebarNavigate} userName={userName} profileImageUrl={profileImageUrl} onLogout={() => { setIsMobileMenuOpen(false); setShowLogoutModal(true); }} />
       <div className="flex min-h-[calc(100vh-54px)]">
-        <div className="hidden w-[272px] shrink-0 md:block"><Sidebar activeKey="saved_question" onNavigate={handleSidebarNavigate} userName={userName} profileImageUrl={profileImageUrl} fallbackProfileImageUrl={tempProfileImage} onLogout={() => setShowLogoutModal(true)} /></div>
+        <div className="hidden w-[272px] shrink-0 md:block"><Sidebar activeKey="saved_question" onNavigate={handleSidebarNavigate} userName={userName} profileImageUrl={profileImageUrl} onLogout={() => setShowLogoutModal(true)} /></div>
         <main className="flex min-w-0 flex-1 flex-col px-4 pb-8 pt-6 sm:px-5 md:px-8 md:pt-10">
           <div className="mx-auto w-full max-w-[1280px]">
             <section className="rounded-[24px] border border-[#e4e7ee] bg-[linear-gradient(180deg,#ffffff_0%,#f7f9fc_100%)] p-6">
@@ -400,7 +445,15 @@ export const SavedQuestionsPage = () => {
                 <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="질문, 답변, 태그 검색" className="rounded-[14px] border border-[#dfe3eb] px-4 py-3 text-[13px] outline-none focus:border-[#8aa2e8]" />
                 <select value={jobFilter} onChange={(event) => { setJobFilter(event.target.value); setSelectedCategoryId(""); }} className="rounded-[14px] border border-[#dfe3eb] px-4 py-3 text-[13px] outline-none focus:border-[#8aa2e8]">
                   <option value="">전체 직무</option>
-                  {jobs.map((job) => <option key={job.categoryId} value={String(job.categoryId)}>{getCategoryDisplayName(job)}</option>)}
+                  {jobs
+                    .slice()
+                    .sort((left, right) => {
+                      const leftCommon = isCommonJobCategory(left) ? 0 : 1;
+                      const rightCommon = isCommonJobCategory(right) ? 0 : 1;
+                      if (leftCommon !== rightCommon) return leftCommon - rightCommon;
+                      return String(left.displayName || left.name || "").localeCompare(String(right.displayName || right.name || ""), "ko");
+                    })
+                    .map((job) => <option key={job.categoryId} value={String(job.categoryId)}>{getCategoryDisplayName(job)}</option>)}
                 </select>
                 <input value={categoryQuery} onChange={(event) => setCategoryQuery(event.target.value)} placeholder="카테고리 검색" className="rounded-[14px] border border-[#dfe3eb] px-4 py-3 text-[13px] outline-none focus:border-[#8aa2e8]" />
                 <input type="date" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} className="rounded-[14px] border border-[#dfe3eb] px-4 py-3 text-[13px] outline-none focus:border-[#8aa2e8]" />
@@ -409,8 +462,38 @@ export const SavedQuestionsPage = () => {
 
               <div className="mt-3 flex flex-wrap gap-2">
                 <CategoryChip label="전체 카테고리" active={!selectedCategoryId} onClick={() => setSelectedCategoryId("")} />
-                {visibleCategories.map((category) => <CategoryChip key={category.categoryId} label={category.displayName || getCategoryDisplayName(category)} active={selectedCategoryId === String(category.categoryId)} onClick={() => setSelectedCategoryId(String(category.categoryId))} />)}
-                {leafCategories.filter((category) => !jobFilter || String(category.parentId) === jobFilter).length > 8 ? <CategoryChip label={showAllCategories ? "접기" : `+${leafCategories.filter((category) => !jobFilter || String(category.parentId) === jobFilter).length - 8}`} onClick={() => setShowAllCategories((prev) => !prev)} /> : null}
+                {visibleCategories.map((category) => (
+                  <CategoryChip
+                    key={category.categoryId}
+                    label={`${category.displayName || getCategoryDisplayName(category)}${category.isCommon ? " · 공통" : ""}`}
+                    active={selectedCategoryId === String(category.categoryId)}
+                    onClick={() => setSelectedCategoryId(String(category.categoryId))}
+                  />
+                ))}
+                {(jobFilter
+                  ? filterSkillCategoriesByBranchAndJob({
+                      categories,
+                      branchId: selectedJobBranchId,
+                      jobId: jobFilter,
+                    }).length
+                  : leafCategories.length) > 8 ? (
+                  <CategoryChip
+                    label={
+                      showAllCategories
+                        ? "접기"
+                        : `+${
+                            (jobFilter
+                              ? filterSkillCategoriesByBranchAndJob({
+                                  categories,
+                                  branchId: selectedJobBranchId,
+                                  jobId: jobFilter,
+                                }).length
+                              : leafCategories.length) - 8
+                          }`
+                    }
+                    onClick={() => setShowAllCategories((prev) => !prev)}
+                  />
+                ) : null}
               </div>
 
               <div className="mt-3 flex flex-wrap gap-2">
@@ -441,27 +524,31 @@ export const SavedQuestionsPage = () => {
                 const sanitizedTags = (item.tags || []).map(sanitizeQuestionTag).filter(Boolean);
                 const selected = selectedSavedIds.includes(item.savedQuestionId);
                 const selectable = item.questionKind === "TECH";
+                const branchLocked = selectedBranchNames.length > 0 && !selectedBranchNames.includes(String(item.branchName || "").trim());
+                const disabledByBranch = selectable && !selected && branchLocked;
                 return (
                   <article key={item.savedQuestionId} className={`rounded-[22px] border bg-white p-5 shadow-[0_12px_32px_rgba(15,23,42,0.04)] transition hover:border-[#cfd6e4] hover:shadow-[0_18px_36px_rgba(15,23,42,0.08)] ${selected ? "border-[#171b24]" : "border-[#e4e7ee]"}`}>
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex min-w-0 flex-1 items-start gap-3">
-                        <label className={`mt-0.5 inline-flex shrink-0 items-center gap-2 rounded-full border px-2.5 py-1 text-[11px] font-semibold ${selectable ? "cursor-pointer border-[#d8dde7] text-[#4f5664]" : "border-[#f0d4d4] bg-[#fff7f7] text-[#b54747]"}`}>
+                        <label className={`mt-0.5 inline-flex shrink-0 items-center gap-2 rounded-full border px-2.5 py-1 text-[11px] font-semibold ${selectable && !disabledByBranch ? "cursor-pointer border-[#d8dde7] text-[#4f5664]" : "border-[#f0d4d4] bg-[#fff7f7] text-[#b54747]"}`}>
                           <input
                             type="checkbox"
                             checked={selected}
                             onChange={() => handleToggleSavedQuestion(item.savedQuestionId)}
-                            disabled={!selectable}
+                            disabled={!selectable || disabledByBranch}
                             className="sr-only"
                           />
                           <span className={`flex h-4 w-4 items-center justify-center rounded-[5px] border text-[10px] ${selected ? "border-[#171b24] bg-[#171b24] text-white" : "border-[#c7cfdd] bg-white text-transparent"} ${!selectable ? "opacity-50" : ""}`}>✓</span>
-                          <span>{selectable ? (selected ? "선택됨" : "세트 선택") : "세트화 불가"}</span>
+                          <span>{!selectable ? "세트화 불가" : disabledByBranch ? "다른 계열" : selected ? "선택됨" : "세트 선택"}</span>
                         </label>
                         <button type="button" onClick={() => setSelectedQuestion(item)} className="min-w-0 flex-1 text-left">
                         <div className="flex flex-wrap gap-2">
-                          <span className="rounded-full bg-[#eef2f8] px-3 py-1 text-[11px] text-[#556070]">{item.jobName}</span>
-                          <span className="rounded-full bg-[#f4f6fb] px-3 py-1 text-[11px] text-[#556070]">{item.categoryName}</span>
+                          <span className="rounded-full bg-[#eef6ec] px-3 py-1 text-[11px] text-[#496542]">{item.branchName}</span>
+                          <span className={`rounded-full px-3 py-1 text-[11px] ${item.jobName === "공통" ? "bg-[#ebf8ff] text-[#2b6cb0]" : "bg-[#eef2f8] text-[#556070]"}`}>{item.jobName}</span>
+                          <span className={`rounded-full px-3 py-1 text-[11px] ${item.jobName === "공통" ? "bg-[#ebf8ff] text-[#2b6cb0]" : "bg-[#f4f6fb] text-[#556070]"}`}>{item.skillName || item.categoryName}</span>
                           {item.difficulty ? <DifficultyStars difficulty={item.difficulty} compact /> : null}
                           {item.questionKind !== "TECH" ? <span className="rounded-full bg-[#fff1f1] px-3 py-1 text-[11px] text-[#b54747]">세트화 불가</span> : null}
+                          {disabledByBranch ? <span className="rounded-full bg-[#fff1f1] px-3 py-1 text-[11px] text-[#b54747]">선택 계열과 다름</span> : null}
                         </div>
                         <p className="mt-4 line-clamp-5 whitespace-pre-wrap text-[17px] font-semibold leading-[1.7] text-[#171b24]">{item.questionText}</p>
                         {sanitizedTags.length > 0 ? <div className="mt-4 flex flex-wrap gap-2">{sanitizedTags.slice(0, 4).map((tag) => <span key={`${item.savedQuestionId}-${tag}`} className="rounded-full bg-[#fff7ed] px-3 py-1 text-[11px] text-[#9a5b11]">#{tag}</span>)}</div> : null}

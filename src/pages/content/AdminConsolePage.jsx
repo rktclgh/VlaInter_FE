@@ -68,6 +68,20 @@ const toInt = (value, fallback = 0) => {
   return Number.isFinite(parsed) ? parsed : fallback;
 };
 
+const isBranchCommonCategory = (category) =>
+  Number(category?.depth) === 1 && String(category?.name || "").trim() === "공통";
+
+const getAdminCategoryDisplayName = (category, categoryById) => {
+  if (!category) return "";
+  if (!isBranchCommonCategory(category)) {
+    return String(category.name || "").trim();
+  }
+  const branch = category.parentId ? categoryById.get(String(category.parentId)) : null;
+  const branchName = String(branch?.name || "").trim();
+  if (!branchName) return "공통";
+  return `공통(${branchName})`;
+};
+
 const handleRowKeyDown = (event, action) => {
   if (event.target !== event.currentTarget) return;
   if (event.key === "Enter" || event.key === " ") {
@@ -392,6 +406,10 @@ export const AdminConsolePage = () => {
     () => sortedCategories.find((item) => item.categoryId === selectedCategoryId) || null,
     [selectedCategoryId, sortedCategories]
   );
+  const selectedCategoryDisplayName = useMemo(
+    () => getAdminCategoryDisplayName(selectedCategory, categoryById),
+    [categoryById, selectedCategory]
+  );
 
   const selectedCategoryParentOptions = useMemo(() => {
     if (!selectedCategory) return [];
@@ -650,7 +668,7 @@ export const AdminConsolePage = () => {
 
   const handleDeleteCategory = async () => {
     if (!selectedCategoryId || !selectedCategory) return;
-    const confirmed = window.confirm(`'${selectedCategory.name}' 카테고리를 삭제하시겠습니까? 하위 카테고리도 함께 삭제됩니다.`);
+    const confirmed = window.confirm(`'${getAdminCategoryDisplayName(selectedCategory, categoryById)}' 카테고리를 삭제하시겠습니까? 하위 카테고리도 함께 삭제됩니다.`);
     if (!confirmed) return;
 
     setDeletingCategory(true);
@@ -674,7 +692,7 @@ export const AdminConsolePage = () => {
 
     const targetCategory = categoryById.get(String(mergeTargetCategoryId));
     const confirmed = window.confirm(
-      `'${selectedCategory.name}' 카테고리를 '${targetCategory?.name || "선택한 카테고리"}'로 통합하시겠습니까? 참조 질문과 하위 카테고리도 함께 이동됩니다.`
+      `'${getAdminCategoryDisplayName(selectedCategory, categoryById)}' 카테고리를 '${getAdminCategoryDisplayName(targetCategory, categoryById) || "선택한 카테고리"}'로 통합하시겠습니까? 참조 질문과 하위 카테고리도 함께 이동됩니다.`
     );
     if (!confirmed) return;
 
@@ -728,7 +746,6 @@ export const AdminConsolePage = () => {
         onNavigate={handleSidebarNavigate}
         userName={userName}
         profileImageUrl={profileImageUrl}
-        fallbackProfileImageUrl={tempProfileImage}
         onLogout={() => {
           setIsMobileMenuOpen(false);
           setShowLogoutModal(true);
@@ -743,7 +760,6 @@ export const AdminConsolePage = () => {
             onNavigate={handleSidebarNavigate}
             userName={userName}
             profileImageUrl={profileImageUrl}
-            fallbackProfileImageUrl={tempProfileImage}
             onLogout={() => setShowLogoutModal(true)}
           />
         </div>
@@ -1113,7 +1129,7 @@ export const AdminConsolePage = () => {
                       .filter((category) => !categoryDepth0Filter || String(category.parentId || "") === categoryDepth0Filter)
                       .map((category) => (
                         <option key={category.categoryId} value={String(category.categoryId)}>
-                          {category.name}
+                          {getAdminCategoryDisplayName(category, categoryById)}
                         </option>
                       ))}
                   </select>
@@ -1146,7 +1162,7 @@ export const AdminConsolePage = () => {
                         className={`cursor-pointer rounded-[12px] border px-3 py-2 ${selected ? "border-[#9eb1dd] bg-[#f5f8ff]" : "border-[#edf1f6] hover:bg-[#fafbfd]"}`}
                       >
                         <p style={{ paddingLeft: `${indent}px` }} className="text-[13px] font-medium text-[#1f2937]">
-                          {category.name}
+                          {getAdminCategoryDisplayName(category, categoryById)}
                         </p>
                         <p className="mt-1 text-[11px] text-[#7b8699]">
                           id={category.categoryId} · {category.depthLabel || `depth=${category.depth}`} · active={String(category.isActive)} · leaf={String(category.isLeaf)}
@@ -1185,7 +1201,7 @@ export const AdminConsolePage = () => {
                       <option value="">{newCategoryDepth === "0" ? "상위 카테고리 없음(루트)" : "상위 카테고리 선택"}</option>
                       {newCategoryParentOptions.map((category) => (
                         <option key={category.categoryId} value={String(category.categoryId)}>
-                          {category.name}
+                          {getAdminCategoryDisplayName(category, categoryById)}
                         </option>
                       ))}
                     </select>
@@ -1222,6 +1238,9 @@ export const AdminConsolePage = () => {
                   <h2 className="text-[15px] font-semibold text-[#1f2937]">카테고리 수정/이동</h2>
                   {selectedCategoryId ? (
                     <div className="mt-3 grid gap-3 text-[13px]">
+                      <p className="rounded-[10px] border border-[#e5e7eb] bg-[#f8fafc] px-3 py-2 text-[12px] text-[#4b5563]">
+                        현재 카테고리: {selectedCategoryDisplayName || "-"}
+                      </p>
                       <p className="rounded-[10px] border border-[#e5e7eb] bg-[#f8fafc] px-3 py-2 text-[12px] text-[#4b5563]">
                         현재 depth: {selectedCategory?.depthLabel || selectedCategory?.depth}
                       </p>
@@ -1261,7 +1280,7 @@ export const AdminConsolePage = () => {
                           .filter((category) => category.categoryId !== selectedCategoryId)
                           .map((category) => (
                             <option key={category.categoryId} value={String(category.categoryId)}>
-                              {category.name}
+                              {getAdminCategoryDisplayName(category, categoryById)}
                             </option>
                           ))}
                       </select>
@@ -1322,7 +1341,7 @@ export const AdminConsolePage = () => {
                           <option value="">통합 대상 카테고리 선택</option>
                           {selectedCategoryMergeOptions.map((category) => (
                             <option key={category.categoryId} value={String(category.categoryId)}>
-                              {category.name}
+                              {getAdminCategoryDisplayName(category, categoryById)}
                             </option>
                           ))}
                         </select>

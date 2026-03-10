@@ -1,8 +1,19 @@
 import { apiRequest, refreshAuthSession } from "./apiClient";
+import defaultProfileImage from "../assets/icon/temp.png";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8080";
+let hasMyProfileImage = false;
+
+const extractProfile = (payload) => {
+  if (!payload || typeof payload !== "object") return {};
+  if (payload.data && typeof payload.data === "object" && !Array.isArray(payload.data)) return payload.data;
+  if (payload.result && typeof payload.result === "object" && !Array.isArray(payload.result)) return payload.result;
+  if (payload.user && typeof payload.user === "object" && !Array.isArray(payload.user)) return payload.user;
+  return payload;
+};
 
 export function getMyProfileImageUrl(cacheBust = true) {
+  if (!hasMyProfileImage) return defaultProfileImage;
   const baseUrl = `${API_BASE_URL}/api/users/files/me/profile-image`;
   if (!cacheBust) return baseUrl;
   const separator = baseUrl.includes("?") ? "&" : "?";
@@ -10,9 +21,12 @@ export function getMyProfileImageUrl(cacheBust = true) {
 }
 
 export async function getMyProfile() {
-  return apiRequest("/api/users/me", {
+  const payload = await apiRequest("/api/users/me", {
     method: "GET",
   });
+  const profile = extractProfile(payload);
+  hasMyProfileImage = Boolean(profile?.hasProfileImage);
+  return payload;
 }
 
 export async function getMyFiles() {
@@ -51,6 +65,10 @@ export async function uploadMyFile(fileType, file) {
 
   if (!response.ok) {
     throw new Error(data?.message || "파일 업로드 중 오류가 발생했습니다.");
+  }
+
+  if (fileType === "PROFILE_IMAGE") {
+    hasMyProfileImage = true;
   }
 
   return data;

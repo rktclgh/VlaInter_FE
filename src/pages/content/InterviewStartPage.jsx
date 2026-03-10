@@ -10,7 +10,7 @@ import { PointChargeSuccessModal } from "../../components/PointChargeSuccessModa
 import { StarRatingInput, StarIcons } from "../../components/DifficultyStars";
 import tempProfileImage from "../../assets/icon/temp.png";
 import { logout } from "../../lib/authApi";
-import { searchCategoryByText } from "../../lib/categoryPresentation";
+import { filterSkillCategoriesByBranchAndJob, searchCategoryByText } from "../../lib/categoryPresentation";
 import { ratingToDifficulty } from "../../lib/difficultyRating";
 import { createInterviewCategory, getInterviewCategories, getMyInterviewSets, getReadyMockDocuments, startMockInterview } from "../../lib/interviewApi";
 import { saveTechInterviewSession } from "../../lib/interviewSessionFlow";
@@ -278,8 +278,12 @@ export const InterviewStartPage = () => {
     });
   }, [branchFilter, jobQuery, jobs]);
   const skillItems = useMemo(
-    () => (categoryTree || [])
-      .filter((item) => Number(item.depth) === 2 && (!jobFilter || String(item.parentId || "") === String(jobFilter)))
+    () => filterSkillCategoriesByBranchAndJob({
+      categories: categoryTree || [],
+      branchId: branchFilter,
+      jobId: jobFilter,
+      keyword: "",
+    })
       .map((item) => ({
         ...item,
         categoryId: Number(item.categoryId),
@@ -287,8 +291,11 @@ export const InterviewStartPage = () => {
         displayName: String(item.name || "").trim(),
         isLeaf: true,
       }))
-      .sort((left, right) => String(left.name || "").localeCompare(String(right.name || ""), "ko")),
-    [categoryTree, jobFilter]
+      .sort((left, right) => {
+        if (Boolean(left.isCommon) !== Boolean(right.isCommon)) return left.isCommon ? -1 : 1;
+        return String(left.name || "").localeCompare(String(right.name || ""), "ko");
+      }),
+    [branchFilter, categoryTree, jobFilter]
   );
   const visibleSkills = useMemo(() => {
     const keyword = skillQuery.trim().toLowerCase();
@@ -315,7 +322,7 @@ export const InterviewStartPage = () => {
 
   const canCreateJob = Boolean(branchFilter && jobQuery.trim() && !visibleJobs.some((job) => (job.displayName || job.name || "").trim().toLowerCase() === jobQuery.trim().toLowerCase()));
   const canCreateBranch = Boolean(branchQuery.trim() && !branchItems.some((branch) => (branch.name || "").trim().toLowerCase() === branchQuery.trim().toLowerCase()));
-  const canCreateSkill = Boolean(jobFilter && skillQuery.trim() && !skillItems.some((skill) => (skill.displayName || skill.name || "").trim().toLowerCase() === skillQuery.trim().toLowerCase()));
+  const canCreateSkill = Boolean(jobFilter && skillQuery.trim() && !(categoryTree || []).some((item) => Number(item.depth) === 2 && String(item.name || "").trim().toLowerCase() === skillQuery.trim().toLowerCase()));
   const branchAlreadyExists = Boolean(branchQuery.trim() && !canCreateBranch);
   const jobAlreadyExists = Boolean(jobQuery.trim() && !canCreateJob);
   const skillAlreadyExists = Boolean(skillQuery.trim() && !canCreateSkill);
@@ -330,12 +337,16 @@ export const InterviewStartPage = () => {
     [myQuestionSets, selectedQuestionSetId]
   );
   const visibleQuestionSets = useMemo(() => {
+    const normalizedBranchName = String(branchItems.find((item) => String(item.categoryId) === String(branchFilter))?.name || "").trim().toLowerCase();
     const normalizedJobName = String(selectedJob?.displayName || selectedJob?.name || "").trim().toLowerCase();
     return myQuestionSets.filter((set) => {
+      const setBranchName = String(set.branchName || set.jobName || "").trim().toLowerCase();
+      const setJobNames = Array.isArray(set.jobNames) ? set.jobNames.map((name) => String(name || "").trim().toLowerCase()) : [];
+      if (normalizedBranchName && setBranchName !== normalizedBranchName) return false;
       if (!normalizedJobName) return true;
-      return String(set.jobName || "").trim().toLowerCase() === normalizedJobName;
+      return setJobNames.includes(normalizedJobName) || setJobNames.includes("공통");
     });
-  }, [myQuestionSets, selectedJob]);
+  }, [branchFilter, branchItems, myQuestionSets, selectedJob]);
 
   useEffect(() => {
     if (!selectedQuestionSetId) return;
@@ -554,7 +565,6 @@ export const InterviewStartPage = () => {
         onNavigate={handleSidebarNavigate}
         userName={userName}
         profileImageUrl={profileImageUrl}
-        fallbackProfileImageUrl={tempProfileImage}
         onLogout={() => {
           if (startingInterview) return;
           setIsMobileMenuOpen(false);
@@ -569,7 +579,6 @@ export const InterviewStartPage = () => {
             onNavigate={handleSidebarNavigate}
             userName={userName}
             profileImageUrl={profileImageUrl}
-            fallbackProfileImageUrl={tempProfileImage}
             onLogout={() => {
               if (startingInterview) return;
               setShowLogoutModal(true);
@@ -681,12 +690,15 @@ export const InterviewStartPage = () => {
                     {selectedSkills.length ? (
                       <div className="mt-4 flex flex-wrap gap-2 rounded-[14px] border border-[#eef1f5] bg-[#fafbfd] p-3">
                         {selectedSkills.map((skill) => (
-                          <span key={`selected-skill-${skill.categoryId}`} className="inline-flex items-center gap-2 rounded-full border border-[#171b24] bg-[#171b24] px-3 py-1 text-[12px] text-white">
+                          <span
+                            key={`selected-skill-${skill.categoryId}`}
+                            className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[12px] ${skill.isCommon ? "border-[#61a8e8] bg-[#e8f4ff] text-[#2563a6]" : "border-[#171b24] bg-[#171b24] text-white"}`}
+                          >
                             <span>{skill.displayName || skill.name}</span>
                             <button
                               type="button"
                               onClick={() => setSelectedCategoryIds((prev) => prev.filter((id) => id !== String(skill.categoryId)))}
-                              className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-white/18 text-[11px] leading-none text-white/90"
+                              className={`inline-flex h-4 w-4 items-center justify-center rounded-full text-[11px] leading-none ${skill.isCommon ? "bg-[#61a8e8]/15 text-[#2563a6]" : "bg-white/18 text-white/90"}`}
                               aria-label={`${skill.displayName || skill.name} 제거`}
                             >
                               ×
@@ -699,7 +711,7 @@ export const InterviewStartPage = () => {
                       {visibleSkills.map((skill) => (
                         <FilterChip
                           key={skill.categoryId}
-                          label={skill.label}
+                          label={skill.isCommon ? `${skill.label} · 공통` : skill.label}
                           active={selectedCategoryIds.includes(String(skill.categoryId))}
                           onClick={() => {
                             const nextId = String(skill.categoryId);
@@ -717,7 +729,7 @@ export const InterviewStartPage = () => {
                     </div>
                     <p className={`mt-3 text-[12px] ${skillAlreadyExists ? "text-[#d14343]" : "text-[#7a8190]"}`}>
                       {skillAlreadyExists
-                        ? "같은 이름의 기술이 이미 있습니다. 중복/장난 입력은 관리자 확인 후 즉시 로그인 차단될 수 있습니다."
+                        ? "같은 이름의 기술이 이미 있습니다. 직무가 달라도 중복 생성은 막힙니다. 장난성 입력은 관리자 확인 후 즉시 로그인 차단될 수 있습니다."
                         : "새로 만든 기술은 바로 선택됩니다. 장난성 입력은 관리자 확인 후 즉시 로그인 차단될 수 있습니다."}
                     </p>
                     <p className="mt-3 text-[12px] text-[#7a8190]">최대 3개까지 선택하실 수 있으며, 선택한 기술 전체에서 질문 후보를 한 번에 생성한 뒤 품질 통과분만 섞어 출제합니다.</p>
@@ -754,7 +766,7 @@ export const InterviewStartPage = () => {
                             <div className="min-w-0 flex-1">
                               <p className="truncate text-[12px] font-semibold text-[#171b24]">{set.title}</p>
                               <p className="mt-0.5 truncate text-[11px] text-[#7a8190]">
-                                {set.jobName || "직무 미지정"} · {(skillLabels.length ? skillLabels.slice(0, 3).join(", ") : "기술 없음")}
+                                {(set.branchName || set.jobName || "계열 미지정")} · {(skillLabels.length ? skillLabels.slice(0, 3).join(", ") : "기술 없음")}
                               </p>
                             </div>
                           </button>
@@ -845,13 +857,23 @@ export const InterviewStartPage = () => {
                         />
                         <span className="text-[12px] text-[#6a7383]">최소 5문항, 최대 20문항</span>
                       </div>
-                      <label className="mt-4 inline-flex items-center gap-2 text-[12px] text-[#4f5664]">
+                      <label className="mt-4 inline-flex cursor-pointer items-center gap-2 text-[12px] text-[#4f5664]">
                         <input
                           type="checkbox"
                           checked={includeSelfIntroduction}
                           onChange={(event) => setIncludeSelfIntroduction(event.target.checked)}
-                          className="h-4 w-4 rounded border border-[#cfd6e4]"
+                          className="sr-only"
                         />
+                        <span
+                          aria-hidden="true"
+                          className={`inline-flex h-4 w-4 items-center justify-center rounded-sm border text-[11px] leading-none transition ${
+                            includeSelfIntroduction
+                              ? "border-[#171b24] bg-[#171b24] text-white"
+                              : "border-[#cfd6e4] bg-white text-transparent"
+                          }`}
+                        >
+                          ✓
+                        </span>
                         <span>첫 질문에 자기소개 문항 추가</span>
                       </label>
                       <p className="mt-2 text-[12px] text-[#7a8190]">
@@ -879,6 +901,11 @@ export const InterviewStartPage = () => {
                       <span className="rounded-full border border-[#d8dde7] bg-white px-3 py-1 text-[12px] text-[#4f5664]">
                         문항 {totalInterviewQuestionCount}개{includeSelfIntroduction ? " (자기소개 포함)" : ""}
                       </span>
+                      {includeSelfIntroduction ? (
+                        <span className="rounded-full border border-[#bfe3fb] bg-[#f3fbff] px-3 py-1 text-[12px] font-medium text-[#2b6cb0]">
+                          첫 질문: 자기소개
+                        </span>
+                      ) : null}
                       {DOCUMENT_TYPES.map((type) => {
                         const file = selectedFileObjects[type.key];
                         return (

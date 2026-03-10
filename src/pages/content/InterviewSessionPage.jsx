@@ -321,7 +321,6 @@ export const InterviewSessionPage = () => {
         onNavigate={handleSidebarNavigate}
         userName={userName}
         profileImageUrl={profileImageUrl}
-        fallbackProfileImageUrl={tempProfileImage}
         onLogout={() => {
           if (isFinalizingSession) return;
           setIsMobileMenuOpen(false);
@@ -336,7 +335,6 @@ export const InterviewSessionPage = () => {
             onNavigate={handleSidebarNavigate}
             userName={userName}
             profileImageUrl={profileImageUrl}
-            fallbackProfileImageUrl={tempProfileImage}
             onLogout={() => {
               if (isFinalizingSession) return;
               setShowLogoutModal(true);

@@ -10,18 +10,27 @@ import { QuestionAnswerDetailModal } from "../../components/QuestionAnswerDetail
 import { Sidebar } from "../../components/Sidebar";
 import tempProfileImage from "../../assets/icon/temp.png";
 import { logout } from "../../lib/authApi";
-import { getCategoryDisplayName, sanitizeQuestionTag } from "../../lib/categoryPresentation";
+import {
+  buildCategoryMap,
+  filterSkillCategoriesByBranchAndJob,
+  getBranchDisplayName,
+  getCategoryDisplayName,
+  isCommonJobCategory,
+  sanitizeQuestionTag,
+} from "../../lib/categoryPresentation";
 import { ratingToDifficulty } from "../../lib/difficultyRating";
 import {
   addQuestionToInterviewSet,
   createInterviewCategory,
   createInterviewSet,
+  deleteQuestionFromInterviewSet,
   deleteInterviewSet,
   getInterviewCategories,
   getInterviewSetQuestions,
   getMyInterviewSets,
   saveInterviewQuestion,
   startTechInterview,
+  updateQuestionInInterviewSet,
   updateInterviewSet,
 } from "../../lib/interviewApi";
 import { saveTechInterviewSession } from "../../lib/interviewSessionFlow";
@@ -31,7 +40,7 @@ import { extractProfile, formatPoint, parsePoint } from "../../lib/profileUtils"
 import { isAlreadySavedQuestionError } from "../../lib/savedQuestionUtils";
 import { getMyProfile, getMyProfileImageUrl } from "../../lib/userApi";
 
-const DEFAULT_ROW = { questionText: "", canonicalAnswer: "", tags: "", rating: 3, skillQuery: "", selectedCategoryId: "" };
+const DEFAULT_ROW = { questionText: "", canonicalAnswer: "", tags: "", rating: 3, jobQuery: "", selectedJobId: "", skillQuery: "", selectedCategoryId: "" };
 
 const formatDate = (value) => {
   const date = new Date(value || "");
@@ -121,8 +130,6 @@ const CreateQuestionSetModal = ({
   const [setTitle, setSetTitle] = useState("");
   const [branchQuery, setBranchQuery] = useState("");
   const [selectedBranchId, setSelectedBranchId] = useState("");
-  const [jobQuery, setJobQuery] = useState("");
-  const [selectedJobId, setSelectedJobId] = useState("");
   const [rows, setRows] = useState([{ ...DEFAULT_ROW }]);
   const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
   const [localMessage, setLocalMessage] = useState("");
@@ -135,33 +142,14 @@ const CreateQuestionSetModal = ({
     });
   }, [branchItems, branchQuery]);
 
-  const visibleJobs = useMemo(() => {
-    const keyword = jobQuery.trim().toLowerCase();
-    return jobs.filter((item) => {
-      if (selectedBranchId && String(item.parentId) !== selectedBranchId) return false;
-      if (!keyword) return true;
-      return [item.name, item.code, item.path].filter(Boolean).join(" ").toLowerCase().includes(keyword);
-    });
-  }, [jobQuery, jobs, selectedBranchId]);
-
   const canCreateBranch = Boolean(
     branchQuery.trim() &&
     !branchItems.some((item) => String(item.name || "").trim().toLowerCase() === branchQuery.trim().toLowerCase())
   );
-  const canCreateJob = Boolean(
-    selectedBranchId &&
-    jobQuery.trim() &&
-    !jobs.some(
-      (item) =>
-        String(item.parentId) === selectedBranchId &&
-        String(item.name || "").trim().toLowerCase() === jobQuery.trim().toLowerCase()
-    )
-  );
   const dirty =
     setTitle.trim() ||
     branchQuery.trim() ||
-    jobQuery.trim() ||
-    rows.some((row) => row.questionText.trim() || row.canonicalAnswer.trim() || row.tags.trim() || row.skillQuery.trim() || row.selectedCategoryId);
+    rows.some((row) => row.questionText.trim() || row.canonicalAnswer.trim() || row.tags.trim() || row.jobQuery.trim() || row.selectedJobId || row.skillQuery.trim() || row.selectedCategoryId);
 
   const requestClose = () => {
     if (submitting || creatingCategory) return;
@@ -178,21 +166,27 @@ const CreateQuestionSetModal = ({
       setLocalMessage("");
       const created = await onCreateCategory({ parentId: null, name: branchQuery.trim() });
       setSelectedBranchId(String(created?.categoryId || ""));
-      setSelectedJobId("");
-      setRows((prev) => prev.map((row) => ({ ...row, selectedCategoryId: "", skillQuery: "" })));
+      setRows((prev) => prev.map((row) => ({ ...row, jobQuery: "", selectedJobId: "", selectedCategoryId: "", skillQuery: "" })));
     } catch (error) {
       setLocalMessage(error?.message || "계열 생성에 실패했습니다.");
     }
   };
 
-  const handleCreateJob = async () => {
-    if (!canCreateJob) return;
+  const handleCreateJob = async (rowIndex) => {
+    const row = rows[rowIndex];
+    const rawName = row?.jobQuery?.trim();
+    if (!selectedBranchId || !rawName) return;
+    const duplicated = rawName.toLowerCase() !== "공통" && jobs.some((item) => String(item.name || "").trim().toLowerCase() === rawName.toLowerCase());
+    if (duplicated) return;
     try {
       setLocalMessage("");
-      const created = await onCreateCategory({ parentId: Number(selectedBranchId), name: jobQuery.trim() });
-      const nextJobId = String(created?.categoryId || "");
-      setSelectedJobId(nextJobId);
-      setRows((prev) => prev.map((row) => ({ ...row, selectedCategoryId: "", skillQuery: "" })));
+      const created = await onCreateCategory({ parentId: Number(selectedBranchId), name: rawName });
+      updateRow(rowIndex, {
+        jobQuery: String(created?.name || rawName).trim(),
+        selectedJobId: String(created?.categoryId || ""),
+        selectedCategoryId: "",
+        skillQuery: "",
+      });
     } catch (error) {
       setLocalMessage(error?.message || "직무 생성에 실패했습니다.");
     }
@@ -205,16 +199,12 @@ const CreateQuestionSetModal = ({
   const handleCreateSkill = async (rowIndex) => {
     const row = rows[rowIndex];
     const rawName = row?.skillQuery?.trim();
-    if (!selectedJobId || !rawName) return;
-    const duplicated = skillItems.some(
-      (item) =>
-        String(item.parentId) === selectedJobId &&
-        String(item.name || "").trim().toLowerCase() === rawName.toLowerCase()
-    );
+    if (!row?.selectedJobId || !rawName) return;
+    const duplicated = skillItems.some((item) => String(item.name || "").trim().toLowerCase() === rawName.toLowerCase());
     if (duplicated) return;
     try {
       setLocalMessage("");
-      const created = await onCreateCategory({ parentId: Number(selectedJobId), name: rawName });
+      const created = await onCreateCategory({ parentId: Number(row.selectedJobId), name: rawName });
       updateRow(rowIndex, {
         selectedCategoryId: String(created?.categoryId || ""),
         skillQuery: String(created?.name || rawName).trim(),
@@ -222,6 +212,22 @@ const CreateQuestionSetModal = ({
     } catch (error) {
       setLocalMessage(error?.message || "기술 생성에 실패했습니다.");
     }
+  };
+
+  const getVisibleJobs = (row) => {
+    const keyword = row.jobQuery.trim().toLowerCase();
+    return jobs
+      .filter((item) => String(item.parentId || "") === String(selectedBranchId || ""))
+      .filter((item) => {
+        if (!keyword) return true;
+        return [item.name, item.code, item.path].filter(Boolean).join(" ").toLowerCase().includes(keyword);
+      })
+      .sort((left, right) => {
+        const leftCommon = isCommonJobCategory(left) ? 0 : 1;
+        const rightCommon = isCommonJobCategory(right) ? 0 : 1;
+        if (leftCommon !== rightCommon) return leftCommon - rightCommon;
+        return String(left.displayName || left.name || "").localeCompare(String(right.displayName || right.name || ""), "ko");
+      });
   };
 
   return (
@@ -283,42 +289,15 @@ const CreateQuestionSetModal = ({
                         active={selectedBranchId === String(item.categoryId)}
                         onClick={() => {
                           setSelectedBranchId(String(item.categoryId));
-                          setSelectedJobId("");
-                          setRows((prev) => prev.map((row) => ({ ...row, selectedCategoryId: "", skillQuery: "" })));
-                        }}
-                      />
-                    ))}
-                  </div>
-                </div>
-
-                <div>
-                  <p className="text-[12px] font-semibold text-[#738094]">직무 검색/생성</p>
-                  <div className="mt-2 grid gap-2 grid-cols-[1fr_auto]">
-                    <input
-                      value={jobQuery}
-                      onChange={(event) => setJobQuery(event.target.value)}
-                      placeholder={selectedBranchId ? "직무 검색 또는 새 직무 입력" : "계열을 먼저 선택해 주세요"}
-                      disabled={!selectedBranchId}
-                      className="rounded-[14px] border border-[#dfe3eb] px-4 py-3 text-[13px] outline-none focus:border-[#8aa2e8] disabled:bg-[#f3f5f8]"
-                    />
-                    <button
-                      type="button"
-                      disabled={!canCreateJob || creatingCategory}
-                      onClick={() => void handleCreateJob()}
-                      className="rounded-[12px] border border-[#171b24] px-3 py-2 text-[12px] font-semibold text-[#171b24] disabled:opacity-50"
-                    >
-                      {creatingCategory ? "생성 중..." : "추가"}
-                    </button>
-                  </div>
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    {visibleJobs.slice(0, 8).map((item) => (
-                      <CategoryChip
-                        key={item.categoryId}
-                        label={item.displayName || item.name}
-                        active={selectedJobId === String(item.categoryId)}
-                        onClick={() => {
-                          setSelectedJobId(String(item.categoryId));
-                          setRows((prev) => prev.map((row) => ({ ...row, selectedCategoryId: "", skillQuery: "" })));
+                          setRows((prev) =>
+                            prev.map((row) => ({
+                              ...row,
+                              jobQuery: "",
+                              selectedJobId: "",
+                              selectedCategoryId: "",
+                              skillQuery: "",
+                            }))
+                          );
                         }}
                       />
                     ))}
@@ -328,7 +307,7 @@ const CreateQuestionSetModal = ({
                 <div className="rounded-[16px] border border-[#eef1f5] bg-white p-4">
                   <p className="text-[12px] font-semibold text-[#738094]">세트 기준</p>
                   <p className="mt-2 text-[12px] leading-[1.7] text-[#5e6472]">
-                    세트 자체에는 계열과 직무만 걸립니다. 기술 카테고리는 아래 각 문답 카드에서 개별로 선택하거나 새로 추가할 수 있습니다.
+                    세트는 계열 단위로 묶이고, 각 문답마다 직무와 기술을 따로 고릅니다. 같은 계열이라면 선택한 직무와 계열 공통 직무의 기술을 함께 쓸 수 있습니다.
                   </p>
                 </div>
               </section>
@@ -349,26 +328,79 @@ const CreateQuestionSetModal = ({
                     </div>
                     <div className="mt-3 grid gap-3">
                       <div>
-                        <p className="text-[12px] font-semibold text-[#738094]">기술 검색/생성</p>
+                        <p className="text-[12px] font-semibold text-[#738094]">직무 검색/생성</p>
                         <div className="mt-2 grid gap-2 sm:grid-cols-[1fr_auto]">
                           <input
-                            value={row.skillQuery}
-                            onChange={(event) => updateRow(index, { skillQuery: event.target.value, selectedCategoryId: "" })}
-                            placeholder={selectedJobId ? "이 문답의 기술 검색 또는 새 기술 입력" : "직무를 먼저 선택해 주세요"}
-                            disabled={!selectedJobId}
+                            value={row.jobQuery}
+                            onChange={(event) => updateRow(index, { jobQuery: event.target.value, selectedJobId: "", selectedCategoryId: "", skillQuery: "" })}
+                            placeholder={selectedBranchId ? "이 문답의 직무 검색 또는 새 직무 입력" : "계열을 먼저 선택해 주세요"}
+                            disabled={!selectedBranchId}
                             className="rounded-[14px] border border-[#dfe3eb] px-4 py-3 text-[13px] outline-none focus:border-[#8aa2e8] disabled:bg-[#f3f5f8]"
                           />
                           <button
                             type="button"
                             disabled={
-                              !selectedJobId ||
+                              !selectedBranchId ||
+                              !row.jobQuery.trim() ||
+                              creatingCategory ||
+                              (row.jobQuery.trim().toLowerCase() !== "공통" &&
+                                jobs.some((item) => String(item.name || "").trim().toLowerCase() === row.jobQuery.trim().toLowerCase()))
+                            }
+                            onClick={() => void handleCreateJob(index)}
+                            className="rounded-[12px] border border-[#171b24] px-3 py-2 text-[12px] font-semibold text-[#171b24] disabled:opacity-50"
+                          >
+                            {creatingCategory ? "생성 중..." : "직무 추가"}
+                          </button>
+                        </div>
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          {getVisibleJobs(row).slice(0, 8).map((item) => {
+                            const selected = row.selectedJobId === String(item.categoryId);
+                            const common = isCommonJobCategory(item);
+                            return (
+                              <button
+                                key={`${index}-job-${item.categoryId}`}
+                                type="button"
+                                onClick={() =>
+                                  updateRow(index, {
+                                    selectedJobId: String(item.categoryId),
+                                    jobQuery: item.displayName || item.name,
+                                    selectedCategoryId: "",
+                                    skillQuery: "",
+                                  })
+                                }
+                                className={`rounded-full border px-3 py-1 text-[11px] transition ${
+                                  selected
+                                    ? common
+                                      ? "border-[#63b3ed] bg-[#ebf8ff] text-[#2b6cb0]"
+                                      : "border-[#171b24] bg-[#171b24] text-white"
+                                    : common
+                                      ? "border-[#bfe3fb] bg-[#f3fbff] text-[#4b83b3]"
+                                      : "border-[#d9dde5] bg-white text-[#556070]"
+                                }`}
+                              >
+                                {item.displayName || item.name}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                      <div>
+                        <p className="text-[12px] font-semibold text-[#738094]">기술 검색/생성</p>
+                        <div className="mt-2 grid gap-2 sm:grid-cols-[1fr_auto]">
+                          <input
+                            value={row.skillQuery}
+                            onChange={(event) => updateRow(index, { skillQuery: event.target.value, selectedCategoryId: "" })}
+                            placeholder={row.selectedJobId ? "이 문답의 기술 검색 또는 새 기술 입력" : "직무를 먼저 선택해 주세요"}
+                            disabled={!row.selectedJobId}
+                            className="rounded-[14px] border border-[#dfe3eb] px-4 py-3 text-[13px] outline-none focus:border-[#8aa2e8] disabled:bg-[#f3f5f8]"
+                          />
+                          <button
+                            type="button"
+                            disabled={
+                              !row.selectedJobId ||
                               !row.skillQuery.trim() ||
                               creatingCategory ||
-                              skillItems.some(
-                                (item) =>
-                                  String(item.parentId) === String(selectedJobId) &&
-                                  String(item.name || "").trim().toLowerCase() === row.skillQuery.trim().toLowerCase()
-                              )
+                              skillItems.some((item) => String(item.name || "").trim().toLowerCase() === row.skillQuery.trim().toLowerCase())
                             }
                             onClick={() => void handleCreateSkill(index)}
                             className="rounded-[12px] border border-[#171b24] px-3 py-2 text-[12px] font-semibold text-[#171b24] disabled:opacity-50"
@@ -377,28 +409,42 @@ const CreateQuestionSetModal = ({
                           </button>
                         </div>
                         <div className="mt-3 flex flex-wrap gap-2">
-                          {skillItems
-                            .filter((item) => !selectedJobId || String(item.parentId) === String(selectedJobId))
-                            .filter((item) => {
-                              const keyword = row.skillQuery.trim().toLowerCase();
-                              if (!keyword) return true;
-                              return [item.name, item.code, item.path].filter(Boolean).join(" ").toLowerCase().includes(keyword);
-                            })
+                          {filterSkillCategoriesByBranchAndJob({
+                            categories,
+                            branchId: selectedBranchId,
+                            jobId: row.selectedJobId,
+                            keyword: row.skillQuery,
+                          })
                             .slice(0, 8)
-                            .map((item) => (
-                              <CategoryChip
-                                key={`${index}-${item.categoryId}`}
-                                label={item.displayName || item.name}
-                                active={row.selectedCategoryId === String(item.categoryId)}
-                                onClick={() => updateRow(index, { selectedCategoryId: String(item.categoryId), skillQuery: item.displayName || item.name })}
-                              />
-                            ))}
+                            .map((item) => {
+                              const selected = row.selectedCategoryId === String(item.categoryId);
+                              return (
+                                <button
+                                  key={`${index}-${item.categoryId}`}
+                                  type="button"
+                                  onClick={() => updateRow(index, { selectedCategoryId: String(item.categoryId), skillQuery: item.displayName || item.name })}
+                                  className={`rounded-full border px-3 py-1 text-[11px] transition ${
+                                    selected
+                                      ? item.isCommon
+                                        ? "border-[#63b3ed] bg-[#ebf8ff] text-[#2b6cb0]"
+                                        : "border-[#171b24] bg-[#171b24] text-white"
+                                      : item.isCommon
+                                        ? "border-[#bfe3fb] bg-[#f3fbff] text-[#4b83b3]"
+                                        : "border-[#d9dde5] bg-white text-[#556070]"
+                                  }`}
+                                >
+                                  {item.displayName || item.name}
+                                  {item.isCommon ? " · 공통" : ""}
+                                </button>
+                              );
+                            })}
                           {row.skillQuery.trim() &&
-                          skillItems
-                            .filter((item) => !selectedJobId || String(item.parentId) === String(selectedJobId))
-                            .filter((item) =>
-                              [item.name, item.code, item.path].filter(Boolean).join(" ").toLowerCase().includes(row.skillQuery.trim().toLowerCase())
-                            ).length === 0 ? (
+                          filterSkillCategoriesByBranchAndJob({
+                            categories,
+                            branchId: selectedBranchId,
+                            jobId: row.selectedJobId,
+                            keyword: row.skillQuery,
+                          }).length === 0 ? (
                             <span className="rounded-full bg-[#fff7ed] px-3 py-1 text-[11px] text-[#9a5b11]">
                               검색 결과가 없으면 이 문답 저장 시 새 기술 카테고리가 생성됩니다.
                             </span>
@@ -450,7 +496,6 @@ const CreateQuestionSetModal = ({
                     onSubmit({
                       setTitle: setTitle.trim(),
                       selectedBranchId,
-                      selectedJobId,
                       rows,
                     })
                   }
@@ -470,6 +515,293 @@ const CreateQuestionSetModal = ({
   );
 };
 
+const EditQuestionModal = ({
+  categories,
+  branchId,
+  item,
+  onClose,
+  onSubmit,
+  onDelete,
+  onCreateCategory,
+  creatingCategory,
+  saving,
+  deleting,
+  errorMessage,
+}) => {
+  const jobs = useMemo(
+    () =>
+      categories
+        .filter((category) => Number(category.depth) === 1 && String(category.parentId || "") === String(branchId || ""))
+        .sort((left, right) => {
+          const leftCommon = isCommonJobCategory(left) ? 0 : 1;
+          const rightCommon = isCommonJobCategory(right) ? 0 : 1;
+          if (leftCommon !== rightCommon) return leftCommon - rightCommon;
+          return String(left.displayName || left.name || "").localeCompare(String(right.displayName || right.name || ""), "ko");
+        }),
+    [branchId, categories]
+  );
+  const [questionText, setQuestionText] = useState(item?.questionText || "");
+  const [canonicalAnswer, setCanonicalAnswer] = useState(item?.canonicalAnswer || "");
+  const [rating, setRating] = useState(item?.difficulty ? { EASY: 1, MEDIUM: 3, HARD: 5 }[item.difficulty] || 3 : 3);
+  const [tags, setTags] = useState(Array.isArray(item?.tags) ? item.tags.join(", ") : "");
+  const initialJob = jobs.find((job) => String(job.displayName || job.name || "").trim() === String(item?.jobName || "").trim()) || null;
+  const [jobQuery, setJobQuery] = useState(initialJob?.displayName || initialJob?.name || item?.jobName || "");
+  const [selectedJobId, setSelectedJobId] = useState(String(initialJob?.categoryId || ""));
+  const [skillQuery, setSkillQuery] = useState(item?.skillName || item?.categoryName || "");
+  const [selectedCategoryId, setSelectedCategoryId] = useState(String(item?.categoryId || ""));
+  const [localMessage, setLocalMessage] = useState("");
+
+  const visibleJobs = useMemo(() => {
+    const keyword = jobQuery.trim().toLowerCase();
+    return jobs.filter((job) => {
+      if (!keyword) return true;
+      return [job.name, job.code, job.path].filter(Boolean).join(" ").toLowerCase().includes(keyword);
+    });
+  }, [jobQuery, jobs]);
+
+  const visibleSkills = useMemo(
+    () =>
+      filterSkillCategoriesByBranchAndJob({
+        categories,
+        branchId,
+        jobId: selectedJobId,
+        keyword: skillQuery,
+      }),
+    [branchId, categories, selectedJobId, skillQuery]
+  );
+
+  const handleCreateJob = async () => {
+    const rawName = jobQuery.trim();
+    if (!branchId || !rawName) return;
+    const duplicated = rawName.toLowerCase() !== "공통" && jobs.some((job) => String(job.name || "").trim().toLowerCase() === rawName.toLowerCase());
+    if (duplicated) return;
+    try {
+      setLocalMessage("");
+      const created = await onCreateCategory({ parentId: Number(branchId), name: rawName });
+      setSelectedJobId(String(created?.categoryId || ""));
+      setJobQuery(String(created?.name || rawName).trim());
+      setSelectedCategoryId("");
+      setSkillQuery("");
+    } catch (error) {
+      setLocalMessage(error?.message || "직무 생성에 실패했습니다.");
+    }
+  };
+
+  const handleCreateSkill = async () => {
+    const rawName = skillQuery.trim();
+    if (!selectedJobId || !rawName) return;
+    const duplicated = categories
+      .filter((category) => Number(category.depth) === 2)
+      .some((category) => String(category.name || "").trim().toLowerCase() === rawName.toLowerCase());
+    if (duplicated) return;
+    try {
+      setLocalMessage("");
+      const created = await onCreateCategory({ parentId: Number(selectedJobId), name: rawName });
+      setSelectedCategoryId(String(created?.categoryId || ""));
+      setSkillQuery(String(created?.name || rawName).trim());
+    } catch (error) {
+      setLocalMessage(error?.message || "기술 생성에 실패했습니다.");
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[86] flex items-center justify-center bg-black/45 px-4">
+      <div className="absolute inset-0" onClick={saving || deleting ? undefined : onClose} />
+      <div className="relative flex max-h-[90vh] w-full max-w-[820px] flex-col overflow-hidden rounded-[24px] border border-[#dfe3eb] bg-white shadow-[0_24px_80px_rgba(15,23,42,0.18)]">
+        <div className="border-b border-[#edf1f6] px-6 py-5">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-[12px] font-semibold tracking-[0.08em] text-[#7a8190]">EDIT QUESTION</p>
+              <h2 className="mt-2 text-[24px] font-semibold tracking-[-0.02em] text-[#161a22]">문답 수정</h2>
+            </div>
+            <button type="button" onClick={onClose} disabled={saving || deleting} className="rounded-full border border-[#d9dde5] px-3 py-1 text-[12px] text-[#4f5664] disabled:opacity-50">닫기</button>
+          </div>
+        </div>
+        <div className="flex-1 overflow-y-auto px-6 py-5">
+          <div className="grid gap-4">
+            <div>
+              <p className="text-[12px] font-semibold text-[#738094]">직무</p>
+              <div className="mt-2 grid gap-2 sm:grid-cols-[1fr_auto]">
+                <input
+                  value={jobQuery}
+                  onChange={(event) => {
+                    setJobQuery(event.target.value);
+                    setSelectedJobId("");
+                    setSelectedCategoryId("");
+                    setSkillQuery("");
+                  }}
+                  placeholder="직무 검색 또는 새 직무 입력"
+                  className="rounded-[14px] border border-[#dfe3eb] px-4 py-3 text-[13px] outline-none focus:border-[#8aa2e8]"
+                />
+                <button
+                  type="button"
+                  disabled={
+                    !jobQuery.trim() ||
+                    creatingCategory ||
+                    (jobQuery.trim().toLowerCase() !== "공통" &&
+                      jobs.some((job) => String(job.name || "").trim().toLowerCase() === jobQuery.trim().toLowerCase()))
+                  }
+                  onClick={() => void handleCreateJob()}
+                  className="rounded-[12px] border border-[#171b24] px-3 py-2 text-[12px] font-semibold text-[#171b24] disabled:opacity-50"
+                >
+                  {creatingCategory ? "생성 중..." : "직무 추가"}
+                </button>
+              </div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {visibleJobs.slice(0, 8).map((job) => {
+                  const selected = selectedJobId === String(job.categoryId);
+                  const common = isCommonJobCategory(job);
+                  return (
+                    <button
+                      key={`edit-job-${job.categoryId}`}
+                      type="button"
+                      onClick={() => {
+                        setSelectedJobId(String(job.categoryId));
+                        setJobQuery(job.displayName || job.name);
+                        setSelectedCategoryId("");
+                        setSkillQuery("");
+                      }}
+                      className={`rounded-full border px-3 py-1 text-[11px] transition ${
+                        selected
+                          ? common
+                            ? "border-[#63b3ed] bg-[#ebf8ff] text-[#2b6cb0]"
+                            : "border-[#171b24] bg-[#171b24] text-white"
+                          : common
+                            ? "border-[#bfe3fb] bg-[#f3fbff] text-[#4b83b3]"
+                            : "border-[#d9dde5] bg-white text-[#556070]"
+                      }`}
+                    >
+                      {job.displayName || job.name}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div>
+              <p className="text-[12px] font-semibold text-[#738094]">기술</p>
+              <div className="mt-2 grid gap-2 sm:grid-cols-[1fr_auto]">
+                <input
+                  value={skillQuery}
+                  onChange={(event) => {
+                    setSkillQuery(event.target.value);
+                    setSelectedCategoryId("");
+                  }}
+                  placeholder={selectedJobId ? "기술 검색 또는 새 기술 입력" : "직무를 먼저 선택해 주세요"}
+                  disabled={!selectedJobId}
+                  className="rounded-[14px] border border-[#dfe3eb] px-4 py-3 text-[13px] outline-none focus:border-[#8aa2e8] disabled:bg-[#f3f5f8]"
+                />
+                <button
+                  type="button"
+                  disabled={
+                    !selectedJobId ||
+                    !skillQuery.trim() ||
+                    creatingCategory ||
+                    categories
+                      .filter((category) => Number(category.depth) === 2)
+                      .some((category) => String(category.name || "").trim().toLowerCase() === skillQuery.trim().toLowerCase())
+                  }
+                  onClick={() => void handleCreateSkill()}
+                  className="rounded-[12px] border border-[#171b24] px-3 py-2 text-[12px] font-semibold text-[#171b24] disabled:opacity-50"
+                >
+                  {creatingCategory ? "생성 중..." : "기술 추가"}
+                </button>
+              </div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {visibleSkills.slice(0, 8).map((skill) => {
+                  const selected = selectedCategoryId === String(skill.categoryId);
+                  return (
+                    <button
+                      key={`edit-skill-${skill.categoryId}`}
+                      type="button"
+                      onClick={() => {
+                        setSelectedCategoryId(String(skill.categoryId));
+                        setSkillQuery(skill.displayName || skill.name);
+                      }}
+                      className={`rounded-full border px-3 py-1 text-[11px] transition ${
+                        selected
+                          ? skill.isCommon
+                            ? "border-[#63b3ed] bg-[#ebf8ff] text-[#2b6cb0]"
+                            : "border-[#171b24] bg-[#171b24] text-white"
+                          : skill.isCommon
+                            ? "border-[#bfe3fb] bg-[#f3fbff] text-[#4b83b3]"
+                            : "border-[#d9dde5] bg-white text-[#556070]"
+                      }`}
+                    >
+                      {skill.displayName || skill.name}
+                      {skill.isCommon ? " · 공통" : ""}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <textarea
+              value={questionText}
+              onChange={(event) => setQuestionText(event.target.value)}
+              placeholder="질문"
+              className="min-h-[120px] rounded-[16px] border border-[#dfe3eb] px-4 py-3 text-[13px] leading-[1.7] outline-none focus:border-[#8aa2e8]"
+            />
+            <textarea
+              value={canonicalAnswer}
+              onChange={(event) => setCanonicalAnswer(event.target.value)}
+              placeholder="모범답안"
+              className="min-h-[160px] rounded-[16px] border border-[#dfe3eb] px-4 py-3 text-[13px] leading-[1.7] outline-none focus:border-[#8aa2e8]"
+            />
+            <div className="grid gap-3 sm:grid-cols-[160px_1fr]">
+              <div className="flex items-center rounded-[14px] border border-[#dfe3eb] px-4 py-3">
+                <StarRatingInput value={rating} onChange={setRating} />
+              </div>
+              <input
+                value={tags}
+                onChange={(event) => setTags(event.target.value)}
+                placeholder="태그 (쉼표 구분)"
+                className="rounded-[14px] border border-[#dfe3eb] px-4 py-3 text-[13px] outline-none focus:border-[#8aa2e8]"
+              />
+            </div>
+          </div>
+        </div>
+        <div className="border-t border-[#edf1f6] px-6 py-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <button
+              type="button"
+              onClick={() => void onDelete(item)}
+              disabled={saving || deleting}
+              className="rounded-[12px] border border-[#ef9a9a] px-3 py-2 text-[12px] font-semibold text-[#c62828] disabled:opacity-50"
+            >
+              {deleting ? "삭제 중..." : "문답 삭제"}
+            </button>
+            <div className="flex items-center gap-2">
+              <button type="button" onClick={onClose} disabled={saving || deleting} className="rounded-[12px] border border-[#d9dde5] px-3 py-2 text-[12px] text-[#4f5664] disabled:opacity-50">취소</button>
+              <button
+                type="button"
+                onClick={() =>
+                  onSubmit({
+                    questionId: item.questionId,
+                    questionText: questionText.trim(),
+                    canonicalAnswer: canonicalAnswer.trim(),
+                    selectedJobId,
+                    selectedCategoryId,
+                    skillQuery: skillQuery.trim(),
+                    difficulty: ratingToDifficulty(rating),
+                    tags: tags.split(",").map((value) => value.trim()).filter(Boolean),
+                  })
+                }
+                disabled={saving || deleting}
+                className="rounded-[12px] bg-[#171b24] px-3 py-2 text-[12px] font-semibold text-white disabled:opacity-60"
+              >
+                {saving ? "저장 중..." : "문답 저장"}
+              </button>
+            </div>
+          </div>
+          {errorMessage ? <p className="mt-3 text-[12px] text-[#dc4b4b]">{errorMessage}</p> : null}
+          {localMessage ? <p className="mt-2 text-[12px] text-[#dc4b4b]">{localMessage}</p> : null}
+        </div>
+      </div>
+    </div>
+  );
+};
+
 export const QuestionSetsPage = () => {
   const navigate = useNavigate();
   const [userName, setUserName] = useState("사용자");
@@ -481,10 +813,14 @@ export const QuestionSetsPage = () => {
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [selectedQuestion, setSelectedQuestion] = useState(null);
+  const [editingQuestion, setEditingQuestion] = useState(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [creatingCategory, setCreatingCategory] = useState(false);
   const [savingSet, setSavingSet] = useState(false);
+  const [savingEditedQuestion, setSavingEditedQuestion] = useState(false);
+  const [deletingEditedQuestion, setDeletingEditedQuestion] = useState(false);
+  const [editQuestionErrorMessage, setEditQuestionErrorMessage] = useState("");
   const [togglingVisibility, setTogglingVisibility] = useState(false);
   const [deletingSet, setDeletingSet] = useState(false);
   const [sets, setSets] = useState([]);
@@ -571,38 +907,64 @@ export const QuestionSetsPage = () => {
   const branchItems = useMemo(() => categories.filter((item) => Number(item.depth) === 0), [categories]);
   const jobItems = useMemo(() => categories.filter((item) => Number(item.depth) === 1), [categories]);
   const skillItems = useMemo(() => categories.filter((item) => Number(item.depth) === 2), [categories]);
+  const categoryMap = useMemo(() => buildCategoryMap(categories), [categories]);
   const selectedFilterJob = useMemo(() => jobItems.find((item) => String(item.categoryId) === String(filterJobId)) || null, [filterJobId, jobItems]);
   const selectedFilterSkill = useMemo(() => skillItems.find((item) => String(item.categoryId) === String(filterSkillId)) || null, [filterSkillId, skillItems]);
   const visibleJobItems = useMemo(
-    () => (filterBranchId ? jobItems.filter((item) => String(item.parentId) === String(filterBranchId)) : jobItems),
+    () =>
+      (filterBranchId ? jobItems.filter((item) => String(item.parentId) === String(filterBranchId)) : jobItems).sort((left, right) => {
+        const leftCommon = isCommonJobCategory(left) ? 0 : 1;
+        const rightCommon = isCommonJobCategory(right) ? 0 : 1;
+        if (leftCommon !== rightCommon) return leftCommon - rightCommon;
+        return String(left.displayName || left.name || "").localeCompare(String(right.displayName || right.name || ""), "ko");
+      }),
     [filterBranchId, jobItems]
   );
   const visibleSkillItems = useMemo(
-    () => (filterJobId ? skillItems.filter((item) => String(item.parentId) === String(filterJobId)) : skillItems),
-    [filterJobId, skillItems]
+    () =>
+      filterJobId || filterBranchId
+        ? filterSkillCategoriesByBranchAndJob({
+            categories,
+            branchId: filterBranchId || selectedFilterJob?.parentId || "",
+            jobId: filterJobId,
+          })
+        : skillItems,
+    [categories, filterBranchId, filterJobId, selectedFilterJob?.parentId, skillItems]
   );
 
   const filteredSets = useMemo(() => {
     const keyword = query.trim().toLowerCase();
     const next = sets.filter((set) => {
-      const normalizedJobName = String(set.jobName || "").trim().toLowerCase();
+      const normalizedBranchName = String(set.branchName || set.jobName || "").trim().toLowerCase();
+      const normalizedJobNames = (Array.isArray(set.jobNames) ? set.jobNames : [set.jobName])
+        .filter(Boolean)
+        .map((item) => String(item).trim().toLowerCase());
       const normalizedSkillNames = (Array.isArray(set.skillNames) ? set.skillNames : [set.skillName])
         .filter(Boolean)
         .map((item) => String(item).trim().toLowerCase());
       if (filterBranchId) {
-        const matchedJob = jobItems.find((item) => String(item.name || "").trim().toLowerCase() === normalizedJobName);
-        if (!matchedJob || String(matchedJob.parentId) !== String(filterBranchId)) return false;
+        const selectedBranchName = String(branchItems.find((item) => String(item.categoryId) === String(filterBranchId))?.name || "").trim().toLowerCase();
+        if (!selectedBranchName || normalizedBranchName !== selectedBranchName) return false;
       }
       if (selectedFilterJob) {
         const selectedJobName = String(selectedFilterJob.name || "").trim().toLowerCase();
-        if (normalizedJobName !== selectedJobName) return false;
+        const selectedJobBranchId = String(selectedFilterJob.parentId || "");
+        const selectedJobBranchName = String(branchItems.find((item) => String(item.categoryId) === selectedJobBranchId)?.name || "").trim().toLowerCase();
+        if (selectedJobBranchName && normalizedBranchName !== selectedJobBranchName) return false;
+        if (!normalizedJobNames.includes(selectedJobName) && !normalizedJobNames.includes("공통")) return false;
       }
       if (selectedFilterSkill) {
         const selectedSkillName = String(selectedFilterSkill.name || "").trim().toLowerCase();
         if (!normalizedSkillNames.includes(selectedSkillName)) return false;
       }
       if (!keyword) return true;
-      return [set.title, set.description, set.jobName, ...(Array.isArray(set.skillNames) ? set.skillNames : [set.skillName])]
+      return [
+        set.title,
+        set.description,
+        set.branchName,
+        ...(Array.isArray(set.jobNames) ? set.jobNames : [set.jobName]),
+        ...(Array.isArray(set.skillNames) ? set.skillNames : [set.skillName]),
+      ]
         .filter(Boolean)
         .join(" ")
         .toLowerCase()
@@ -614,7 +976,7 @@ export const QuestionSetsPage = () => {
       return sortOrder === "latest" ? rightTime - leftTime : leftTime - rightTime;
     });
     return next;
-  }, [filterBranchId, jobItems, query, selectedFilterJob, selectedFilterSkill, sets, sortOrder]);
+  }, [branchItems, filterBranchId, query, selectedFilterJob, selectedFilterSkill, sets, sortOrder]);
 
   const selectedSet = useMemo(
     () => filteredSets.find((item) => item.setId === selectedSetId) || filteredSets[0] || null,
@@ -689,52 +1051,80 @@ export const QuestionSetsPage = () => {
   const handleCreateSet = async ({
     setTitle: newSetTitle,
     selectedBranchId,
-    selectedJobId,
     rows,
   }) => {
     const normalizedRows = rows
       .map((row) => ({
         questionText: row.questionText.trim(),
         canonicalAnswer: row.canonicalAnswer.trim(),
+        selectedJobId: row.selectedJobId ? Number(row.selectedJobId) : null,
         selectedCategoryId: row.selectedCategoryId ? Number(row.selectedCategoryId) : null,
+        jobQuery: row.jobQuery.trim(),
         skillQuery: row.skillQuery.trim(),
         difficulty: ratingToDifficulty(row.rating || 3),
         tags: row.tags.split(",").map((item) => item.trim()).filter(Boolean),
       }))
-      .filter((row) => row.questionText || row.canonicalAnswer || row.tags.length > 0 || row.skillQuery);
+      .filter((row) => row.questionText || row.canonicalAnswer || row.tags.length > 0 || row.skillQuery || row.jobQuery);
 
     if (!normalizedRows.length) return setModalErrorMessage("질문과 모범답안을 하나 이상 입력해 주세요.");
     if (normalizedRows.some((row) => !row.questionText || !row.canonicalAnswer)) return setModalErrorMessage("모든 문답에는 질문과 모범답안이 모두 필요합니다.");
+    if (normalizedRows.some((row) => !row.selectedJobId && !row.jobQuery)) return setModalErrorMessage("모든 문답에는 직무 선택 또는 입력이 필요합니다.");
     if (normalizedRows.some((row) => !row.selectedCategoryId && !row.skillQuery)) return setModalErrorMessage("모든 문답에는 기술 카테고리 선택 또는 입력이 필요합니다.");
     if (!newSetTitle?.trim()) return setModalErrorMessage("세트 제목을 입력해 주세요.");
     if (!selectedBranchId) return setModalErrorMessage("계열을 선택해 주세요.");
-    if (!selectedJobId) return setModalErrorMessage("직무를 선택해 주세요.");
 
     setSubmitting(true);
     setModalErrorMessage("");
     try {
-      const selectedJob = categories.find((item) => String(item.categoryId) === String(selectedJobId)) || null;
-      const jobName = (selectedJob?.displayName || selectedJob?.name || "").trim();
-      if (!jobName) {
-        setModalErrorMessage("직무를 선택해 주세요.");
+      const selectedBranch = categories.find((item) => String(item.categoryId) === String(selectedBranchId)) || null;
+      const branchName = (selectedBranch?.displayName || selectedBranch?.name || "").trim();
+      if (!branchName) {
+        setModalErrorMessage("계열을 선택해 주세요.");
         return;
       }
 
       const createdSet = await createInterviewSet({
         title: newSetTitle.trim(),
-        jobName,
+        branchName,
         description: null,
         visibility: "PRIVATE",
       });
 
+      let localCategories = categories;
       const failedRows = [];
       for (const [rowIndex, row] of normalizedRows.entries()) {
         try {
+          let selectedJob = localCategories.find((item) => item.categoryId === row.selectedJobId) || null;
+          if (!selectedJob && row.jobQuery) {
+            const createdJob = await createInterviewCategory({
+              parentId: Number(selectedBranchId),
+              name: row.jobQuery,
+            });
+            selectedJob = {
+              ...createdJob,
+              categoryId: Number(createdJob?.categoryId || 0),
+              name: String(createdJob?.name || row.jobQuery).trim(),
+              displayName: String(createdJob?.name || row.jobQuery).trim(),
+              parentId: Number(selectedBranchId),
+              depth: 1,
+            };
+            localCategories = [...localCategories, selectedJob];
+            setCategories(localCategories);
+          }
+          const jobName = (selectedJob?.displayName || selectedJob?.name || row.jobQuery).trim();
+          if (!jobName) {
+            failedRows.push({
+              rowNo: rowIndex + 1,
+              questionText: row.questionText,
+              reason: "직무를 확인해 주세요.",
+            });
+            continue;
+          }
           let categoryId = row.selectedCategoryId;
-          let category = categories.find((item) => item.categoryId === categoryId) || null;
+          let category = localCategories.find((item) => item.categoryId === categoryId) || null;
           if (!category && row.skillQuery) {
             const createdCategory = await createInterviewCategory({
-              parentId: Number(selectedJobId),
+              parentId: Number(selectedJob?.categoryId),
               name: row.skillQuery,
             });
             categoryId = Number(createdCategory?.categoryId || 0) || null;
@@ -744,12 +1134,23 @@ export const QuestionSetsPage = () => {
                   categoryId,
                   name: String(createdCategory?.name || row.skillQuery).trim(),
                   displayName: String(createdCategory?.name || row.skillQuery).trim(),
+                  parentId: Number(selectedJob?.categoryId),
+                  depth: 2,
                 }
               : null;
+            if (category) {
+              localCategories = [...localCategories, category];
+              setCategories(localCategories);
+            }
           }
           const skillName = (category?.displayName || category?.name || row.skillQuery).trim();
           if (!skillName) {
-            throw new Error("기술 카테고리를 확인해 주세요.");
+            failedRows.push({
+              rowNo: rowIndex + 1,
+              questionText: row.questionText,
+              reason: "기술 카테고리를 확인해 주세요.",
+            });
+            continue;
           }
           await addQuestionToInterviewSet(createdSet.setId, {
             questionText: row.questionText,
@@ -804,6 +1205,93 @@ export const QuestionSetsPage = () => {
       return created;
     } finally {
       setCreatingCategory(false);
+    }
+  };
+
+  const handleOpenEditQuestion = (question) => {
+    setEditQuestionErrorMessage("");
+    setEditingQuestion(question);
+  };
+
+  const handleUpdateQuestion = async ({ questionId, questionText, canonicalAnswer, selectedJobId, selectedCategoryId, skillQuery, difficulty, tags }) => {
+    if (!selectedSet?.setId || !editingQuestion) return;
+    if (!questionText) return setEditQuestionErrorMessage("질문을 입력해 주세요.");
+    if (!canonicalAnswer) return setEditQuestionErrorMessage("모범답안을 입력해 주세요.");
+    if (!selectedJobId) return setEditQuestionErrorMessage("직무를 선택해 주세요.");
+    if (!selectedCategoryId && !skillQuery) return setEditQuestionErrorMessage("기술을 선택하거나 입력해 주세요.");
+
+    setSavingEditedQuestion(true);
+    setEditQuestionErrorMessage("");
+    try {
+      let localCategories = categories;
+      const selectedJob = localCategories.find((item) => String(item.categoryId) === String(selectedJobId)) || null;
+      const jobName = (selectedJob?.displayName || selectedJob?.name || "").trim();
+      if (!jobName) {
+        setEditQuestionErrorMessage("직무를 확인해 주세요.");
+        return;
+      }
+
+      let categoryId = selectedCategoryId ? Number(selectedCategoryId) : null;
+      let category = localCategories.find((item) => item.categoryId === categoryId) || null;
+      if (!category && skillQuery) {
+        const createdCategory = await createInterviewCategory({
+          parentId: Number(selectedJobId),
+          name: skillQuery,
+        });
+        categoryId = Number(createdCategory?.categoryId || 0) || null;
+        category = categoryId
+          ? {
+              ...createdCategory,
+              categoryId,
+              name: String(createdCategory?.name || skillQuery).trim(),
+              displayName: String(createdCategory?.name || skillQuery).trim(),
+              parentId: Number(selectedJobId),
+              depth: 2,
+            }
+          : null;
+        if (category) {
+          localCategories = [...localCategories, category];
+          setCategories(localCategories);
+        }
+      }
+      const resolvedSkillName = (category?.displayName || category?.name || skillQuery).trim();
+      if (!resolvedSkillName) {
+        setEditQuestionErrorMessage("기술을 확인해 주세요.");
+        return;
+      }
+
+      await updateQuestionInInterviewSet(selectedSet.setId, questionId, {
+        questionText,
+        canonicalAnswer,
+        categoryId,
+        jobName,
+        skillName: resolvedSkillName,
+        difficulty,
+        tags,
+      });
+      await loadPage();
+      setEditingQuestion(null);
+    } catch (error) {
+      setEditQuestionErrorMessage(error?.message || "문답 수정에 실패했습니다.");
+    } finally {
+      setSavingEditedQuestion(false);
+    }
+  };
+
+  const handleDeleteQuestion = async (question) => {
+    if (!selectedSet?.setId || !question?.questionId) return;
+    const confirmed = window.confirm("선택한 문답을 삭제하시겠습니까?");
+    if (!confirmed) return;
+    setDeletingEditedQuestion(true);
+    setEditQuestionErrorMessage("");
+    try {
+      await deleteQuestionFromInterviewSet(selectedSet.setId, question.questionId);
+      await loadPage();
+      setEditingQuestion(null);
+    } catch (error) {
+      setEditQuestionErrorMessage(error?.message || "문답 삭제에 실패했습니다.");
+    } finally {
+      setDeletingEditedQuestion(false);
     }
   };
 
@@ -871,9 +1359,10 @@ export const QuestionSetsPage = () => {
     setStartingSetId(setItem.setId);
     setPageErrorMessage("");
     try {
+      const primaryJobName = (Array.isArray(setItem.jobNames) ? setItem.jobNames : [setItem.jobName]).find((name) => name && name !== "공통") || setItem.jobName || null;
       const response = await startTechInterview({
         setId: setItem.setId,
-        jobName: setItem.jobName || null,
+        jobName: primaryJobName,
         skillName: (Array.isArray(setItem.skillNames) ? setItem.skillNames[0] : setItem.skillName) || null,
         questionCount: 5,
         saveHistory: false,
@@ -892,7 +1381,7 @@ export const QuestionSetsPage = () => {
           fromQuestionSet: true,
           saveHistory: false,
           categoryName: (Array.isArray(setItem.skillNames) ? setItem.skillNames.join(", ") : setItem.skillName) || null,
-          jobName: setItem.jobName || null,
+          jobName: primaryJobName,
         },
       });
       navigate("/content/interview/session");
@@ -919,7 +1408,6 @@ export const QuestionSetsPage = () => {
         onNavigate={handleSidebarNavigate}
         userName={userName}
         profileImageUrl={profileImageUrl}
-        fallbackProfileImageUrl={tempProfileImage}
         onLogout={() => {
           setIsMobileMenuOpen(false);
           setShowLogoutModal(true);
@@ -932,7 +1420,6 @@ export const QuestionSetsPage = () => {
             onNavigate={handleSidebarNavigate}
             userName={userName}
             profileImageUrl={profileImageUrl}
-            fallbackProfileImageUrl={tempProfileImage}
             onLogout={() => setShowLogoutModal(true)}
           />
         </div>
@@ -1019,7 +1506,32 @@ export const QuestionSetsPage = () => {
                   {!loading && filteredSets.length === 0 ? <p className="text-[12px] text-[#6b7280]">조회된 질문 세트가 없습니다.</p> : null}
                   {filteredSets.map((setItem) => {
                     const selected = setItem.setId === selectedSet?.setId;
-                    const setSkillNames = (Array.isArray(setItem.skillNames) ? setItem.skillNames : [setItem.skillName]).filter(Boolean);
+                    const setJobNames = (Array.isArray(setItem.jobNames) ? setItem.jobNames : [setItem.jobName])
+                      .filter(Boolean)
+                      .sort((left, right) => {
+                        const leftCommon = String(left).trim() === "공통" ? 0 : 1;
+                        const rightCommon = String(right).trim() === "공통" ? 0 : 1;
+                        if (leftCommon !== rightCommon) return leftCommon - rightCommon;
+                        return String(left).localeCompare(String(right), "ko");
+                      });
+                    const setSkillSummaries = Array.from(
+                      new Map(
+                        (setItem.questions || []).map((question) => [
+                          String(question.skillName || question.categoryName || "").trim().toLowerCase(),
+                          {
+                            label: String(question.skillName || question.categoryName || "").trim(),
+                            isCommon: String(question.jobName || "").trim() === "공통",
+                          },
+                        ])
+                      ).values()
+                    )
+                      .filter((item) => item.label)
+                      .sort((left, right) => {
+                        const leftCommon = left.isCommon ? 0 : 1;
+                        const rightCommon = right.isCommon ? 0 : 1;
+                        if (leftCommon !== rightCommon) return leftCommon - rightCommon;
+                        return left.label.localeCompare(right.label, "ko");
+                      });
                     return (
                       <button
                         key={setItem.setId}
@@ -1036,11 +1548,19 @@ export const QuestionSetsPage = () => {
                               ) : null}
                             </div>
                             <div className="mt-2 flex flex-wrap gap-1.5">
-                              {setItem.jobName ? <span className="rounded-full bg-[#eef2f8] px-2 py-0.5 text-[10px] text-[#556070]">{setItem.jobName}</span> : null}
-                              {setSkillNames.slice(0, 4).map((skillName) => (
-                                <span key={`${setItem.setId}-${skillName}`} className="rounded-full bg-[#f4f6fb] px-2 py-0.5 text-[10px] text-[#556070]">{skillName}</span>
+                              {setItem.branchName ? <span className="rounded-full bg-[#eef2f8] px-2 py-0.5 text-[10px] text-[#556070]">{setItem.branchName}</span> : null}
+                              {setJobNames.slice(0, 3).map((jobName) => (
+                                <span
+                                  key={`${setItem.setId}-job-${jobName}`}
+                                  className={`rounded-full px-2 py-0.5 text-[10px] ${jobName === "공통" ? "bg-[#ebf8ff] text-[#2b6cb0]" : "bg-[#f4f6fb] text-[#556070]"}`}
+                                >
+                                  {jobName}
+                                </span>
                               ))}
-                              {setSkillNames.length > 4 ? <span className="rounded-full bg-[#f8fafc] px-2 py-0.5 text-[10px] text-[#7b8798]">+{setSkillNames.length - 4}</span> : null}
+                              {setSkillSummaries.slice(0, 4).map((skill) => (
+                                <span key={`${setItem.setId}-${skill.label}`} className={`rounded-full px-2 py-0.5 text-[10px] ${skill.isCommon ? "bg-[#ebf8ff] text-[#2b6cb0]" : "bg-[#f4f6fb] text-[#556070]"}`}>{skill.label}</span>
+                              ))}
+                              {setSkillSummaries.length > 4 ? <span className="rounded-full bg-[#f8fafc] px-2 py-0.5 text-[10px] text-[#7b8798]">+{setSkillSummaries.length - 4}</span> : null}
                             </div>
                             <p className="mt-2 text-[11px] text-[#8b95a7]">{formatDate(setItem.createdAt)}</p>
                           </div>
@@ -1061,6 +1581,22 @@ export const QuestionSetsPage = () => {
                       <div className="min-w-0">
                         <p className="text-[16px] font-semibold text-[#1f2937]">세트 상세</p>
                         <p className="mt-1 text-[12px] text-[#6b7280]">세트 제목/설명을 수정하고 문답을 확인하실 수 있습니다.</p>
+                        <div className="mt-2 flex flex-wrap gap-1.5">
+                          {selectedSet.branchName ? <span className="rounded-full bg-[#eef2f8] px-2 py-0.5 text-[10px] text-[#556070]">{selectedSet.branchName}</span> : null}
+                          {(Array.isArray(selectedSet.jobNames) ? selectedSet.jobNames : [selectedSet.jobName])
+                            .filter(Boolean)
+                            .sort((left, right) => {
+                              const leftCommon = String(left).trim() === "공통" ? 0 : 1;
+                              const rightCommon = String(right).trim() === "공통" ? 0 : 1;
+                              if (leftCommon !== rightCommon) return leftCommon - rightCommon;
+                              return String(left).localeCompare(String(right), "ko");
+                            })
+                            .map((jobName) => (
+                              <span key={`selected-job-${jobName}`} className={`rounded-full px-2 py-0.5 text-[10px] ${jobName === "공통" ? "bg-[#ebf8ff] text-[#2b6cb0]" : "bg-[#f4f6fb] text-[#556070]"}`}>
+                                {jobName}
+                              </span>
+                            ))}
+                        </div>
                       </div>
                       <button
                         type="button"
@@ -1160,18 +1696,46 @@ export const QuestionSetsPage = () => {
                               <div className="min-w-0 flex-1">
                                 <p className="text-[11px] text-[#7a8190]">문답 {index + 1}</p>
                                 <p className="mt-1 line-clamp-3 text-[13px] leading-[1.6] text-[#1f2937]">{question.questionText}</p>
+                                <div className="mt-2 flex flex-wrap gap-1.5">
+                                  {question.jobName ? (
+                                    <span className={`rounded-full px-2 py-0.5 text-[10px] ${question.jobName === "공통" ? "bg-[#ebf8ff] text-[#2b6cb0]" : "bg-[#f4f6fb] text-[#556070]"}`}>
+                                      {question.jobName}
+                                    </span>
+                                  ) : null}
+                                  {question.skillName || question.categoryName ? (
+                                    <span className={`rounded-full px-2 py-0.5 text-[10px] ${question.jobName === "공통" ? "bg-[#ebf8ff] text-[#2b6cb0]" : "bg-[#eef2f8] text-[#556070]"}`}>
+                                      {question.skillName || question.categoryName}
+                                    </span>
+                                  ) : null}
+                                </div>
                               </div>
-                              <button
-                                type="button"
-                                disabled={savingQuestionId === question.questionId || savedQuestionIds.includes(question.questionId)}
-                                onClick={(event) => {
-                                  event.stopPropagation();
-                                  void handleSaveQuestion(question.questionId);
-                                }}
-                                className="shrink-0 rounded-[10px] border border-[#d9dde5] px-3 py-1 text-[11px] text-[#4f5664] disabled:opacity-60"
-                              >
-                                {savedQuestionIds.includes(question.questionId) ? "저장됨" : savingQuestionId === question.questionId ? "저장 중..." : "저장하기"}
-                              </button>
+                              <div className="flex shrink-0 items-start gap-2">
+                                <button
+                                  type="button"
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    handleOpenEditQuestion({
+                                      ...question,
+                                      setId: selectedSet.setId,
+                                      branchName: selectedSet.branchName || getBranchDisplayName(categoryMap, question.categoryId),
+                                    });
+                                  }}
+                                  className="rounded-[10px] border border-[#d9dde5] px-3 py-1 text-[11px] text-[#4f5664]"
+                                >
+                                  수정
+                                </button>
+                                <button
+                                  type="button"
+                                  disabled={savingQuestionId === question.questionId || savedQuestionIds.includes(question.questionId)}
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    void handleSaveQuestion(question.questionId);
+                                  }}
+                                  className="rounded-[10px] border border-[#d9dde5] px-3 py-1 text-[11px] text-[#4f5664] disabled:opacity-60"
+                                >
+                                  {savedQuestionIds.includes(question.questionId) ? "저장됨" : savingQuestionId === question.questionId ? "저장 중..." : "저장하기"}
+                                </button>
+                              </div>
                             </div>
                             <div className="mt-2 flex flex-wrap items-center gap-2">
                               {question.difficulty ? <DifficultyStars difficulty={question.difficulty} compact /> : null}
@@ -1199,6 +1763,21 @@ export const QuestionSetsPage = () => {
       </div>
 
       {selectedQuestion ? <QuestionAnswerDetailModal item={selectedQuestion} onClose={() => setSelectedQuestion(null)} /> : null}
+      {editingQuestion ? (
+        <EditQuestionModal
+          categories={categories}
+          branchId={branchItems.find((item) => String(item.name || "").trim() === String(editingQuestion.branchName || "").trim())?.categoryId || ""}
+          item={editingQuestion}
+          onClose={() => setEditingQuestion(null)}
+          onSubmit={handleUpdateQuestion}
+          onDelete={handleDeleteQuestion}
+          onCreateCategory={handleCreateCategoryForSet}
+          creatingCategory={creatingCategory}
+          saving={savingEditedQuestion}
+          deleting={deletingEditedQuestion}
+          errorMessage={editQuestionErrorMessage}
+        />
+      ) : null}
       {showCreateModal ? (
         <CreateQuestionSetModal
           categories={categories}
