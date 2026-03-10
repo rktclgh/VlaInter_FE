@@ -20,6 +20,7 @@ import {
 } from "../../lib/interviewSessionFlow";
 import { consumePointChargeSuccessResult } from "../../lib/pointChargeFlow";
 import { extractProfile, formatPoint, parsePoint } from "../../lib/profileUtils";
+import { isAlreadySavedQuestionError } from "../../lib/savedQuestionUtils";
 import { getMyProfile, getMyProfileImageUrl } from "../../lib/userApi";
 
 const QuestionMetaChip = ({ label }) => (
@@ -277,6 +278,18 @@ export const InterviewSessionPage = () => {
           : prev
       );
     } catch (error) {
+      if (isAlreadySavedQuestionError(error)) {
+        setPendingResult((prev) => (prev?.answeredTurnId === turnId ? { ...prev, bookmarked: true } : prev));
+        setSessionResults((prev) =>
+          prev
+            ? {
+                ...prev,
+                turns: prev.turns.map((item) => (item.turnId === turnId ? { ...item, bookmarked: true } : item)),
+              }
+            : prev
+        );
+        return;
+      }
       setPageErrorMessage(error?.message || "질문 저장에 실패했습니다.");
     } finally {
       setBookmarking(false);
@@ -455,14 +468,16 @@ export const InterviewSessionPage = () => {
                                 </p>
                               </div>
                               {!isQuestionSetPractice ? (
+                                turn.sourceTag === "INTRO" ? null : (
                                 <button
                                   type="button"
                                   onClick={() => handleBookmark(turn.turnId)}
                                   disabled={bookmarking || turn.bookmarked}
                                   className="rounded-[12px] border border-[#d8dde7] px-3 py-2 text-[12px] text-[#4f5664] disabled:opacity-60"
                                 >
-                                  {turn.bookmarked ? "저장 완료" : bookmarking ? "저장 중..." : "질문 저장"}
+                                  {turn.bookmarked ? "저장됨" : bookmarking ? "저장 중..." : "질문 저장"}
                                 </button>
+                                )
                               ) : null}
                             </div>
 

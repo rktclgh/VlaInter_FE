@@ -173,10 +173,10 @@ export const TechPracticePage = () => {
       return !branchFilter || String(job.parentId || "") === String(branchFilter);
     });
   }, [branchFilter, jobQuery, jobs]);
-  const leafCategories = useMemo(() => categories.filter((item) => item?.isLeaf), [categories]);
+  const skillCategories = useMemo(() => categories.filter((item) => Number(item.depth) === 2), [categories]);
   const categoryCards = useMemo(() => {
     const keyword = categoryQuery.trim().toLowerCase();
-    return leafCategories
+    return skillCategories
       .filter((category) => {
         if (jobFilter && String(category.parentId) !== jobFilter) return false;
         return searchCategoryByText(category, keyword);
@@ -186,11 +186,15 @@ export const TechPracticePage = () => {
         name: category.displayName || getCategoryDisplayName(category),
         jobName: getCategoryDisplayName(jobs.find((job) => job.categoryId === category.parentId)) || "기타",
       }));
-  }, [categoryQuery, jobFilter, jobs, leafCategories]);
+  }, [categoryQuery, jobFilter, jobs, skillCategories]);
 
   const canCreateBranch = Boolean(branchQuery.trim() && !branchItems.some((branch) => (branch.name || "").trim().toLowerCase() === branchQuery.trim().toLowerCase()));
   const canCreateJob = Boolean(branchFilter && jobQuery.trim() && !visibleJobs.some((job) => (job.displayName || job.name).toLowerCase() === jobQuery.trim().toLowerCase()));
-  const canCreateCategory = Boolean(categoryQuery.trim() && jobFilter && !categoryCards.some((item) => item.name.toLowerCase() === categoryQuery.trim().toLowerCase()));
+  const canCreateCategory = Boolean(
+    categoryQuery.trim() &&
+      jobFilter &&
+      !skillCategories.some((item) => String(item.parentId) === String(jobFilter) && (item.displayName || item.name || "").trim().toLowerCase() === categoryQuery.trim().toLowerCase()),
+  );
   const branchAlreadyExists = Boolean(branchQuery.trim() && !canCreateBranch);
   const jobAlreadyExists = Boolean(jobQuery.trim() && !canCreateJob);
   const categoryAlreadyExists = Boolean(categoryQuery.trim() && !canCreateCategory);
@@ -339,57 +343,71 @@ export const TechPracticePage = () => {
             </section>
 
             <section className="mt-5 rounded-[24px] border border-[#e4e7ee] bg-white p-5 sm:p-6">
-              <div className="grid gap-3 xl:grid-cols-[1fr_auto]">
-                <input value={branchQuery} onChange={(event) => setBranchQuery(event.target.value)} placeholder="계열 검색 또는 새 계열 입력" className="rounded-[14px] border border-[#dfe3eb] px-4 py-3 text-[13px] outline-none focus:border-[#8aa2e8]" />
-                {canCreateBranch ? <button type="button" disabled={creatingCategory} onClick={handleCreateBranch} className="rounded-[14px] border border-[#171b24] px-4 py-2.5 text-[13px] font-semibold text-[#171b24] disabled:opacity-60">{creatingCategory ? "생성 중..." : "계열 추가"}</button> : <div />}
-              </div>
-              <div className="mt-3 flex flex-wrap gap-2">
-                <DifficultyChip label="전체 계열" active={!branchFilter} onClick={() => setBranchFilter("")} />
-                {visibleBranches.map((branch) => (
-                  <DifficultyChip key={branch.categoryId} label={branch.name} active={branchFilter === String(branch.categoryId)} onClick={() => setBranchFilter(String(branch.categoryId))} />
-                ))}
-              </div>
-              <p className={`mt-3 text-[12px] ${branchAlreadyExists ? "text-[#d14343]" : "text-[#7a8190]"}`}>
-                {branchAlreadyExists
-                  ? "같은 이름의 계열이 이미 있습니다. 중복/장난 입력은 관리자 확인 후 즉시 로그인 차단될 수 있습니다."
-                  : "새로 만든 계열은 바로 선택됩니다. 장난성 입력은 관리자 확인 후 즉시 로그인 차단될 수 있습니다."}
-              </p>
-              <div className="mt-3 grid gap-3 xl:grid-cols-[180px_1fr]">
-                <select value={jobFilter} onChange={(event) => setJobFilter(event.target.value)} className="rounded-[14px] border border-[#dfe3eb] px-4 py-3 text-[13px] outline-none focus:border-[#8aa2e8]">
-                  <option value="">전체 직무</option>
-                  {visibleJobs.map((job) => <option key={job.categoryId} value={String(job.categoryId)}>{job.displayName || getCategoryDisplayName(job)}</option>)}
-                </select>
-                <input value={categoryQuery} onChange={(event) => setCategoryQuery(event.target.value)} placeholder={jobFilter ? "기술 카테고리 검색 또는 새 카테고리 입력" : "직무를 먼저 선택해 주세요"} disabled={!jobFilter} className="rounded-[14px] border border-[#dfe3eb] px-4 py-3 text-[13px] outline-none focus:border-[#8aa2e8] disabled:bg-[#f3f5f8]" />
-              </div>
-              <div className="mt-3 grid gap-3 xl:grid-cols-[180px_auto_1fr]">
-                <input value={jobQuery} onChange={(event) => setJobQuery(event.target.value)} placeholder={branchFilter ? "직무 검색 또는 새 직무 입력" : "계열을 먼저 선택해 주세요"} disabled={!branchFilter} className="rounded-[14px] border border-[#dfe3eb] px-4 py-3 text-[13px] outline-none focus:border-[#8aa2e8] disabled:bg-[#f3f5f8]" />
-                {canCreateJob ? <button type="button" disabled={creatingCategory} onClick={handleCreateJob} className="rounded-[14px] border border-[#171b24] px-4 py-2.5 text-[13px] font-semibold text-[#171b24] disabled:opacity-60">{creatingCategory ? "생성 중..." : "직무 추가"}</button> : <div />}
-                <div />
-              </div>
-              <p className={`mt-3 text-[12px] ${jobAlreadyExists ? "text-[#d14343]" : "text-[#7a8190]"}`}>
-                {jobAlreadyExists
-                  ? "같은 이름의 직무가 이미 있습니다. 중복/장난 입력은 관리자 확인 후 즉시 로그인 차단될 수 있습니다."
-                  : "새로 만든 직무는 바로 선택됩니다. 장난성 입력은 관리자 확인 후 즉시 로그인 차단될 수 있습니다."}
-              </p>
+              <div className="space-y-5">
+                <div className="rounded-[20px] border border-[#edf1f7] bg-[#fafbfd] p-4">
+                  <p className="text-[12px] font-semibold tracking-[0.08em] text-[#7a8190]">1. 계열 선택</p>
+                  <div className="mt-3 grid gap-3 xl:grid-cols-[1fr_auto]">
+                    <input value={branchQuery} onChange={(event) => setBranchQuery(event.target.value)} placeholder="계열 검색 또는 새 계열 입력" className="rounded-[14px] border border-[#dfe3eb] bg-white px-4 py-3 text-[13px] outline-none focus:border-[#8aa2e8]" />
+                    {canCreateBranch ? <button type="button" disabled={creatingCategory} onClick={handleCreateBranch} className="rounded-[14px] border border-[#171b24] bg-white px-4 py-2.5 text-[13px] font-semibold text-[#171b24] disabled:opacity-60">{creatingCategory ? "생성 중..." : "계열 추가"}</button> : <div />}
+                  </div>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <DifficultyChip label="전체 계열" active={!branchFilter} onClick={() => setBranchFilter("")} />
+                    {visibleBranches.map((branch) => (
+                      <DifficultyChip key={branch.categoryId} label={branch.name} active={branchFilter === String(branch.categoryId)} onClick={() => setBranchFilter(String(branch.categoryId))} />
+                    ))}
+                  </div>
+                  <p className={`mt-3 text-[12px] ${branchAlreadyExists ? "text-[#d14343]" : "text-[#7a8190]"}`}>
+                    {branchAlreadyExists
+                      ? "같은 이름의 계열이 이미 있습니다. 중복/장난 입력은 관리자 확인 후 즉시 로그인 차단될 수 있습니다."
+                      : "새로 만든 계열은 바로 선택됩니다. 장난성 입력은 관리자 확인 후 즉시 로그인 차단될 수 있습니다."}
+                  </p>
+                </div>
 
-              <div className="mt-3 flex flex-wrap gap-2">
+                <div className="rounded-[20px] border border-[#edf1f7] bg-[#fafbfd] p-4">
+                  <p className="text-[12px] font-semibold tracking-[0.08em] text-[#7a8190]">2. 직무 선택</p>
+                  <div className="mt-3 grid gap-3 xl:grid-cols-[1fr_auto]">
+                    <input value={jobQuery} onChange={(event) => setJobQuery(event.target.value)} placeholder={branchFilter ? "직무 검색 또는 새 직무 입력" : "계열을 먼저 선택해 주세요"} disabled={!branchFilter} className="rounded-[14px] border border-[#dfe3eb] bg-white px-4 py-3 text-[13px] outline-none focus:border-[#8aa2e8] disabled:bg-[#f3f5f8]" />
+                    {canCreateJob ? <button type="button" disabled={creatingCategory} onClick={handleCreateJob} className="rounded-[14px] border border-[#171b24] bg-white px-4 py-2.5 text-[13px] font-semibold text-[#171b24] disabled:opacity-60">{creatingCategory ? "생성 중..." : "직무 추가"}</button> : <div />}
+                  </div>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <DifficultyChip label="전체 직무" active={!jobFilter} onClick={() => setJobFilter("")} />
+                    {visibleJobs.map((job) => (
+                      <DifficultyChip key={job.categoryId} label={job.displayName || getCategoryDisplayName(job)} active={jobFilter === String(job.categoryId)} onClick={() => setJobFilter(String(job.categoryId))} />
+                    ))}
+                  </div>
+                  <p className={`mt-3 text-[12px] ${jobAlreadyExists ? "text-[#d14343]" : "text-[#7a8190]"}`}>
+                    {jobAlreadyExists
+                      ? "같은 이름의 직무가 이미 있습니다. 중복/장난 입력은 관리자 확인 후 즉시 로그인 차단될 수 있습니다."
+                      : "새로 만든 직무는 바로 선택됩니다. 장난성 입력은 관리자 확인 후 즉시 로그인 차단될 수 있습니다."}
+                  </p>
+                </div>
+
+                <div className="rounded-[20px] border border-[#edf1f7] bg-[#fafbfd] p-4">
+                  <p className="text-[12px] font-semibold tracking-[0.08em] text-[#7a8190]">3. 기술 선택</p>
+                  <div className="mt-3 grid gap-3 xl:grid-cols-[1fr_auto]">
+                    <input value={categoryQuery} onChange={(event) => setCategoryQuery(event.target.value)} placeholder={jobFilter ? "기술 검색 또는 새 기술 입력" : "직무를 먼저 선택해 주세요"} disabled={!jobFilter} className="rounded-[14px] border border-[#dfe3eb] bg-white px-4 py-3 text-[13px] outline-none focus:border-[#8aa2e8] disabled:bg-[#f3f5f8]" />
+                    {canCreateCategory ? <button type="button" disabled={creatingCategory} onClick={handleCreateCategory} className="rounded-[14px] border border-[#171b24] bg-white px-4 py-2.5 text-[13px] font-semibold text-[#171b24] disabled:opacity-60">{creatingCategory ? "생성 중..." : "기술 추가"}</button> : <div />}
+                  </div>
+                  {canCreateCategory ? (
+                    <div className="mt-4 flex items-center justify-between gap-3 rounded-[18px] border border-dashed border-[#d7dce5] bg-white p-4">
+                      <div>
+                        <p className="text-[13px] font-semibold text-[#171b24]">`{categoryQuery.trim()}` 기술이 아직 없습니다.</p>
+                        <p className="mt-1 text-[12px] text-[#5e6472]">선택한 직무 아래에 새 기술을 만들고 바로 연습 대상으로 사용할 수 있습니다.</p>
+                      </div>
+                      <button type="button" disabled={creatingCategory} onClick={handleCreateCategory} className="rounded-[14px] border border-[#171b24] px-4 py-2.5 text-[13px] font-semibold text-[#171b24] disabled:opacity-60">{creatingCategory ? "생성 중..." : "기술 추가"}</button>
+                    </div>
+                  ) : null}
+                  <p className={`mt-3 text-[12px] ${categoryAlreadyExists ? "text-[#d14343]" : "text-[#7a8190]"}`}>
+                    {categoryAlreadyExists
+                      ? "같은 이름의 기술이 이미 있습니다. 중복/장난 입력은 관리자 확인 후 즉시 로그인 차단될 수 있습니다."
+                      : "새로 만든 기술은 목록에 바로 반영됩니다. 장난성 입력은 관리자 확인 후 즉시 로그인 차단될 수 있습니다."}
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-5 flex flex-wrap gap-2">
                 {[1, 2, 3, 4, 5].map((rating) => <DifficultyChip key={rating} label={<StarIcons rating={rating} sizeClass="text-[11px]" />} active={selectedRating === rating} onClick={() => setSelectedRating(rating)} />)}
               </div>
-
-              {canCreateCategory ? (
-                <div className="mt-4 flex items-center justify-between gap-3 rounded-[18px] border border-dashed border-[#d7dce5] bg-[#fafbfd] p-4">
-                <div>
-                  <p className="text-[13px] font-semibold text-[#171b24]">`{categoryQuery.trim()}` 카테고리가 아직 없습니다.</p>
-                  <p className="mt-1 text-[12px] text-[#5e6472]">직무를 고른 뒤 새 카테고리를 만드시면 바로 기술질문 연습에 사용하실 수 있습니다.</p>
-                </div>
-                <button type="button" disabled={creatingCategory} onClick={handleCreateCategory} className="rounded-[14px] border border-[#171b24] px-4 py-2.5 text-[13px] font-semibold text-[#171b24] disabled:opacity-60">{creatingCategory ? "생성 중..." : "카테고리 추가"}</button>
-              </div>
-              ) : null}
-              <p className={`mt-3 text-[12px] ${categoryAlreadyExists ? "text-[#d14343]" : "text-[#7a8190]"}`}>
-                {categoryAlreadyExists
-                  ? "같은 이름의 기술 카테고리가 이미 있습니다. 중복/장난 입력은 관리자 확인 후 즉시 로그인 차단될 수 있습니다."
-                  : "새로 만든 기술은 목록에 바로 반영됩니다. 장난성 입력은 관리자 확인 후 즉시 로그인 차단될 수 있습니다."}
-              </p>
             </section>
 
             <section className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3">

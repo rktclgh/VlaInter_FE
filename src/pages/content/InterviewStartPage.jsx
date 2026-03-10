@@ -12,7 +12,7 @@ import tempProfileImage from "../../assets/icon/temp.png";
 import { logout } from "../../lib/authApi";
 import { searchCategoryByText } from "../../lib/categoryPresentation";
 import { ratingToDifficulty } from "../../lib/difficultyRating";
-import { createInterviewCategory, getInterviewCategories, getReadyMockDocuments, startMockInterview } from "../../lib/interviewApi";
+import { createInterviewCategory, getInterviewCategories, getMyInterviewSets, getReadyMockDocuments, startMockInterview } from "../../lib/interviewApi";
 import { saveTechInterviewSession } from "../../lib/interviewSessionFlow";
 import { consumePointChargeSuccessResult } from "../../lib/pointChargeFlow";
 import { extractProfile, formatPoint, parsePoint } from "../../lib/profileUtils";
@@ -164,8 +164,11 @@ export const InterviewStartPage = () => {
   const [jobQuery, setJobQuery] = useState("");
   const [skillQuery, setSkillQuery] = useState("");
   const [selectedCategoryIds, setSelectedCategoryIds] = useState([]);
+  const [myQuestionSets, setMyQuestionSets] = useState([]);
+  const [selectedQuestionSetId, setSelectedQuestionSetId] = useState("");
   const [selectedRating, setSelectedRating] = useState(3);
   const [selectedQuestionCount, setSelectedQuestionCount] = useState(5);
+  const [includeSelfIntroduction, setIncludeSelfIntroduction] = useState(false);
   const [loadingPage, setLoadingPage] = useState(true);
   const [startingInterview, setStartingInterview] = useState(false);
   const [creatingCategory, setCreatingCategory] = useState(false);
@@ -194,9 +197,10 @@ export const InterviewStartPage = () => {
     }
 
     try {
-      const [filesPayload, categoriesPayload] = await Promise.all([
+      const [filesPayload, categoriesPayload, mySetsPayload] = await Promise.all([
         getReadyMockDocuments(),
         getInterviewCategories(),
+        getMyInterviewSets(),
       ]);
       const nextCategoryTree = Array.isArray(categoriesPayload) ? categoriesPayload : [];
       const nextJobs = nextCategoryTree
@@ -228,6 +232,7 @@ export const InterviewStartPage = () => {
       const defaultBranch = matchedJob?.parentId ? String(matchedJob.parentId) : nextJobs[0]?.parentId ? String(nextJobs[0].parentId) : "";
 
       setCategoryTree(nextCategoryTree);
+      setMyQuestionSets(Array.isArray(mySetsPayload) ? mySetsPayload.filter((item) => !item?.aiGenerated && Number(item?.questionCount || 0) > 0) : []);
       setFilesByType(nextFilesByType);
       setSelectedFiles({
         RESUME: String(nextFilesByType.RESUME[0]?.fileId || nextFilesByType.RESUME[0]?.file_id || ""),
@@ -320,10 +325,29 @@ export const InterviewStartPage = () => {
     [selectedCategoryIds, skillItems]
   );
   const selectedJob = useMemo(() => jobs.find((item) => String(item.categoryId) === String(jobFilter)) || null, [jobFilter, jobs]);
+  const selectedQuestionSet = useMemo(
+    () => myQuestionSets.find((item) => String(item.setId) === String(selectedQuestionSetId)) || null,
+    [myQuestionSets, selectedQuestionSetId]
+  );
+  const visibleQuestionSets = useMemo(() => {
+    const normalizedJobName = String(selectedJob?.displayName || selectedJob?.name || "").trim().toLowerCase();
+    return myQuestionSets.filter((set) => {
+      if (!normalizedJobName) return true;
+      return String(set.jobName || "").trim().toLowerCase() === normalizedJobName;
+    });
+  }, [myQuestionSets, selectedJob]);
+
+  useEffect(() => {
+    if (!selectedQuestionSetId) return;
+    if (visibleQuestionSets.some((set) => String(set.setId) === String(selectedQuestionSetId))) return;
+    setSelectedQuestionSetId("");
+  }, [selectedQuestionSetId, visibleQuestionSets]);
+
   const selectedFileObjects = useMemo(() => DOCUMENT_TYPES.reduce((acc, item) => {
     acc[item.key] = filesByType[item.key].find((file) => String(file?.fileId || file?.file_id || "") === String(selectedFiles[item.key] || "")) || null;
     return acc;
   }, {}), [filesByType, selectedFiles]);
+  const totalInterviewQuestionCount = Math.max(5, Number(selectedQuestionCount) || 5) + (includeSelfIntroduction ? 1 : 0);
 
   const handleSidebarNavigate = (item) => {
     if (startingInterview) return;
@@ -442,15 +466,13 @@ export const InterviewStartPage = () => {
       return;
     }
     const resolvedJobName = (selectedJob?.displayName || selectedJob?.name || jobQuery.trim()).trim();
-    const resolvedSkillNames = selectedSkills
-      .map((skill) => (skill.displayName || skill.name || "").trim())
-      .filter(Boolean);
+    const resolvedSkillNames = selectedSkills.map((skill) => (skill.displayName || skill.name || "").trim()).filter(Boolean);
     if (!resolvedJobName) {
       setPageErrorMessage("모의면접에는 직무 입력이 필요합니다.");
       return;
     }
-    if (!resolvedSkillNames.length) {
-      setPageErrorMessage("모의면접에는 기술 카테고리를 1개 이상 선택해 주세요.");
+    if (!selectedQuestionSet && !resolvedSkillNames.length) {
+      setPageErrorMessage("모의면접에는 기술 카테고리를 선택하거나 내 질문 세트를 골라 주세요.");
       return;
     }
 
@@ -459,9 +481,11 @@ export const InterviewStartPage = () => {
     try {
       const response = await startMockInterview({
         documentFileIds: selectedDocumentIds,
+        questionSetId: selectedQuestionSet ? Number(selectedQuestionSet.setId) : null,
         categoryIds: selectedCategoryIds.map((id) => Number(id)).filter(Number.isFinite),
         jobName: resolvedJobName,
         difficulty: ratingToDifficulty(selectedRating),
+        includeSelfIntroduction,
         questionCount: Math.max(5, Number(selectedQuestionCount) || 5),
       });
 
@@ -485,9 +509,14 @@ export const InterviewStartPage = () => {
           difficulty: ratingToDifficulty(selectedRating),
           difficultyRating: selectedRating,
           categoryId: null,
-          categoryName: resolvedSkillNames.join(", "),
+          categoryName: selectedQuestionSet
+            ? ((Array.isArray(selectedQuestionSet.skillNames) ? selectedQuestionSet.skillNames : [selectedQuestionSet.skillName]).filter(Boolean).join(", "))
+            : resolvedSkillNames.join(", "),
           jobName: resolvedJobName,
-          questionCount: Math.max(5, Number(selectedQuestionCount) || 5),
+          questionCount: totalInterviewQuestionCount,
+          requestedQuestionCount: Math.max(5, Number(selectedQuestionCount) || 5),
+          includeSelfIntroduction,
+          questionSetId: selectedQuestionSet ? Number(selectedQuestionSet.setId) : null,
         },
       });
 
@@ -657,9 +686,10 @@ export const InterviewStartPage = () => {
                             <button
                               type="button"
                               onClick={() => setSelectedCategoryIds((prev) => prev.filter((id) => id !== String(skill.categoryId)))}
-                              className="text-[11px] text-white/80"
+                              className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-white/18 text-[11px] leading-none text-white/90"
+                              aria-label={`${skill.displayName || skill.name} 제거`}
                             >
-                              제거
+                              ×
                             </button>
                           </span>
                         ))}
@@ -678,6 +708,7 @@ export const InterviewStartPage = () => {
                               return;
                             }
                             setPageErrorMessage("");
+                            setSelectedQuestionSetId("");
                             setSelectedCategoryIds((prev) => toggleSkillSelection(prev, nextId));
                           }}
                         />
@@ -690,6 +721,48 @@ export const InterviewStartPage = () => {
                         : "새로 만든 기술은 바로 선택됩니다. 장난성 입력은 관리자 확인 후 즉시 로그인 차단될 수 있습니다."}
                     </p>
                     <p className="mt-3 text-[12px] text-[#7a8190]">최대 3개까지 선택하실 수 있으며, 선택한 기술 전체에서 질문 후보를 한 번에 생성한 뒤 품질 통과분만 섞어 출제합니다.</p>
+                  </CategoryCard>
+
+                  <CategoryCard title="내 질문 세트로 기술질문 대체" description="AI 기술질문 대신 내가 만든 질문 세트를 그대로 기술 질문 풀로 사용할 수 있습니다. 선택 시 위 기술 카테고리 대신 이 세트가 우선 적용됩니다.">
+                    <div className="space-y-2">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedQuestionSetId("")}
+                        className={`flex w-full items-center gap-3 rounded-[14px] border px-3 py-2.5 text-left transition ${!selectedQuestionSetId ? "border-[#171b24] bg-[#f8fafc]" : "border-[#d9dde5] bg-white text-[#4f5664]"}`}
+                      >
+                        <span className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full border text-[10px] ${!selectedQuestionSetId ? "border-[#171b24] bg-[#171b24] text-white" : "border-[#c7cfdd] bg-white text-transparent"}`}>✓</span>
+                        <div className="min-w-0">
+                          <p className="text-[12px] font-semibold text-[#171b24]">기술 카테고리 생성 사용</p>
+                          <p className="mt-0.5 text-[11px] text-[#7a8190]">선택한 기술 카테고리 기준으로 AI 기술질문을 생성합니다.</p>
+                        </div>
+                      </button>
+                      {visibleQuestionSets.map((set) => {
+                        const selected = selectedQuestionSetId === String(set.setId);
+                        const skillLabels = (Array.isArray(set.skillNames) ? set.skillNames : [set.skillName]).filter(Boolean);
+                        return (
+                          <button
+                            key={set.setId}
+                            type="button"
+                            onClick={() => {
+                              setSelectedQuestionSetId(String(set.setId));
+                              setSelectedCategoryIds([]);
+                              setPageErrorMessage("");
+                            }}
+                            className={`flex w-full items-center gap-3 rounded-[14px] border px-3 py-2.5 text-left transition ${selected ? "border-[#171b24] bg-[#f8fafc]" : "border-[#d9dde5] bg-white text-[#4f5664]"}`}
+                          >
+                            <span className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full border text-[10px] ${selected ? "border-[#171b24] bg-[#171b24] text-white" : "border-[#c7cfdd] bg-white text-transparent"}`}>✓</span>
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate text-[12px] font-semibold text-[#171b24]">{set.title}</p>
+                              <p className="mt-0.5 truncate text-[11px] text-[#7a8190]">
+                                {set.jobName || "직무 미지정"} · {(skillLabels.length ? skillLabels.slice(0, 3).join(", ") : "기술 없음")}
+                              </p>
+                            </div>
+                          </button>
+                        );
+                      })}
+                      {!visibleQuestionSets.length ? <span className="text-[12px] text-[#7a8190]">현재 선택한 직무에서 사용할 수 있는 내 질문 세트가 없습니다.</span> : null}
+                    </div>
+                    <p className="mt-3 text-[12px] text-[#7a8190]">세트를 선택하면 기술질문은 AI 생성 대신 해당 세트 문답에서 랜덤하게 대체됩니다.</p>
                   </CategoryCard>
 
                   <CategoryCard title="서류 선택" description="AI 분석이 끝난 서류만 노출됩니다. 이력서와 자기소개서는 필수이며, 포트폴리오는 선택 사항입니다. OCR fallback이 사용된 문서는 배지를 함께 표시합니다.">
@@ -772,13 +845,29 @@ export const InterviewStartPage = () => {
                         />
                         <span className="text-[12px] text-[#6a7383]">최소 5문항, 최대 20문항</span>
                       </div>
+                      <label className="mt-4 inline-flex items-center gap-2 text-[12px] text-[#4f5664]">
+                        <input
+                          type="checkbox"
+                          checked={includeSelfIntroduction}
+                          onChange={(event) => setIncludeSelfIntroduction(event.target.checked)}
+                          className="h-4 w-4 rounded border border-[#cfd6e4]"
+                        />
+                        <span>첫 질문에 자기소개 문항 추가</span>
+                      </label>
+                      <p className="mt-2 text-[12px] text-[#7a8190]">
+                        체크하면 첫 질문으로 &quot;자기소개 부탁드리겠습니다.&quot;가 추가되며, 선택 문항 수에 1문항이 더해집니다.
+                      </p>
                     </div>
                   </CategoryCard>
 
                   <CategoryCard title="선택 요약" description="세션 상단에 그대로 표시되는 메타 정보입니다.">
                     <div className="flex flex-wrap gap-2">
                       {selectedJob ? <span className="rounded-full border border-[#d8dde7] bg-white px-3 py-1 text-[12px] text-[#4f5664]">{selectedJob.displayName || selectedJob.name}</span> : null}
-                      {selectedSkills.length ? selectedSkills.map((skill) => (
+                      {selectedQuestionSet ? (
+                        <span className="rounded-full border border-[#d8dde7] bg-[#f7f9fc] px-3 py-1 text-[12px] text-[#4f5664]">
+                          질문 세트: {selectedQuestionSet.title}
+                        </span>
+                      ) : selectedSkills.length ? selectedSkills.map((skill) => (
                         <span key={`summary-skill-${skill.categoryId}`} className="rounded-full border border-[#d8dde7] bg-white px-3 py-1 text-[12px] text-[#4f5664]">
                           {skill.displayName || skill.name}
                         </span>
@@ -787,7 +876,9 @@ export const InterviewStartPage = () => {
                           기술 미선택
                         </span>
                       )}
-                      <span className="rounded-full border border-[#d8dde7] bg-white px-3 py-1 text-[12px] text-[#4f5664]">문항 {selectedQuestionCount}개</span>
+                      <span className="rounded-full border border-[#d8dde7] bg-white px-3 py-1 text-[12px] text-[#4f5664]">
+                        문항 {totalInterviewQuestionCount}개{includeSelfIntroduction ? " (자기소개 포함)" : ""}
+                      </span>
                       {DOCUMENT_TYPES.map((type) => {
                         const file = selectedFileObjects[type.key];
                         return (

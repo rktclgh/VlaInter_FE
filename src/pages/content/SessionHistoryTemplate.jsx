@@ -12,6 +12,7 @@ import { logout } from "../../lib/authApi";
 import { bookmarkInterviewTurn, getInterviewSessionHistory, getInterviewSessionResults } from "../../lib/interviewApi";
 import { getQuestionCategoryDisplayName } from "../../lib/categoryPresentation";
 import { consumePointChargeSuccessResult } from "../../lib/pointChargeFlow";
+import { isAlreadySavedQuestionError } from "../../lib/savedQuestionUtils";
 import { getMyProfile, getMyProfileImageUrl } from "../../lib/userApi";
 
 const formatPoint = (value) => `${new Intl.NumberFormat("ko-KR").format(Number(value) || 0)}P`;
@@ -305,6 +306,17 @@ export const SessionHistoryTemplate = ({ title, description, apiBasePath, active
           : prev
       );
     } catch (error) {
+      if (isAlreadySavedQuestionError(error)) {
+        setSelectedResults((prev) =>
+          prev
+            ? {
+                ...prev,
+                turns: prev.turns.map((item) => (item.turnId === turnId ? { ...item, bookmarked: true } : item)),
+              }
+            : prev
+        );
+        return;
+      }
       setPageErrorMessage(error?.message || "질문 저장에 실패했습니다.");
     } finally {
       setBookmarkingTurnIds((prev) => {
@@ -417,7 +429,7 @@ export const SessionHistoryTemplate = ({ title, description, apiBasePath, active
                   <div className="flex items-center justify-between gap-3">
                     <div>
                       <p className="text-[12px] font-semibold tracking-[0.08em] text-[#7a8190]">SESSION DETAIL</p>
-                      <h2 className="mt-2 text-[24px] font-semibold text-[#171b24]">세션 #{selectedSummary.sessionId}</h2>
+                      <h2 className="mt-2 text-[24px] font-semibold text-[#171b24]">선택한 면접 결과</h2>
                     </div>
                     {loadingResult ? <InlineSpinner label="결과 불러오는 중..." /> : null}
                   </div>

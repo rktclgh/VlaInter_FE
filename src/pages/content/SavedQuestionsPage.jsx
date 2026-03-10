@@ -12,7 +12,14 @@ import { logout } from "../../lib/authApi";
 import { buildVisibleCategories, getCategoryDisplayName, sanitizeQuestionTag, searchCategoryByText } from "../../lib/categoryPresentation";
 import { ratingToDifficulty } from "../../lib/difficultyRating";
 import { consumePointChargeSuccessResult } from "../../lib/pointChargeFlow";
-import { deleteSavedInterviewQuestion, getInterviewCategories, getSavedInterviewQuestions } from "../../lib/interviewApi";
+import {
+  addQuestionToInterviewSet,
+  createInterviewSet,
+  deleteInterviewSet,
+  deleteSavedInterviewQuestion,
+  getInterviewCategories,
+  getSavedInterviewQuestions,
+} from "../../lib/interviewApi";
 import { getMyProfile, getMyProfileImageUrl } from "../../lib/userApi";
 
 const PAGE_SIZE = 12;
@@ -69,6 +76,40 @@ const DeleteConfirmModal = ({ targetQuestion, deleting, onCancel, onConfirm }) =
   </div>
 );
 
+const CreateSetFromSavedModal = ({
+  title,
+  setTitle,
+  onChangeTitle,
+  saving,
+  selectedCount,
+  summaryLabel,
+  errorMessage,
+  onCancel,
+  onConfirm,
+}) => (
+  <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/45 px-4">
+    <div className="w-full max-w-[520px] rounded-[18px] border border-[#d9d9d9] bg-white p-5 shadow-[0_20px_60px_rgba(15,23,42,0.18)]">
+      <p className="text-[16px] font-semibold text-[#252525]">{title}</p>
+      <p className="mt-2 text-[13px] leading-[1.7] text-[#4f5664]">
+        선택한 저장 질문 {selectedCount}개를 새 문답 세트로 묶습니다.
+        <br />
+        {summaryLabel || "현재 세트 구조상 같은 직무/기술 질문끼리만 묶을 수 있습니다."}
+      </p>
+      <input
+        value={setTitle}
+        onChange={(event) => onChangeTitle(event.target.value)}
+        placeholder="세트 제목을 입력해 주세요"
+        className="mt-4 w-full rounded-[14px] border border-[#dfe3eb] px-4 py-3 text-[13px] outline-none focus:border-[#8aa2e8]"
+      />
+      {errorMessage ? <p className="mt-3 text-[12px] text-[#dc4b4b]">{errorMessage}</p> : null}
+      <div className="mt-4 flex justify-end gap-2">
+        <button type="button" onClick={onCancel} disabled={saving} className="rounded-[10px] border border-[#d6d6d6] px-3 py-1.5 text-[12px] text-[#666] disabled:opacity-60">취소</button>
+        <button type="button" onClick={onConfirm} disabled={saving} className="rounded-[10px] border border-[#171b24] bg-[#171b24] px-3 py-1.5 text-[12px] text-white disabled:opacity-60">{saving ? "세트 생성 중..." : "새 세트 만들기"}</button>
+      </div>
+    </div>
+  </div>
+);
+
 const CategoryChip = ({ label, active = false, onClick }) => (
   <button type="button" onClick={onClick} className={`rounded-full border px-3 py-1 text-[11px] transition ${active ? "border-[#171b24] bg-[#171b24] text-white" : "border-[#d9dde5] bg-white text-[#556070]"}`}>
     {label}
@@ -106,6 +147,11 @@ export const SavedQuestionsPage = () => {
   const [deletingQuestion, setDeletingQuestion] = useState(false);
   const [pageErrorMessage, setPageErrorMessage] = useState("");
   const [showAllCategories, setShowAllCategories] = useState(false);
+  const [selectedSavedIds, setSelectedSavedIds] = useState([]);
+  const [showCreateSetModal, setShowCreateSetModal] = useState(false);
+  const [newSetTitle, setNewSetTitle] = useState("");
+  const [creatingSet, setCreatingSet] = useState(false);
+  const [createSetErrorMessage, setCreateSetErrorMessage] = useState("");
 
   useEffect(() => {
     const charged = consumePointChargeSuccessResult();
@@ -177,6 +223,30 @@ export const SavedQuestionsPage = () => {
     });
   }, [categoryMap, dateFrom, dateTo, enrichedItems, jobFilter, query, selectedCategoryId, selectedRating]);
 
+  const selectedItems = useMemo(
+    () => enrichedItems.filter((item) => selectedSavedIds.includes(item.savedQuestionId)),
+    [enrichedItems, selectedSavedIds]
+  );
+
+  const selectableSelectedItems = useMemo(
+    () => selectedItems.filter((item) => item.questionKind === "TECH" && item.categoryId && item.jobName && item.categoryName),
+    [selectedItems]
+  );
+
+  const selectedJobNames = useMemo(() => {
+    const keys = new Set(
+      selectableSelectedItems.map((item) => String(item.jobName || "").trim()).filter(Boolean)
+    );
+    return [...keys];
+  }, [selectableSelectedItems]);
+
+  const selectedGroupSummary = useMemo(() => {
+    if (!selectableSelectedItems.length) return "";
+    const first = selectableSelectedItems[0];
+    const skillNames = [...new Set(selectableSelectedItems.map((item) => String(item.categoryName || "").trim()).filter(Boolean))];
+    return `${first.jobName} · ${skillNames.slice(0, 3).join(", ")}${skillNames.length > 3 ? ` 외 ${skillNames.length - 3}개` : ""}`;
+  }, [selectableSelectedItems]);
+
   useEffect(() => {
     setPage(1);
   }, [query, jobFilter, categoryQuery, selectedCategoryId, selectedRating, dateFrom, dateTo]);
@@ -214,12 +284,100 @@ export const SavedQuestionsPage = () => {
     try {
       await deleteSavedInterviewQuestion(savedQuestionId);
       setItems((prev) => prev.filter((item) => item.savedQuestionId !== savedQuestionId));
+      setSelectedSavedIds((prev) => prev.filter((id) => id !== savedQuestionId));
       setSelectedQuestion((prev) => (prev?.savedQuestionId === savedQuestionId ? null : prev));
       setDeleteTargetQuestion(null);
     } catch (error) {
       setPageErrorMessage(error?.message || "저장된 질문 삭제에 실패했습니다.");
     } finally {
       setDeletingQuestion(false);
+    }
+  };
+
+  const handleToggleSavedQuestion = (savedQuestionId) => {
+    setSelectedSavedIds((prev) => (
+      prev.includes(savedQuestionId) ? prev.filter((id) => id !== savedQuestionId) : [...prev, savedQuestionId]
+    ));
+  };
+
+  const handleOpenCreateSetModal = () => {
+    setCreateSetErrorMessage("");
+    setNewSetTitle("");
+    if (!selectedSavedIds.length) {
+      setPageErrorMessage("새 세트로 묶을 저장 질문을 먼저 선택해 주세요.");
+      return;
+    }
+    if (!selectableSelectedItems.length) {
+      setPageErrorMessage("현재는 기술 질문 저장본만 새 문답 세트로 만들 수 있습니다.");
+      return;
+    }
+    setShowCreateSetModal(true);
+  };
+
+  const handleCreateSetFromSaved = async () => {
+    const normalizedTitle = newSetTitle.trim();
+    if (!normalizedTitle) {
+      setCreateSetErrorMessage("세트 제목을 입력해 주세요.");
+      return;
+    }
+    if (!selectableSelectedItems.length) {
+      setCreateSetErrorMessage("현재는 기술 질문 저장본만 새 문답 세트로 만들 수 있습니다.");
+      return;
+    }
+    if (selectableSelectedItems.length !== selectedSavedIds.length) {
+      setCreateSetErrorMessage("문서 질문은 아직 세트에 함께 담을 수 없습니다. 기술 질문만 선택해 주세요.");
+      return;
+    }
+    if (selectedJobNames.length !== 1) {
+      setCreateSetErrorMessage("하나의 문답 세트에는 같은 직무의 저장 질문만 담을 수 있습니다.");
+      return;
+    }
+
+    const base = selectableSelectedItems[0];
+    setCreatingSet(true);
+    setCreateSetErrorMessage("");
+    try {
+      const createdSet = await createInterviewSet({
+        title: normalizedTitle,
+        jobName: base.jobName,
+        description: `저장된 질문 ${selectableSelectedItems.length}개로 만든 세트`,
+        visibility: "PRIVATE",
+      });
+
+      const failedRows = [];
+      for (const item of selectableSelectedItems) {
+        try {
+          await addQuestionToInterviewSet(createdSet.setId, {
+            questionText: item.questionText,
+            canonicalAnswer: item.canonicalAnswer || item.modelAnswer || "",
+            categoryId: item.categoryId,
+            jobName: item.jobName,
+            skillName: item.categoryName,
+            difficulty: item.difficulty || "MEDIUM",
+            tags: item.tags || [],
+          });
+        } catch (error) {
+          failedRows.push(error?.message || "질문 추가 실패");
+        }
+      }
+
+      if (failedRows.length > 0) {
+        try {
+          await deleteInterviewSet(createdSet.setId);
+        } catch (rollbackError) {
+          console.error(`저장 질문 세트 롤백에 실패했습니다. setId=${createdSet.setId}`, rollbackError);
+        }
+        setCreateSetErrorMessage(`질문 세트 생성 중 일부 문답 저장에 실패했습니다. ${failedRows[0]}`);
+        return;
+      }
+
+      setSelectedSavedIds([]);
+      setShowCreateSetModal(false);
+      setPageErrorMessage("새 문답 세트를 생성했습니다. 내 질문 세트에서 확인해 주세요.");
+    } catch (error) {
+      setCreateSetErrorMessage(error?.message || "저장 질문으로 세트를 만드는 데 실패했습니다.");
+    } finally {
+      setCreatingSet(false);
     }
   };
 
@@ -259,6 +417,21 @@ export const SavedQuestionsPage = () => {
                 <DifficultyChip label="전체 난이도" active={!selectedRating} onClick={() => setSelectedRating("")} />
                 {[1, 2, 3, 4, 5].map((rating) => <DifficultyChip key={rating} label={<StarIcons rating={rating} sizeClass="text-[11px]" />} active={Number(selectedRating) === rating} onClick={() => setSelectedRating(String(rating))} />)}
               </div>
+
+              <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-[18px] border border-dashed border-[#d7dce5] bg-[#fafbfd] px-4 py-3">
+                <div className="text-[12px] text-[#5e6472]">
+                  선택 {selectedSavedIds.length}개
+                  {selectedGroupSummary ? ` · ${selectedGroupSummary}` : ""}
+                </div>
+                <button
+                  type="button"
+                  onClick={handleOpenCreateSetModal}
+                  disabled={!selectedSavedIds.length}
+                  className="rounded-[12px] border border-[#171b24] px-3 py-2 text-[12px] font-semibold text-[#171b24] disabled:opacity-50"
+                >
+                  선택한 질문으로 세트 만들기
+                </button>
+              </div>
             </section>
 
             <section className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
@@ -266,19 +439,35 @@ export const SavedQuestionsPage = () => {
               {!loading && pagedItems.length === 0 ? <p className="text-[13px] text-[#5e6472]">조건에 맞는 저장 질문이 없습니다.</p> : null}
               {pagedItems.map((item) => {
                 const sanitizedTags = (item.tags || []).map(sanitizeQuestionTag).filter(Boolean);
+                const selected = selectedSavedIds.includes(item.savedQuestionId);
+                const selectable = item.questionKind === "TECH";
                 return (
-                  <article key={item.savedQuestionId} className="rounded-[22px] border border-[#e4e7ee] bg-white p-5 shadow-[0_12px_32px_rgba(15,23,42,0.04)] transition hover:border-[#cfd6e4] hover:shadow-[0_18px_36px_rgba(15,23,42,0.08)]">
+                  <article key={item.savedQuestionId} className={`rounded-[22px] border bg-white p-5 shadow-[0_12px_32px_rgba(15,23,42,0.04)] transition hover:border-[#cfd6e4] hover:shadow-[0_18px_36px_rgba(15,23,42,0.08)] ${selected ? "border-[#171b24]" : "border-[#e4e7ee]"}`}>
                     <div className="flex items-start justify-between gap-3">
-                      <button type="button" onClick={() => setSelectedQuestion(item)} className="min-w-0 flex-1 text-left">
+                      <div className="flex min-w-0 flex-1 items-start gap-3">
+                        <label className={`mt-0.5 inline-flex shrink-0 items-center gap-2 rounded-full border px-2.5 py-1 text-[11px] font-semibold ${selectable ? "cursor-pointer border-[#d8dde7] text-[#4f5664]" : "border-[#f0d4d4] bg-[#fff7f7] text-[#b54747]"}`}>
+                          <input
+                            type="checkbox"
+                            checked={selected}
+                            onChange={() => handleToggleSavedQuestion(item.savedQuestionId)}
+                            disabled={!selectable}
+                            className="sr-only"
+                          />
+                          <span className={`flex h-4 w-4 items-center justify-center rounded-[5px] border text-[10px] ${selected ? "border-[#171b24] bg-[#171b24] text-white" : "border-[#c7cfdd] bg-white text-transparent"} ${!selectable ? "opacity-50" : ""}`}>✓</span>
+                          <span>{selectable ? (selected ? "선택됨" : "세트 선택") : "세트화 불가"}</span>
+                        </label>
+                        <button type="button" onClick={() => setSelectedQuestion(item)} className="min-w-0 flex-1 text-left">
                         <div className="flex flex-wrap gap-2">
                           <span className="rounded-full bg-[#eef2f8] px-3 py-1 text-[11px] text-[#556070]">{item.jobName}</span>
                           <span className="rounded-full bg-[#f4f6fb] px-3 py-1 text-[11px] text-[#556070]">{item.categoryName}</span>
                           {item.difficulty ? <DifficultyStars difficulty={item.difficulty} compact /> : null}
+                          {item.questionKind !== "TECH" ? <span className="rounded-full bg-[#fff1f1] px-3 py-1 text-[11px] text-[#b54747]">세트화 불가</span> : null}
                         </div>
                         <p className="mt-4 line-clamp-5 whitespace-pre-wrap text-[17px] font-semibold leading-[1.7] text-[#171b24]">{item.questionText}</p>
                         {sanitizedTags.length > 0 ? <div className="mt-4 flex flex-wrap gap-2">{sanitizedTags.slice(0, 4).map((tag) => <span key={`${item.savedQuestionId}-${tag}`} className="rounded-full bg-[#fff7ed] px-3 py-1 text-[11px] text-[#9a5b11]">#{tag}</span>)}</div> : null}
                         <div className="mt-4 text-[11px] text-[#6b7280]">저장일 {formatDate(item.createdAt)}</div>
-                      </button>
+                        </button>
+                      </div>
                       <button type="button" onClick={() => setDeleteTargetQuestion(item)} className="shrink-0 rounded-[12px] border border-[#d8dde7] px-3 py-2 text-[12px] text-[#4f5664]">삭제</button>
                     </div>
                   </article>
@@ -297,6 +486,23 @@ export const SavedQuestionsPage = () => {
         </main>
       </div>
       {selectedQuestion ? <QuestionAnswerDetailModal item={selectedQuestion} onClose={() => setSelectedQuestion(null)} /> : null}
+      {showCreateSetModal ? (
+        <CreateSetFromSavedModal
+          title="저장된 질문으로 새 문답 세트 만들기"
+          setTitle={newSetTitle}
+          onChangeTitle={setNewSetTitle}
+          saving={creatingSet}
+          selectedCount={selectedSavedIds.length}
+          summaryLabel={selectedGroupSummary ? `기준: ${selectedGroupSummary}` : ""}
+          errorMessage={createSetErrorMessage}
+          onCancel={() => {
+            if (creatingSet) return;
+            setShowCreateSetModal(false);
+            setCreateSetErrorMessage("");
+          }}
+          onConfirm={() => void handleCreateSetFromSaved()}
+        />
+      ) : null}
       {deleteTargetQuestion ? <DeleteConfirmModal targetQuestion={deleteTargetQuestion} deleting={deletingQuestion} onCancel={() => setDeleteTargetQuestion(null)} onConfirm={handleDelete} /> : null}
       {showLogoutModal ? <LogoutConfirmModal onCancel={() => setShowLogoutModal(false)} onConfirm={handleLogoutConfirm} /> : null}
       {showPointChargeModal ? <PointChargeModal onClose={() => setShowPointChargeModal(false)} onCharged={(result) => { setUserPoint(parsePoint(result?.currentPoint)); setShowPointChargeModal(false); setShowPointChargeSuccessModal(true); }} /> : null}

@@ -20,6 +20,7 @@ import {
   getInterviewCategories,
   getInterviewSetQuestions,
   getMyInterviewSets,
+  saveInterviewQuestion,
   startTechInterview,
   updateInterviewSet,
 } from "../../lib/interviewApi";
@@ -27,9 +28,10 @@ import { saveTechInterviewSession } from "../../lib/interviewSessionFlow";
 import { isGeminiOverloadError } from "../../lib/geminiErrorUtils";
 import { consumePointChargeSuccessResult } from "../../lib/pointChargeFlow";
 import { extractProfile, formatPoint, parsePoint } from "../../lib/profileUtils";
+import { isAlreadySavedQuestionError } from "../../lib/savedQuestionUtils";
 import { getMyProfile, getMyProfileImageUrl } from "../../lib/userApi";
 
-const DEFAULT_ROW = { questionText: "", canonicalAnswer: "", tags: "", rating: 3 };
+const DEFAULT_ROW = { questionText: "", canonicalAnswer: "", tags: "", rating: 3, skillQuery: "", selectedCategoryId: "" };
 
 const formatDate = (value) => {
   const date = new Date(value || "");
@@ -121,8 +123,6 @@ const CreateQuestionSetModal = ({
   const [selectedBranchId, setSelectedBranchId] = useState("");
   const [jobQuery, setJobQuery] = useState("");
   const [selectedJobId, setSelectedJobId] = useState("");
-  const [skillQuery, setSkillQuery] = useState("");
-  const [selectedCategoryId, setSelectedCategoryId] = useState("");
   const [rows, setRows] = useState([{ ...DEFAULT_ROW }]);
   const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
   const [localMessage, setLocalMessage] = useState("");
@@ -144,15 +144,6 @@ const CreateQuestionSetModal = ({
     });
   }, [jobQuery, jobs, selectedBranchId]);
 
-  const filteredCategories = useMemo(() => {
-    const keyword = skillQuery.trim().toLowerCase();
-    return skillItems.filter((item) => {
-      if (selectedJobId && String(item.parentId) !== selectedJobId) return false;
-      if (!keyword) return true;
-      return [item.name, item.code, item.path].filter(Boolean).join(" ").toLowerCase().includes(keyword);
-    });
-  }, [selectedJobId, skillItems, skillQuery]);
-
   const canCreateBranch = Boolean(
     branchQuery.trim() &&
     !branchItems.some((item) => String(item.name || "").trim().toLowerCase() === branchQuery.trim().toLowerCase())
@@ -166,23 +157,11 @@ const CreateQuestionSetModal = ({
         String(item.name || "").trim().toLowerCase() === jobQuery.trim().toLowerCase()
     )
   );
-  const canCreateSkill = Boolean(
-    selectedJobId &&
-    skillQuery.trim() &&
-    !skillItems.some(
-      (item) =>
-        String(item.parentId) === selectedJobId &&
-        String(item.name || "").trim().toLowerCase() === skillQuery.trim().toLowerCase()
-    )
-  );
-
   const dirty =
     setTitle.trim() ||
     branchQuery.trim() ||
     jobQuery.trim() ||
-    skillQuery.trim() ||
-    selectedCategoryId ||
-    rows.some((row) => row.questionText.trim() || row.canonicalAnswer.trim() || row.tags.trim());
+    rows.some((row) => row.questionText.trim() || row.canonicalAnswer.trim() || row.tags.trim() || row.skillQuery.trim() || row.selectedCategoryId);
 
   const requestClose = () => {
     if (submitting || creatingCategory) return;
@@ -200,7 +179,7 @@ const CreateQuestionSetModal = ({
       const created = await onCreateCategory({ parentId: null, name: branchQuery.trim() });
       setSelectedBranchId(String(created?.categoryId || ""));
       setSelectedJobId("");
-      setSelectedCategoryId("");
+      setRows((prev) => prev.map((row) => ({ ...row, selectedCategoryId: "", skillQuery: "" })));
     } catch (error) {
       setLocalMessage(error?.message || "계열 생성에 실패했습니다.");
     }
@@ -213,18 +192,33 @@ const CreateQuestionSetModal = ({
       const created = await onCreateCategory({ parentId: Number(selectedBranchId), name: jobQuery.trim() });
       const nextJobId = String(created?.categoryId || "");
       setSelectedJobId(nextJobId);
-      setSelectedCategoryId("");
+      setRows((prev) => prev.map((row) => ({ ...row, selectedCategoryId: "", skillQuery: "" })));
     } catch (error) {
       setLocalMessage(error?.message || "직무 생성에 실패했습니다.");
     }
   };
 
-  const handleCreateSkill = async () => {
-    if (!canCreateSkill) return;
+  const updateRow = (rowIndex, updates) => {
+    setRows((prev) => prev.map((item, index) => (index === rowIndex ? { ...item, ...updates } : item)));
+  };
+
+  const handleCreateSkill = async (rowIndex) => {
+    const row = rows[rowIndex];
+    const rawName = row?.skillQuery?.trim();
+    if (!selectedJobId || !rawName) return;
+    const duplicated = skillItems.some(
+      (item) =>
+        String(item.parentId) === selectedJobId &&
+        String(item.name || "").trim().toLowerCase() === rawName.toLowerCase()
+    );
+    if (duplicated) return;
     try {
       setLocalMessage("");
-      const created = await onCreateCategory({ parentId: Number(selectedJobId), name: skillQuery.trim() });
-      setSelectedCategoryId(String(created?.categoryId || ""));
+      const created = await onCreateCategory({ parentId: Number(selectedJobId), name: rawName });
+      updateRow(rowIndex, {
+        selectedCategoryId: String(created?.categoryId || ""),
+        skillQuery: String(created?.name || rawName).trim(),
+      });
     } catch (error) {
       setLocalMessage(error?.message || "기술 생성에 실패했습니다.");
     }
@@ -290,7 +284,7 @@ const CreateQuestionSetModal = ({
                         onClick={() => {
                           setSelectedBranchId(String(item.categoryId));
                           setSelectedJobId("");
-                          setSelectedCategoryId("");
+                          setRows((prev) => prev.map((row) => ({ ...row, selectedCategoryId: "", skillQuery: "" })));
                         }}
                       />
                     ))}
@@ -324,50 +318,18 @@ const CreateQuestionSetModal = ({
                         active={selectedJobId === String(item.categoryId)}
                         onClick={() => {
                           setSelectedJobId(String(item.categoryId));
-                          setSelectedCategoryId("");
+                          setRows((prev) => prev.map((row) => ({ ...row, selectedCategoryId: "", skillQuery: "" })));
                         }}
                       />
                     ))}
                   </div>
                 </div>
 
-                <div>
-                  <p className="text-[12px] font-semibold text-[#738094]">기술 검색/생성</p>
-                  <div className="mt-2 grid gap-2 grid-cols-[1fr_auto]">
-                    <input
-                      value={skillQuery}
-                      onChange={(event) => setSkillQuery(event.target.value)}
-                      placeholder={selectedJobId ? "기술 검색 또는 새 기술 입력" : "직무를 먼저 선택해 주세요"}
-                      disabled={!selectedJobId}
-                      className="rounded-[14px] border border-[#dfe3eb] px-4 py-3 text-[13px] outline-none focus:border-[#8aa2e8] disabled:bg-[#f3f5f8]"
-                    />
-                    <button
-                      type="button"
-                      disabled={!canCreateSkill || creatingCategory}
-                      onClick={() => void handleCreateSkill()}
-                      className="rounded-[12px] border border-[#171b24] px-3 py-2 text-[12px] font-semibold text-[#171b24] disabled:opacity-50"
-                    >
-                      {creatingCategory ? "생성 중..." : "추가"}
-                    </button>
-                  </div>
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    {filteredCategories.slice(0, 8).map((item) => (
-                      <CategoryChip
-                        key={item.categoryId}
-                        label={item.displayName || item.name}
-                        active={selectedCategoryId === String(item.categoryId)}
-                        onClick={() => {
-                          setSelectedCategoryId(String(item.categoryId));
-                          setSkillQuery(item.displayName || item.name);
-                        }}
-                      />
-                    ))}
-                    {filteredCategories.length === 0 && skillQuery.trim() ? (
-                      <span className="rounded-full bg-[#fff7ed] px-3 py-1 text-[11px] text-[#9a5b11]">
-                        결과가 없으므로 세트를 저장하면 새 기술 카테고리가 생성됩니다.
-                      </span>
-                    ) : null}
-                  </div>
+                <div className="rounded-[16px] border border-[#eef1f5] bg-white p-4">
+                  <p className="text-[12px] font-semibold text-[#738094]">세트 기준</p>
+                  <p className="mt-2 text-[12px] leading-[1.7] text-[#5e6472]">
+                    세트 자체에는 계열과 직무만 걸립니다. 기술 카테고리는 아래 각 문답 카드에서 개별로 선택하거나 새로 추가할 수 있습니다.
+                  </p>
                 </div>
               </section>
 
@@ -386,25 +348,82 @@ const CreateQuestionSetModal = ({
                       </button>
                     </div>
                     <div className="mt-3 grid gap-3">
+                      <div>
+                        <p className="text-[12px] font-semibold text-[#738094]">기술 검색/생성</p>
+                        <div className="mt-2 grid gap-2 sm:grid-cols-[1fr_auto]">
+                          <input
+                            value={row.skillQuery}
+                            onChange={(event) => updateRow(index, { skillQuery: event.target.value, selectedCategoryId: "" })}
+                            placeholder={selectedJobId ? "이 문답의 기술 검색 또는 새 기술 입력" : "직무를 먼저 선택해 주세요"}
+                            disabled={!selectedJobId}
+                            className="rounded-[14px] border border-[#dfe3eb] px-4 py-3 text-[13px] outline-none focus:border-[#8aa2e8] disabled:bg-[#f3f5f8]"
+                          />
+                          <button
+                            type="button"
+                            disabled={
+                              !selectedJobId ||
+                              !row.skillQuery.trim() ||
+                              creatingCategory ||
+                              skillItems.some(
+                                (item) =>
+                                  String(item.parentId) === String(selectedJobId) &&
+                                  String(item.name || "").trim().toLowerCase() === row.skillQuery.trim().toLowerCase()
+                              )
+                            }
+                            onClick={() => void handleCreateSkill(index)}
+                            className="rounded-[12px] border border-[#171b24] px-3 py-2 text-[12px] font-semibold text-[#171b24] disabled:opacity-50"
+                          >
+                            {creatingCategory ? "생성 중..." : "기술 추가"}
+                          </button>
+                        </div>
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          {skillItems
+                            .filter((item) => !selectedJobId || String(item.parentId) === String(selectedJobId))
+                            .filter((item) => {
+                              const keyword = row.skillQuery.trim().toLowerCase();
+                              if (!keyword) return true;
+                              return [item.name, item.code, item.path].filter(Boolean).join(" ").toLowerCase().includes(keyword);
+                            })
+                            .slice(0, 8)
+                            .map((item) => (
+                              <CategoryChip
+                                key={`${index}-${item.categoryId}`}
+                                label={item.displayName || item.name}
+                                active={row.selectedCategoryId === String(item.categoryId)}
+                                onClick={() => updateRow(index, { selectedCategoryId: String(item.categoryId), skillQuery: item.displayName || item.name })}
+                              />
+                            ))}
+                          {row.skillQuery.trim() &&
+                          skillItems
+                            .filter((item) => !selectedJobId || String(item.parentId) === String(selectedJobId))
+                            .filter((item) =>
+                              [item.name, item.code, item.path].filter(Boolean).join(" ").toLowerCase().includes(row.skillQuery.trim().toLowerCase())
+                            ).length === 0 ? (
+                            <span className="rounded-full bg-[#fff7ed] px-3 py-1 text-[11px] text-[#9a5b11]">
+                              검색 결과가 없으면 이 문답 저장 시 새 기술 카테고리가 생성됩니다.
+                            </span>
+                          ) : null}
+                        </div>
+                      </div>
                       <textarea
                         value={row.questionText}
-                        onChange={(event) => setRows((prev) => prev.map((item, rowIndex) => (rowIndex === index ? { ...item, questionText: event.target.value } : item)))}
+                        onChange={(event) => updateRow(index, { questionText: event.target.value })}
                         placeholder="질문"
                         className="min-h-[110px] rounded-[16px] border border-[#dfe3eb] px-4 py-3 text-[13px] leading-[1.7] outline-none focus:border-[#8aa2e8]"
                       />
                       <textarea
                         value={row.canonicalAnswer}
-                        onChange={(event) => setRows((prev) => prev.map((item, rowIndex) => (rowIndex === index ? { ...item, canonicalAnswer: event.target.value } : item)))}
+                        onChange={(event) => updateRow(index, { canonicalAnswer: event.target.value })}
                         placeholder="내가 생각하는 모범답안"
                         className="min-h-[150px] rounded-[16px] border border-[#dfe3eb] px-4 py-3 text-[13px] leading-[1.7] outline-none focus:border-[#8aa2e8]"
                       />
                       <div className="grid gap-3 sm:grid-cols-[160px_1fr]">
                         <div className="flex items-center rounded-[14px] border border-[#dfe3eb] px-4 py-3">
-                          <StarRatingInput value={row.rating} onChange={(rating) => setRows((prev) => prev.map((item, rowIndex) => (rowIndex === index ? { ...item, rating } : item)))} />
+                          <StarRatingInput value={row.rating} onChange={(rating) => updateRow(index, { rating })} />
                         </div>
                         <input
                           value={row.tags}
-                          onChange={(event) => setRows((prev) => prev.map((item, rowIndex) => (rowIndex === index ? { ...item, tags: event.target.value } : item)))}
+                          onChange={(event) => updateRow(index, { tags: event.target.value })}
                           placeholder="태그 (쉼표 구분, 없어도 됨)"
                           className="rounded-[14px] border border-[#dfe3eb] px-4 py-3 text-[13px] outline-none focus:border-[#8aa2e8]"
                         />
@@ -432,8 +451,6 @@ const CreateQuestionSetModal = ({
                       setTitle: setTitle.trim(),
                       selectedBranchId,
                       selectedJobId,
-                      selectedCategoryId,
-                      skillQuery: skillQuery.trim(),
                       rows,
                     })
                   }
@@ -486,6 +503,8 @@ export const QuestionSetsPage = () => {
   const [pageErrorMessage, setPageErrorMessage] = useState("");
   const [modalErrorMessage, setModalErrorMessage] = useState("");
   const [showGeminiOverloadModal, setShowGeminiOverloadModal] = useState(false);
+  const [savingQuestionId, setSavingQuestionId] = useState(null);
+  const [savedQuestionIds, setSavedQuestionIds] = useState([]);
 
   const loadPage = useCallback(async () => {
     const [setList, categoryList] = await Promise.all([getMyInterviewSets(), getInterviewCategories()]);
@@ -495,9 +514,10 @@ export const QuestionSetsPage = () => {
     const details = await Promise.all(
       normalizedSets.map(async (set) => {
         try {
+          const questions = ((await getInterviewSetQuestions(set.setId)) || []).filter((question) => question.sourceTag === "USER");
           return {
             ...set,
-            questions: (await getInterviewSetQuestions(set.setId)) || [],
+            questions,
           };
         } catch (error) {
           console.error(`질문 세트 문항 로딩에 실패했습니다. setId=${set.setId}`, error);
@@ -510,10 +530,10 @@ export const QuestionSetsPage = () => {
     );
 
     setCategories(normalizedCategories);
-    setSets(details);
+    setSets(details.filter((set) => !set.aiGenerated && (set.questions || []).length > 0));
     setSelectedSetId((prev) => {
-      if (prev && details.some((item) => item.setId === prev)) return prev;
-      return details[0]?.setId ?? null;
+      if (prev && details.some((item) => !item.aiGenerated && (item.questions || []).length > 0 && item.setId === prev)) return prev;
+      return details.find((item) => !item.aiGenerated && (item.questions || []).length > 0)?.setId ?? null;
     });
   }, []);
 
@@ -566,7 +586,9 @@ export const QuestionSetsPage = () => {
     const keyword = query.trim().toLowerCase();
     const next = sets.filter((set) => {
       const normalizedJobName = String(set.jobName || "").trim().toLowerCase();
-      const normalizedSkillName = String(set.skillName || "").trim().toLowerCase();
+      const normalizedSkillNames = (Array.isArray(set.skillNames) ? set.skillNames : [set.skillName])
+        .filter(Boolean)
+        .map((item) => String(item).trim().toLowerCase());
       if (filterBranchId) {
         const matchedJob = jobItems.find((item) => String(item.name || "").trim().toLowerCase() === normalizedJobName);
         if (!matchedJob || String(matchedJob.parentId) !== String(filterBranchId)) return false;
@@ -577,10 +599,10 @@ export const QuestionSetsPage = () => {
       }
       if (selectedFilterSkill) {
         const selectedSkillName = String(selectedFilterSkill.name || "").trim().toLowerCase();
-        if (normalizedSkillName !== selectedSkillName) return false;
+        if (!normalizedSkillNames.includes(selectedSkillName)) return false;
       }
       if (!keyword) return true;
-      return [set.title, set.description, set.jobName, set.skillName]
+      return [set.title, set.description, set.jobName, ...(Array.isArray(set.skillNames) ? set.skillNames : [set.skillName])]
         .filter(Boolean)
         .join(" ")
         .toLowerCase()
@@ -624,11 +646,29 @@ export const QuestionSetsPage = () => {
   }, [selectedSet]);
 
   const visibleQuestions = useMemo(() => {
-    const questions = Array.isArray(selectedSet?.questions) ? selectedSet.questions : [];
+    const questions = Array.isArray(selectedSet?.questions) ? selectedSet.questions.filter((item) => item.sourceTag === "USER") : [];
     if (!selectedRating) return questions;
     const targetDifficulty = ratingToDifficulty(Number(selectedRating));
     return questions.filter((item) => item.difficulty === targetDifficulty);
   }, [selectedRating, selectedSet]);
+
+  const handleSaveQuestion = async (questionId) => {
+    if (!questionId) return;
+    setSavingQuestionId(questionId);
+    setPageErrorMessage("");
+    try {
+      await saveInterviewQuestion(questionId);
+      setSavedQuestionIds((prev) => (prev.includes(questionId) ? prev : [...prev, questionId]));
+    } catch (error) {
+      if (isAlreadySavedQuestionError(error)) {
+        setSavedQuestionIds((prev) => (prev.includes(questionId) ? prev : [...prev, questionId]));
+        return;
+      }
+      setPageErrorMessage(error?.message || "질문 저장에 실패했습니다.");
+    } finally {
+      setSavingQuestionId(null);
+    }
+  };
 
   const handleSidebarNavigate = (item) => {
     setIsMobileMenuOpen(false);
@@ -650,21 +690,22 @@ export const QuestionSetsPage = () => {
     setTitle: newSetTitle,
     selectedBranchId,
     selectedJobId,
-    selectedCategoryId: categoryIdRaw,
-    skillQuery: rawSkillName,
     rows,
   }) => {
     const normalizedRows = rows
       .map((row) => ({
         questionText: row.questionText.trim(),
         canonicalAnswer: row.canonicalAnswer.trim(),
+        selectedCategoryId: row.selectedCategoryId ? Number(row.selectedCategoryId) : null,
+        skillQuery: row.skillQuery.trim(),
         difficulty: ratingToDifficulty(row.rating || 3),
         tags: row.tags.split(",").map((item) => item.trim()).filter(Boolean),
       }))
-      .filter((row) => row.questionText || row.canonicalAnswer || row.tags.length > 0);
+      .filter((row) => row.questionText || row.canonicalAnswer || row.tags.length > 0 || row.skillQuery);
 
     if (!normalizedRows.length) return setModalErrorMessage("질문과 모범답안을 하나 이상 입력해 주세요.");
     if (normalizedRows.some((row) => !row.questionText || !row.canonicalAnswer)) return setModalErrorMessage("모든 문답에는 질문과 모범답안이 모두 필요합니다.");
+    if (normalizedRows.some((row) => !row.selectedCategoryId && !row.skillQuery)) return setModalErrorMessage("모든 문답에는 기술 카테고리 선택 또는 입력이 필요합니다.");
     if (!newSetTitle?.trim()) return setModalErrorMessage("세트 제목을 입력해 주세요.");
     if (!selectedBranchId) return setModalErrorMessage("계열을 선택해 주세요.");
     if (!selectedJobId) return setModalErrorMessage("직무를 선택해 주세요.");
@@ -679,42 +720,9 @@ export const QuestionSetsPage = () => {
         return;
       }
 
-      let categoryId = categoryIdRaw ? Number(categoryIdRaw) : null;
-      let category = categories.find((item) => item.categoryId === categoryId) || null;
-      const rawName = rawSkillName.trim();
-      if (!category && !rawName) {
-        setModalErrorMessage("기술을 선택하거나 입력해 주세요.");
-        return;
-      }
-      if (!category && rawName) {
-        const createdCategory = await createInterviewCategory({
-          parentId: Number(selectedJobId),
-          name: rawName,
-        });
-        categoryId = Number(createdCategory?.categoryId || 0) || null;
-        category = categoryId
-          ? {
-              ...createdCategory,
-              categoryId,
-              name: String(createdCategory?.name || rawName).trim(),
-              displayName: String(createdCategory?.name || rawName).trim(),
-            }
-          : null;
-      }
-
-      const skillName = (category?.displayName || category?.name || rawName).trim();
-      if (!skillName) {
-        setModalErrorMessage("기술을 선택하거나 입력해 주세요.");
-        return;
-      }
-      if (category?.isVirtual) {
-        categoryId = null;
-      }
-
       const createdSet = await createInterviewSet({
         title: newSetTitle.trim(),
         jobName,
-        skillName,
         description: null,
         visibility: "PRIVATE",
       });
@@ -722,6 +730,27 @@ export const QuestionSetsPage = () => {
       const failedRows = [];
       for (const [rowIndex, row] of normalizedRows.entries()) {
         try {
+          let categoryId = row.selectedCategoryId;
+          let category = categories.find((item) => item.categoryId === categoryId) || null;
+          if (!category && row.skillQuery) {
+            const createdCategory = await createInterviewCategory({
+              parentId: Number(selectedJobId),
+              name: row.skillQuery,
+            });
+            categoryId = Number(createdCategory?.categoryId || 0) || null;
+            category = categoryId
+              ? {
+                  ...createdCategory,
+                  categoryId,
+                  name: String(createdCategory?.name || row.skillQuery).trim(),
+                  displayName: String(createdCategory?.name || row.skillQuery).trim(),
+                }
+              : null;
+          }
+          const skillName = (category?.displayName || category?.name || row.skillQuery).trim();
+          if (!skillName) {
+            throw new Error("기술 카테고리를 확인해 주세요.");
+          }
           await addQuestionToInterviewSet(createdSet.setId, {
             questionText: row.questionText,
             canonicalAnswer: row.canonicalAnswer,
@@ -845,7 +874,7 @@ export const QuestionSetsPage = () => {
       const response = await startTechInterview({
         setId: setItem.setId,
         jobName: setItem.jobName || null,
-        skillName: setItem.skillName || null,
+        skillName: (Array.isArray(setItem.skillNames) ? setItem.skillNames[0] : setItem.skillName) || null,
         questionCount: 5,
         saveHistory: false,
       });
@@ -862,7 +891,7 @@ export const QuestionSetsPage = () => {
           apiBasePath: "/api/interview/tech",
           fromQuestionSet: true,
           saveHistory: false,
-          categoryName: setItem.skillName || null,
+          categoryName: (Array.isArray(setItem.skillNames) ? setItem.skillNames.join(", ") : setItem.skillName) || null,
           jobName: setItem.jobName || null,
         },
       });
@@ -990,6 +1019,7 @@ export const QuestionSetsPage = () => {
                   {!loading && filteredSets.length === 0 ? <p className="text-[12px] text-[#6b7280]">조회된 질문 세트가 없습니다.</p> : null}
                   {filteredSets.map((setItem) => {
                     const selected = setItem.setId === selectedSet?.setId;
+                    const setSkillNames = (Array.isArray(setItem.skillNames) ? setItem.skillNames : [setItem.skillName]).filter(Boolean);
                     return (
                       <button
                         key={setItem.setId}
@@ -1001,16 +1031,16 @@ export const QuestionSetsPage = () => {
                           <div className="min-w-0">
                             <div className="flex items-center gap-2">
                               <p className="truncate text-[13px] font-semibold text-[#1f2937]">{setItem.title}</p>
-                              {setItem.aiGenerated ? (
-                                <span className="rounded-full bg-[#f3ecff] px-2 py-0.5 text-[10px] font-semibold text-[#6d3bb6]">AI</span>
-                              ) : null}
                               {setItem.visibility === "GLOBAL" ? (
                                 <span className="rounded-full bg-[#e7f4ff] px-2 py-0.5 text-[10px] font-semibold text-[#0b69b7]">공유중</span>
                               ) : null}
                             </div>
                             <div className="mt-2 flex flex-wrap gap-1.5">
                               {setItem.jobName ? <span className="rounded-full bg-[#eef2f8] px-2 py-0.5 text-[10px] text-[#556070]">{setItem.jobName}</span> : null}
-                              {setItem.skillName ? <span className="rounded-full bg-[#f4f6fb] px-2 py-0.5 text-[10px] text-[#556070]">{setItem.skillName}</span> : null}
+                              {setSkillNames.slice(0, 4).map((skillName) => (
+                                <span key={`${setItem.setId}-${skillName}`} className="rounded-full bg-[#f4f6fb] px-2 py-0.5 text-[10px] text-[#556070]">{skillName}</span>
+                              ))}
+                              {setSkillNames.length > 4 ? <span className="rounded-full bg-[#f8fafc] px-2 py-0.5 text-[10px] text-[#7b8798]">+{setSkillNames.length - 4}</span> : null}
                             </div>
                             <p className="mt-2 text-[11px] text-[#8b95a7]">{formatDate(setItem.createdAt)}</p>
                           </div>
@@ -1126,8 +1156,23 @@ export const QuestionSetsPage = () => {
                               )
                             }
                           >
-                            <p className="text-[11px] text-[#7a8190]">문답 {index + 1}</p>
-                            <p className="mt-1 line-clamp-3 text-[13px] leading-[1.6] text-[#1f2937]">{question.questionText}</p>
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0 flex-1">
+                                <p className="text-[11px] text-[#7a8190]">문답 {index + 1}</p>
+                                <p className="mt-1 line-clamp-3 text-[13px] leading-[1.6] text-[#1f2937]">{question.questionText}</p>
+                              </div>
+                              <button
+                                type="button"
+                                disabled={savingQuestionId === question.questionId || savedQuestionIds.includes(question.questionId)}
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  void handleSaveQuestion(question.questionId);
+                                }}
+                                className="shrink-0 rounded-[10px] border border-[#d9dde5] px-3 py-1 text-[11px] text-[#4f5664] disabled:opacity-60"
+                              >
+                                {savedQuestionIds.includes(question.questionId) ? "저장됨" : savingQuestionId === question.questionId ? "저장 중..." : "저장하기"}
+                              </button>
+                            </div>
                             <div className="mt-2 flex flex-wrap items-center gap-2">
                               {question.difficulty ? <DifficultyStars difficulty={question.difficulty} compact /> : null}
                               {sanitizedTags.slice(0, 4).map((tag) => (

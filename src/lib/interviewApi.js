@@ -38,6 +38,19 @@ export async function addQuestionToInterviewSet(setId, payload) {
   });
 }
 
+export async function updateQuestionInInterviewSet(setId, questionId, payload) {
+  return apiRequest(`/api/interview/sets/${encodeURIComponent(setId)}/questions/${encodeURIComponent(questionId)}`, {
+    method: "PATCH",
+    body: payload,
+  });
+}
+
+export async function deleteQuestionFromInterviewSet(setId, questionId) {
+  return apiRequest(`/api/interview/sets/${encodeURIComponent(setId)}/questions/${encodeURIComponent(questionId)}`, {
+    method: "DELETE",
+  });
+}
+
 export async function updateInterviewSet(setId, payload) {
   return apiRequest(`/api/interview/sets/${encodeURIComponent(setId)}`, {
     method: "PATCH",

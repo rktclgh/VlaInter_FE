@@ -11,6 +11,7 @@ import tempProfileImage from "../../assets/icon/temp.png";
 import { logout } from "../../lib/authApi";
 import { consumePointChargeSuccessResult } from "../../lib/pointChargeFlow";
 import { extractProfile, formatPoint, parsePoint } from "../../lib/profileUtils";
+import { isAlreadySavedQuestionError } from "../../lib/savedQuestionUtils";
 import { getGlobalInterviewSets, getInterviewSetQuestions, saveInterviewQuestion, startTechInterview } from "../../lib/interviewApi";
 import { saveTechInterviewSession } from "../../lib/interviewSessionFlow";
 import { isGeminiOverloadError } from "../../lib/geminiErrorUtils";
@@ -64,6 +65,7 @@ export const QuestionBrowsePage = () => {
   const [showGeminiOverloadModal, setShowGeminiOverloadModal] = useState(false);
   const [selectedQuestion, setSelectedQuestion] = useState(null);
   const [savingQuestionId, setSavingQuestionId] = useState(null);
+  const [savedQuestionIds, setSavedQuestionIds] = useState([]);
 
   const loadPage = useCallback(async () => {
     const setList = await getGlobalInterviewSets();
@@ -204,7 +206,12 @@ export const QuestionBrowsePage = () => {
     setPageErrorMessage("");
     try {
       await saveInterviewQuestion(questionId);
+      setSavedQuestionIds((prev) => (prev.includes(questionId) ? prev : [...prev, questionId]));
     } catch (error) {
+      if (isAlreadySavedQuestionError(error)) {
+        setSavedQuestionIds((prev) => (prev.includes(questionId) ? prev : [...prev, questionId]));
+        return;
+      }
       setPageErrorMessage(error?.message || "질문 저장에 실패했습니다.");
     } finally {
       setSavingQuestionId(null);
@@ -331,14 +338,14 @@ export const QuestionBrowsePage = () => {
                           <div className="mt-2 flex justify-end">
                             <button
                               type="button"
-                              disabled={savingQuestionId === question.questionId}
+                              disabled={savingQuestionId === question.questionId || savedQuestionIds.includes(question.questionId)}
                               onClick={(event) => {
                                 event.stopPropagation();
                                 void handleSaveQuestion(question.questionId);
                               }}
                               className="rounded-[10px] border border-[#d9dde5] px-3 py-1 text-[11px] text-[#4f5664] disabled:opacity-60"
                             >
-                              {savingQuestionId === question.questionId ? "저장 중..." : "저장하기"}
+                              {savedQuestionIds.includes(question.questionId) ? "저장됨" : savingQuestionId === question.questionId ? "저장 중..." : "저장하기"}
                             </button>
                           </div>
                         </article>
