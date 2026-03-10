@@ -1,4 +1,6 @@
-import { MAIN_MENU_ITEMS, MY_MENU_ITEMS } from "./sidebarMenuItems";
+import { useMemo } from "react";
+import { useAdminStatus } from "../hooks/useAdminStatus";
+import { getMainMenuSections, MY_MENU_ITEMS } from "./sidebarMenuItems";
 
 export const MobileSidebarDrawer = ({
   open,
@@ -7,9 +9,14 @@ export const MobileSidebarDrawer = ({
   onNavigate,
   userName = "사용자",
   profileImageUrl = "",
-  fallbackProfileImageUrl = "",
+  isAdmin = null,
   onLogout,
 }) => {
+  const resolvedIsAdmin = useAdminStatus(isAdmin);
+  const hasProfileImage = typeof profileImageUrl === "string" && profileImageUrl.trim().length > 0;
+
+  const mainMenuSections = useMemo(() => getMainMenuSections({ isAdmin: resolvedIsAdmin }), [resolvedIsAdmin]);
+
   const renderMenuButton = (item) => {
     const active = item.key === activeKey;
     return (
@@ -57,34 +64,35 @@ export const MobileSidebarDrawer = ({
           </button>
         </div>
 
-        <div className="px-4 pt-5">
-          <p className="mb-2 text-[12px] font-medium text-[#b1b1b1]">Main</p>
-          <div className="space-y-1.5">{MAIN_MENU_ITEMS.map(renderMenuButton)}</div>
+        <div className="flex-1 overflow-y-auto px-4 pt-5">
+          {mainMenuSections.map((section) => (
+            <div key={section.title} className="pb-4">
+              <p className="mb-2 text-[12px] font-medium text-[#b1b1b1]">{section.title}</p>
+              <div className="space-y-1.5">{section.items.map(renderMenuButton)}</div>
+            </div>
+          ))}
+
+          <div className="pt-2">
+            <p className="mb-2 text-[12px] font-medium text-[#b1b1b1]">My</p>
+            <div className="space-y-1">{MY_MENU_ITEMS.map(renderMenuButton)}</div>
+          </div>
         </div>
 
-        <div className="px-4 pt-5">
-          <p className="mb-2 text-[12px] font-medium text-[#b1b1b1]">My</p>
-          <div className="space-y-1">{MY_MENU_ITEMS.map(renderMenuButton)}</div>
-        </div>
-
-        <div className="mt-auto flex items-center gap-2 px-4 py-4">
-          <img
-            key={profileImageUrl || fallbackProfileImageUrl || "mobile-profile-image"}
-            src={profileImageUrl}
-            alt="프로필"
-            className="h-8 w-8 rounded-full border border-[#d7d7d7] object-cover"
-            onLoad={(event) => {
-              event.currentTarget.dataset.fallbackTried = "false";
-            }}
-            onError={(event) => {
-              const target = event.currentTarget;
-              const alreadyTriedFallback = target.dataset.fallbackTried === "true";
-              if (!alreadyTriedFallback && fallbackProfileImageUrl && target.src !== fallbackProfileImageUrl) {
-                target.dataset.fallbackTried = "true";
-                event.currentTarget.src = fallbackProfileImageUrl;
-              }
-            }}
-          />
+        <div className="flex items-center gap-2 border-t border-[#e8e8e8] px-4 py-4">
+          {hasProfileImage ? (
+            <img
+              key={profileImageUrl || "mobile-profile-image"}
+              src={profileImageUrl}
+              alt="프로필"
+              className="h-8 w-8 rounded-full border border-[#d7d7d7] object-cover"
+            />
+          ) : (
+            <div
+              key="mobile-profile-image"
+              aria-hidden="true"
+              className="h-8 w-8 rounded-full border border-[#d7d7d7] bg-[#eceff4]"
+            />
+          )}
           <span className="text-[13px] text-[#1f1f1f]">{userName}</span>
           <button
             type="button"

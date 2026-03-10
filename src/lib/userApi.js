@@ -1,18 +1,36 @@
 import { apiRequest, refreshAuthSession } from "./apiClient";
+import defaultProfileImage from "../assets/icon/temp.png";
+import { extractProfile } from "./profileUtils";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8080";
+const myProfileCache = {
+  hasProfileImage: false,
+};
 
 export function getMyProfileImageUrl(cacheBust = true) {
+  if (!myProfileCache.hasProfileImage) return defaultProfileImage;
   const baseUrl = `${API_BASE_URL}/api/users/files/me/profile-image`;
   if (!cacheBust) return baseUrl;
   const separator = baseUrl.includes("?") ? "&" : "?";
   return `${baseUrl}${separator}v=${Date.now()}`;
 }
 
+export function resetMyProfileCache() {
+  myProfileCache.hasProfileImage = false;
+}
+
 export async function getMyProfile() {
-  return apiRequest("/api/users/me", {
-    method: "GET",
-  });
+  try {
+    const payload = await apiRequest("/api/users/me", {
+      method: "GET",
+    });
+    const profile = extractProfile(payload);
+    myProfileCache.hasProfileImage = Boolean(profile?.hasProfileImage);
+    return payload;
+  } catch (error) {
+    resetMyProfileCache();
+    throw error;
+  }
 }
 
 export async function getMyFiles() {
@@ -50,7 +68,14 @@ export async function uploadMyFile(fileType, file) {
   }
 
   if (!response.ok) {
+    if (fileType === "PROFILE_IMAGE") {
+      resetMyProfileCache();
+    }
     throw new Error(data?.message || "파일 업로드 중 오류가 발생했습니다.");
+  }
+
+  if (fileType === "PROFILE_IMAGE") {
+    myProfileCache.hasProfileImage = true;
   }
 
   return data;
