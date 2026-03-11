@@ -1,14 +1,20 @@
 import { apiRequest } from "./apiClient";
 import { clearAuthenticatedBrowserSession, markAuthenticatedBrowserSession } from "./authSessionMarker";
+import { extractProfile } from "./profileUtils";
 import { resetMyProfileCache } from "./userApi";
+
+function extractAuthResult(payload) {
+  return extractProfile(payload);
+}
 
 export async function login(payload) {
   const result = await apiRequest("/api/auth/login", {
     method: "POST",
     body: payload,
   });
-  if (result?.userId != null) {
-    markAuthenticatedBrowserSession(result.userId);
+  const authResult = extractAuthResult(result);
+  if (authResult?.userId != null) {
+    markAuthenticatedBrowserSession(authResult.userId);
   }
   return result;
 }
@@ -39,8 +45,9 @@ export async function kakaoLogin(payload) {
     method: "POST",
     body: payload,
   });
-  if (result?.userId != null) {
-    markAuthenticatedBrowserSession(result.userId);
+  const authResult = extractAuthResult(result);
+  if (authResult?.userId != null) {
+    markAuthenticatedBrowserSession(authResult.userId);
   }
   return result;
 }
