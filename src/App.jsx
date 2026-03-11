@@ -18,12 +18,15 @@ import { FileUploadPage } from './pages/content/FileUploadPage'
 import { MyPage } from './pages/content/MyPage'
 import { ErrorPage } from './pages/ErrorPage'
 import { GeminiApiKeyGuard } from './components/GeminiApiKeyGuard'
+import { BrowserSessionGuard } from './components/BrowserSessionGuard'
 import './App.css'
 
 const GuardedContentRoutes = () => (
-  <GeminiApiKeyGuard>
-    <Outlet />
-  </GeminiApiKeyGuard>
+  <BrowserSessionGuard>
+    <GeminiApiKeyGuard>
+      <Outlet />
+    </GeminiApiKeyGuard>
+  </BrowserSessionGuard>
 )
 
 function App() {
@@ -46,8 +49,8 @@ function App() {
         <Route path="/content/files" element={<FileUploadPage />} />
         <Route path="/content/point-charge" element={<MyPage />} />
       </Route>
-      <Route path="/content/admin" element={<AdminConsolePage />} />
-      <Route path="/content/mypage" element={<MyPage />} />
+      <Route path="/content/admin" element={<BrowserSessionGuard><AdminConsolePage /></BrowserSessionGuard>} />
+      <Route path="/content/mypage" element={<BrowserSessionGuard><MyPage /></BrowserSessionGuard>} />
       <Route path="/content/point-charge/callback" element={<PointChargeCallbackPage />} />
       <Route path="/errors/403" element={<ErrorPage code={403} />} />
       <Route path="/errors/404" element={<ErrorPage code={404} />} />

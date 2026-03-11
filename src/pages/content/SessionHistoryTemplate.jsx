@@ -284,15 +284,9 @@ export const SessionHistoryTemplate = ({ title, description, apiBasePath, active
     const target = selectedResults?.turns?.find((item) => item.turnId === turnId);
     if (target?.bookmarked) return;
 
-    let added = false;
-    setBookmarkingTurnIds((prev) => {
-      if (prev.includes(turnId)) return prev;
-      const next = [...prev, turnId];
-      bookmarkingTurnIdsRef.current = next;
-      added = true;
-      return next;
-    });
-    if (!added) return;
+    const nextBookmarkingTurnIds = [...bookmarkingTurnIdsRef.current, turnId];
+    bookmarkingTurnIdsRef.current = nextBookmarkingTurnIds;
+    setBookmarkingTurnIds(nextBookmarkingTurnIds);
 
     setPageErrorMessage("");
     try {

@@ -1,11 +1,22 @@
 import { apiRequest } from "./apiClient";
+import { clearAuthenticatedBrowserSession, markAuthenticatedBrowserSession } from "./authSessionMarker";
+import { extractProfile } from "./profileUtils";
 import { resetMyProfileCache } from "./userApi";
 
+function extractAuthResult(payload) {
+  return extractProfile(payload);
+}
+
 export async function login(payload) {
-  return apiRequest("/api/auth/login", {
+  const result = await apiRequest("/api/auth/login", {
     method: "POST",
     body: payload,
   });
+  const authResult = extractAuthResult(result);
+  if (authResult?.userId != null) {
+    markAuthenticatedBrowserSession(authResult.userId);
+  }
+  return result;
 }
 
 export async function signup(payload) {
@@ -30,10 +41,15 @@ export async function verifyEmailCode(email, code) {
 }
 
 export async function kakaoLogin(payload) {
-  return apiRequest("/api/auth/kakao/login", {
+  const result = await apiRequest("/api/auth/kakao/login", {
     method: "POST",
     body: payload,
   });
+  const authResult = extractAuthResult(result);
+  if (authResult?.userId != null) {
+    markAuthenticatedBrowserSession(authResult.userId);
+  }
+  return result;
 }
 
 export async function logout() {
@@ -42,6 +58,7 @@ export async function logout() {
       method: "POST",
     });
   } finally {
+    clearAuthenticatedBrowserSession();
     resetMyProfileCache();
   }
 }
