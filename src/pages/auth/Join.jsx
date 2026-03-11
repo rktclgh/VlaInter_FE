@@ -4,7 +4,8 @@ import { TopNav } from "../../components/TopNav";
 import eyeOpenIcon from "../../assets/icon/eye-open.svg";
 import eyeOffIcon from "../../assets/icon/eye-off.svg";
 import kakaoLoginButtonImage from "../../assets/icon/kakao_login_medium_wide.png";
-import { sendVerificationEmail, signup, verifyEmailCode } from "../../lib/authApi";
+import { logout, sendVerificationEmail, signup, verifyEmailCode } from "../../lib/authApi";
+import { clearAuthenticatedBrowserSession, createKakaoOAuthState, storeKakaoOAuthState } from "../../lib/authSessionMarker";
 
 const footerLinks = [
   { text: "이용약관", href: "#" },
@@ -149,15 +150,25 @@ export const Join = () => {
     }
   };
 
-  const handleKakaoJoin = () => {
+  const handleKakaoJoin = async () => {
     if (!kakaoClientId) {
       setErrorMessage("카카오 클라이언트 ID 설정이 필요합니다.");
       return;
     }
+    clearAuthenticatedBrowserSession();
+    try {
+      await logout();
+    } catch {
+      // ignore: stale sessions should not block a fresh Kakao login attempt
+    }
+    const state = createKakaoOAuthState();
+    storeKakaoOAuthState(state);
     const params = new URLSearchParams({
       response_type: "code",
       client_id: kakaoClientId,
       redirect_uri: kakaoRedirectUri,
+      prompt: "login",
+      state,
     });
     const authorizeUrl = `${kakaoAuthUri}?${params.toString()}`;
     sessionStorage.setItem("kakao_redirect_uri", kakaoRedirectUri);

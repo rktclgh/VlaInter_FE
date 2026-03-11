@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { TopNav } from "../components/TopNav";
 import { Link, useNavigate } from "react-router-dom";
 import { getMyProfile } from "../lib/userApi";
+import { hasAuthenticatedBrowserSession } from "../lib/authSessionMarker";
 import icon11st from "../assets/icon/11st.png";
 import iconDaum from "../assets/icon/Daum.png";
 import iconHmail from "../assets/icon/Hmail.png";
@@ -34,6 +35,9 @@ export const StartingPage = () => {
     let unmounted = false;
 
     const redirectIfAuthenticated = async () => {
+      if (!hasAuthenticatedBrowserSession()) {
+        return;
+      }
       try {
         await getMyProfile();
         if (!unmounted) {
@@ -51,7 +55,7 @@ export const StartingPage = () => {
     };
   }, [navigate]);
 
-  const heroTags = ["이력서 분석하기", "예상질문 50개", "대기업 인재상 Top5", "···"];
+  const heroTags = ["이력서 분석하기", "예상질문 50개", "대기업 인재상 Top5", "(어그로임)"];
 
   const statTagsOne = [
     "Vlainter의 역대 입사면접 합격자가 몇명이야?",
@@ -269,7 +273,7 @@ export const StartingPage = () => {
             1,684,535명
           </p>
           <p className="mx-auto mt-4 max-w-[760px] text-[24px] font-normal leading-[1.5] text-[#6e6e6e]">
-            Vlainter AI의 면접 도움으로 지금까지 1,684,535명이 면접에 성공했어요
+            Vlainter AI의 면접 도움으로 지금까지 1,684,535명이 면접에 성공했어요(어그로임)
           </p>
           <div className="mt-6 flex flex-wrap items-center justify-center gap-2">
             {statTagsOne.map((tag) => (
@@ -289,7 +293,7 @@ export const StartingPage = () => {
           </p>
           <p className="mx-auto mt-4 max-w-[860px] text-[24px] font-normal leading-[1.5] text-[#6e6e6e]">
             면접 경험자의 데이터에 따르면 Vlainter AI가 예상한 면접질문이 75%의
-            확률로 적중했어요
+            확률로 적중했어요(어그로임)
           </p>
           <div className="mt-6 flex flex-wrap items-center justify-center gap-2">
             {statTagsTwo.map((tag) => (

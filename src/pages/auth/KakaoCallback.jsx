@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { kakaoLogin } from "../../lib/authApi";
+import { kakaoLogin, logout } from "../../lib/authApi";
+import { clearAuthenticatedBrowserSession, consumeKakaoOAuthState } from "../../lib/authSessionMarker";
 
 export const KakaoCallback = () => {
   const navigate = useNavigate();
@@ -22,6 +23,11 @@ export const KakaoCallback = () => {
     return params.get("code");
   }, []);
 
+  const returnedState = useMemo(() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get("state") || "";
+  }, []);
+
   const kakaoError = useMemo(() => {
     const params = new URLSearchParams(window.location.search);
     return params.get("error");
@@ -31,11 +37,15 @@ export const KakaoCallback = () => {
     if (kakaoError) {
       return "카카오 로그인에 실패했습니다. 다시 시도해 주세요.";
     }
+    const expectedState = consumeKakaoOAuthState();
+    if (expectedState && returnedState !== expectedState) {
+      return "카카오 로그인 요청 검증에 실패했습니다. 다시 시도해 주세요.";
+    }
     if (!code) {
       return "인가 코드가 없습니다. 다시 시도해 주세요.";
     }
     return "";
-  }, [code, kakaoError]);
+  }, [code, kakaoError, returnedState]);
 
   useEffect(() => {
     if (initialMessage) {
@@ -48,6 +58,12 @@ export const KakaoCallback = () => {
 
     const run = async () => {
       try {
+        clearAuthenticatedBrowserSession();
+        try {
+          await logout();
+        } catch {
+          // ignore: stale sessions should not block Kakao callback processing
+        }
         await kakaoLogin({
           code,
           redirectUri: kakaoRedirectUri,
