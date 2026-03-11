@@ -7,7 +7,6 @@ import { PointChargeModal } from "../../components/PointChargeModal";
 import { PointChargeSuccessModal } from "../../components/PointChargeSuccessModal";
 import tempProfileImage from "../../assets/icon/temp.png";
 import { logout } from "../../lib/authApi";
-import { clearAuthenticatedBrowserSession } from "../../lib/authSessionMarker";
 import { consumePointChargeSuccessResult } from "../../lib/pointChargeFlow";
 import {
   getPointLedgerHistory,
@@ -22,7 +21,6 @@ import {
   getMyFiles,
   getMyProfile,
   getMyProfileImageUrl,
-  resetMyProfileCache,
   updateMyGeminiApiKey,
   uploadMyFile,
 } from "../../lib/userApi";
@@ -379,6 +377,7 @@ export const MyPage = () => {
   const [showDeleteAccountModal, setShowDeleteAccountModal] = useState(false);
   const [deleteAccountSubmitting, setDeleteAccountSubmitting] = useState(false);
   const [deleteAccountErrorMessage, setDeleteAccountErrorMessage] = useState("");
+  const deleteAccountSubmittingRef = useRef(false);
 
   const [showPasswordChangeModal, setShowPasswordChangeModal] = useState(false);
   const [showReLoginGuideModal, setShowReLoginGuideModal] = useState(false);
@@ -657,17 +656,19 @@ export const MyPage = () => {
   };
 
   const confirmDeleteAccount = async () => {
+    if (deleteAccountSubmittingRef.current) return;
+    deleteAccountSubmittingRef.current = true;
     setDeleteAccountSubmitting(true);
     setDeleteAccountErrorMessage("");
     try {
       await deleteMyAccount();
-      clearAuthenticatedBrowserSession();
-      resetMyProfileCache();
+      await logout();
       setShowDeleteAccountModal(false);
       navigate("/login", { replace: true });
     } catch (error) {
       setDeleteAccountErrorMessage(error?.message || "회원 탈퇴 처리에 실패했습니다.");
     } finally {
+      deleteAccountSubmittingRef.current = false;
       setDeleteAccountSubmitting(false);
     }
   };

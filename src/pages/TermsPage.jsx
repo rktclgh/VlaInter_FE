@@ -1,4 +1,5 @@
 import { LegalDocumentLayout } from "../components/LegalDocumentLayout";
+import { LegalSection } from "../components/LegalSection";
 
 const sections = [
   {
@@ -107,22 +108,11 @@ const sections = [
   },
 ];
 
-const Section = ({ title, body }) => (
-  <section>
-    <h2 className="text-[18px] font-semibold text-[#171b24]">{title}</h2>
-    <div className="mt-3 space-y-3">
-      {body.map((line) => (
-        <p key={line}>{line}</p>
-      ))}
-    </div>
-  </section>
-);
-
 export const TermsPage = () => {
   return (
     <LegalDocumentLayout title="이용약관" updatedAt="2026-03-11">
       {sections.map((section) => (
-        <Section key={section.title} {...section} />
+        <LegalSection key={section.title} {...section} />
       ))}
     </LegalDocumentLayout>
   );

@@ -1,3 +1,5 @@
+import { useEffect, useRef } from "react";
+
 export const ResumeSessionModal = ({
   open,
   title,
@@ -8,16 +10,67 @@ export const ResumeSessionModal = ({
   onDismiss,
   busy = false,
 }) => {
+  const dialogRef = useRef(null);
+  const previousFocusRef = useRef(null);
+
+  useEffect(() => {
+    if (!open || !dialogRef.current) return undefined;
+
+    previousFocusRef.current = document.activeElement;
+    const dialog = dialogRef.current;
+    const tabbableSelector = 'a, button, input, textarea, select, [tabindex]:not([tabindex="-1"])';
+    const getFocusable = () =>
+      Array.from(dialog.querySelectorAll(tabbableSelector)).filter(
+        (element) => !element.hasAttribute("disabled") && element.getAttribute("aria-hidden") !== "true"
+      );
+
+    const focusable = getFocusable();
+    (focusable[0] || dialog).focus();
+
+    const handleKeyDown = (event) => {
+      if (event.key !== "Tab") return;
+      const elements = getFocusable();
+      if (elements.length === 0) {
+        event.preventDefault();
+        dialog.focus();
+        return;
+      }
+      const currentIndex = elements.indexOf(document.activeElement);
+      if (event.shiftKey) {
+        if (currentIndex <= 0) {
+          event.preventDefault();
+          elements[elements.length - 1].focus();
+        }
+        return;
+      }
+      if (currentIndex === -1 || currentIndex === elements.length - 1) {
+        event.preventDefault();
+        elements[0].focus();
+      }
+    };
+
+    dialog.addEventListener("keydown", handleKeyDown);
+    return () => {
+      dialog.removeEventListener("keydown", handleKeyDown);
+      if (previousFocusRef.current instanceof HTMLElement) {
+        previousFocusRef.current.focus();
+      }
+    };
+  }, [open]);
+
   if (!open) return null;
 
   return (
     <div className="fixed inset-0 z-[95] flex items-center justify-center bg-black/45 px-4">
-      <div className="absolute inset-0" />
+      <div className="absolute inset-0" onClick={onDismiss} />
       <div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="resume-session-modal-title"
         aria-describedby="resume-session-modal-description"
+        tabIndex={-1}
+        onClick={(event) => event.stopPropagation()}
         className="relative w-full max-w-[460px] rounded-[22px] border border-[#dfe3eb] bg-white p-5 shadow-[0_24px_80px_rgba(15,23,42,0.18)]"
       >
         <p id="resume-session-modal-title" className="text-[18px] font-semibold text-[#161a22]">

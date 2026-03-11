@@ -16,6 +16,8 @@ import {
   getAdminInterviewSets,
   getAdminMemberDetail,
   getAdminMembers,
+  refreshAdminGlobalAccessSummary,
+  refreshAdminMemberDetail,
   deleteAdminInterviewSet,
   hardDeleteAdminMember,
   mergeAdminInterviewCategory,
@@ -87,6 +89,58 @@ const formatDecimal = (value, digits = 1) => {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed.toFixed(digits) : "-";
 };
+
+const normalizeDailyLoginCounts = (items) => (Array.isArray(items) ? items : []).map((item) => ({
+  date: String(item?.date || ""),
+  loginCount: toInt(item?.loginCount, 0),
+}));
+
+const normalizeRecentAccessLogs = (items) => (Array.isArray(items) ? items : []).map((item) => ({
+  sessionIdPrefix: String(item?.sessionIdPrefix || ""),
+  authProvider: String(item?.authProvider || "-"),
+  browser: String(item?.browser || "-"),
+  deviceType: String(item?.deviceType || "-"),
+  active: item?.active === true,
+  loginAt: item?.loginAt || null,
+  lastActivityAt: item?.lastActivityAt || null,
+  logoutAt: item?.logoutAt || null,
+  ipAddress: item?.ipAddress || "",
+  actionCount: toInt(item?.actionCount, 0),
+}));
+
+const normalizeAccessSummary = (summary) => ({
+  recentLoginCount: toInt(summary?.recentLoginCount, 0),
+  activeSessionCount: toInt(summary?.activeSessionCount, 0),
+  totalActionCount: toInt(summary?.totalActionCount, 0),
+  averageActionCount: Number(summary?.averageActionCount) || 0,
+  averageSessionMinutes: toInt(summary?.averageSessionMinutes, 0),
+  interviewCompletionRate: Number(summary?.interviewCompletionRate) || 0,
+  completedInterviewCount: toInt(summary?.completedInterviewCount, 0),
+  totalInterviewCount: toInt(summary?.totalInterviewCount, 0),
+  lastLoginAt: summary?.lastLoginAt || null,
+  lastLoginIpAddress: summary?.lastLoginIpAddress || "",
+  calculatedAt: summary?.calculatedAt || null,
+  dailyLoginCounts: normalizeDailyLoginCounts(summary?.dailyLoginCounts),
+});
+
+const normalizeMemberDetail = (payload) => ({
+  ...payload,
+  accessSummary: normalizeAccessSummary(payload?.accessSummary),
+  recentAccessLogs: normalizeRecentAccessLogs(payload?.recentAccessLogs),
+});
+
+const normalizeMemberGlobalSummary = (payload) => ({
+  ...payload,
+  totalMemberCount: toInt(payload?.totalMemberCount, 0),
+  totalLoginCount: toInt(payload?.totalLoginCount, 0),
+  totalActionCount: toInt(payload?.totalActionCount, 0),
+  averageLoginCount: Number(payload?.averageLoginCount) || 0,
+  averageActionCount: Number(payload?.averageActionCount) || 0,
+  averageSessionMinutes: Number(payload?.averageSessionMinutes) || 0,
+  averageActiveSessionCount: Number(payload?.averageActiveSessionCount) || 0,
+  calculatedAt: payload?.calculatedAt || null,
+  dailyMetrics: Array.isArray(payload?.dailyMetrics) ? payload.dailyMetrics : [],
+});
 
 const isBranchCommonCategory = (category) =>
   Number(category?.depth) === 1 && String(category?.name || "").trim() === "공통";
@@ -184,7 +238,7 @@ export const AdminConsolePage = () => {
   const [categoryDepth2Filter, setCategoryDepth2Filter] = useState("");
   const [newCategoryDepth, setNewCategoryDepth] = useState("0");
 
-  const loadMembers = useCallback(async (targetPage = 0, keyword = memberKeyword) => {
+  const loadMembers = useCallback(async (targetPage = 0, keyword = "") => {
     setLoadingMembers(true);
     try {
       const payload = await getAdminMembers({ page: targetPage, size: memberSize, keyword });
@@ -204,7 +258,7 @@ export const AdminConsolePage = () => {
     } finally {
       setLoadingMembers(false);
     }
-  }, [memberKeyword, memberSize]);
+  }, [memberSize]);
 
   const loadGlobalAccessSummary = useCallback(async (windowDays = memberSummaryWindowDays, refresh = false) => {
     if (refresh) {
@@ -213,8 +267,10 @@ export const AdminConsolePage = () => {
       setLoadingMemberGlobalSummary(true);
     }
     try {
-      const payload = await getAdminGlobalAccessSummary({ windowDays, refresh });
-      setMemberGlobalSummary(payload);
+      const payload = refresh
+        ? await refreshAdminGlobalAccessSummary({ windowDays })
+        : await getAdminGlobalAccessSummary({ windowDays });
+      setMemberGlobalSummary(normalizeMemberGlobalSummary(payload));
     } catch (error) {
       setPageErrorMessage(error?.message || "전체 회원 접속 집계를 불러오지 못했습니다.");
     } finally {
@@ -294,7 +350,7 @@ export const AdminConsolePage = () => {
     return () => {
       cancelled = true;
     };
-  }, [loadCategories, loadGlobalAccessSummary, loadMembers, loadSets, navigate]);
+  }, [loadCategories, loadMembers, loadSets, navigate]);
 
   useEffect(() => {
     if (!selectedMemberId) {
@@ -309,7 +365,7 @@ export const AdminConsolePage = () => {
       try {
         const payload = await getAdminMemberDetail(selectedMemberId);
         if (cancelled) return;
-        setSelectedMemberDetail(payload);
+        setSelectedMemberDetail(normalizeMemberDetail(payload));
       } catch (error) {
         if (!cancelled) {
           setSelectedMemberDetail(null);
@@ -332,8 +388,8 @@ export const AdminConsolePage = () => {
     if (!selectedMemberId || refreshingMemberAccess) return;
     setRefreshingMemberAccess(true);
     try {
-      const payload = await getAdminMemberDetail(selectedMemberId, { refreshAccess: true });
-      setSelectedMemberDetail(payload);
+      const payload = await refreshAdminMemberDetail(selectedMemberId);
+      setSelectedMemberDetail(normalizeMemberDetail(payload));
     } catch (error) {
       setPageErrorMessage(error?.message || "접속 기록을 새로 불러오지 못했습니다.");
     } finally {
@@ -535,7 +591,7 @@ export const AdminConsolePage = () => {
     try {
       await deactivateAdminMember(selectedMemberId);
       const refreshed = await getAdminMemberDetail(selectedMemberId);
-      setSelectedMemberDetail(refreshed);
+      setSelectedMemberDetail(normalizeMemberDetail(refreshed));
       await loadMembers(memberPage);
     } catch (error) {
       setPageErrorMessage(error?.message || "회원 비활성화(로그인 차단) 처리에 실패했습니다.");
@@ -554,7 +610,7 @@ export const AdminConsolePage = () => {
     try {
       await activateAdminMember(selectedMemberId);
       const refreshed = await getAdminMemberDetail(selectedMemberId);
-      setSelectedMemberDetail(refreshed);
+      setSelectedMemberDetail(normalizeMemberDetail(refreshed));
       await loadMembers(memberPage);
     } catch (error) {
       setPageErrorMessage(error?.message || "회원 활성화 처리에 실패했습니다.");
@@ -574,7 +630,7 @@ export const AdminConsolePage = () => {
       await softDeleteAdminMember(selectedMemberId);
       try {
         const refreshed = await getAdminMemberDetail(selectedMemberId);
-        setSelectedMemberDetail(refreshed);
+        setSelectedMemberDetail(normalizeMemberDetail(refreshed));
       } catch {
         setSelectedMemberDetail(null);
       }
@@ -596,7 +652,7 @@ export const AdminConsolePage = () => {
     try {
       await restoreAdminMember(selectedMemberId);
       const refreshed = await getAdminMemberDetail(selectedMemberId);
-      setSelectedMemberDetail(refreshed);
+      setSelectedMemberDetail(normalizeMemberDetail(refreshed));
       await loadMembers(memberPage);
     } catch (error) {
       setPageErrorMessage(error?.message || "회원 복구에 실패했습니다.");
@@ -958,7 +1014,7 @@ export const AdminConsolePage = () => {
                           <div key={metric.key} className="rounded-[14px] border border-[#eef2f8] bg-white p-3">
                             <p className="text-[12px] font-semibold text-[#334155]">{metric.label}</p>
                             <div className="mt-3 flex items-end gap-2">
-                              {memberGlobalSummary.dailyMetrics.map((item) => {
+                              {(memberGlobalSummary.dailyMetrics || []).map((item) => {
                                 const rawValue = Number(item?.[metric.key]) || 0;
                                 const height = Math.max(8, Math.round((rawValue / maxValue) * 72));
                                 return (
@@ -1164,7 +1220,7 @@ export const AdminConsolePage = () => {
                         </div>
                         <div className="rounded-[12px] border border-[#e5eaf2] bg-white px-3 py-2">
                           <p className="text-[11px] text-[#64748b]">평균 액션 수</p>
-                          <p className="mt-1 text-[16px] font-semibold text-[#0f172a]">{selectedMemberDetail.accessSummary.averageActionCount.toFixed(1)}</p>
+                          <p className="mt-1 text-[16px] font-semibold text-[#0f172a]">{formatDecimal(selectedMemberDetail.accessSummary.averageActionCount, 1)}</p>
                         </div>
                         <div className="rounded-[12px] border border-[#e5eaf2] bg-white px-3 py-2">
                           <p className="text-[11px] text-[#64748b]">평균 세션 시간</p>
@@ -1176,15 +1232,15 @@ export const AdminConsolePage = () => {
                         <p className="text-[12px] text-[#4b5563]">마지막 로그인 IP: <strong className="text-[#111827]">{selectedMemberDetail.accessSummary.lastLoginIpAddress || "-"}</strong></p>
                         <p className="text-[12px] text-[#4b5563]">집계 기준 시각: <strong className="text-[#111827]">{formatDateTime(selectedMemberDetail.accessSummary.calculatedAt)}</strong></p>
                         <p className="text-[12px] text-[#4b5563]">
-                          면접 완료율: <strong className="text-[#111827]">{(selectedMemberDetail.accessSummary.interviewCompletionRate * 100).toFixed(0)}%</strong>
+                          면접 완료율: <strong className="text-[#111827]">{formatDecimal(selectedMemberDetail.accessSummary.interviewCompletionRate * 100, 0)}%</strong>
                           <span className="ml-1 text-[#64748b]">({selectedMemberDetail.accessSummary.completedInterviewCount}/{selectedMemberDetail.accessSummary.totalInterviewCount})</span>
                         </p>
                       </div>
                       <div className="mt-3">
                         <p className="text-[11px] font-semibold text-[#64748b]">일별 로그인 추이</p>
                         <div className="mt-2 flex items-end gap-2">
-                          {selectedMemberDetail.accessSummary.dailyLoginCounts.map((item) => {
-                            const maxCount = Math.max(...selectedMemberDetail.accessSummary.dailyLoginCounts.map((stat) => stat.loginCount), 1);
+                          {(selectedMemberDetail.accessSummary.dailyLoginCounts || []).map((item) => {
+                            const maxCount = Math.max(...(selectedMemberDetail.accessSummary.dailyLoginCounts || []).map((stat) => stat.loginCount), 1);
                             const height = Math.max(8, Math.round((item.loginCount / maxCount) * 56));
                             return (
                               <div key={item.date} className="flex flex-1 flex-col items-center gap-1">
@@ -1200,7 +1256,7 @@ export const AdminConsolePage = () => {
                     <div className="rounded-[14px] border border-[#eef2f8] bg-white p-3">
                       <p className="text-[12px] font-semibold text-[#334155]">최근 접속 기록</p>
                       <div className="mt-2 space-y-2">
-                        {selectedMemberDetail.recentAccessLogs.map((log) => (
+                        {(selectedMemberDetail.recentAccessLogs || []).map((log) => (
                           <div key={`${log.sessionIdPrefix}-${log.loginAt}`} className="rounded-[12px] border border-[#eef2f8] px-3 py-2">
                             <div className="flex flex-wrap items-center gap-2">
                               <span className="rounded-full bg-[#eff6ff] px-2 py-0.5 text-[10px] font-semibold text-[#1d4ed8]">{log.authProvider}</span>
@@ -1220,7 +1276,7 @@ export const AdminConsolePage = () => {
                             </div>
                           </div>
                         ))}
-                        {selectedMemberDetail.recentAccessLogs.length === 0 ? (
+                        {(selectedMemberDetail.recentAccessLogs || []).length === 0 ? (
                           <p className="text-[12px] text-[#64748b]">최근 접속 기록이 없습니다.</p>
                         ) : null}
                       </div>

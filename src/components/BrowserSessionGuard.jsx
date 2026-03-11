@@ -2,9 +2,9 @@ import { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import {
   clearAuthenticatedBrowserSession,
-  hasAuthenticatedBrowserSession,
   markAuthenticatedBrowserSession,
 } from "../lib/authSessionMarker";
+import { logout } from "../lib/authApi";
 import { getMyProfile } from "../lib/userApi";
 import { extractProfile } from "../lib/profileUtils";
 
@@ -17,24 +17,27 @@ export const BrowserSessionGuard = ({ children }) => {
     let cancelled = false;
 
     const guard = async () => {
-      if (hasAuthenticatedBrowserSession()) {
-        if (!cancelled) {
-          setReady(true);
-        }
-        return;
-      }
-
       try {
         const payload = await getMyProfile();
         const profile = extractProfile(payload);
         if (profile?.userId != null) {
           markAuthenticatedBrowserSession(profile.userId);
+          if (!cancelled) {
+            setReady(true);
+          }
+          return;
         }
-        if (!cancelled) {
-          setReady(true);
+        try {
+          await logout();
+        } catch {
+          // ignore logout failure and continue clearing client marker
         }
-        return;
       } catch {
+        try {
+          await logout();
+        } catch {
+          // ignore logout failure and continue clearing client marker
+        }
         clearAuthenticatedBrowserSession();
       }
 

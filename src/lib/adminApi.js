@@ -12,25 +12,31 @@ export async function getAdminMembers({ page = 0, size = 20, keyword = "" } = {}
   });
 }
 
-export async function getAdminGlobalAccessSummary({ windowDays = 7, refresh = false } = {}) {
+export async function getAdminGlobalAccessSummary({ windowDays = 7 } = {}) {
   const search = new URLSearchParams();
   search.set("windowDays", String(windowDays));
-  if (refresh) {
-    search.set("refresh", "true");
-  }
   return apiRequest(`/api/admin/members/access-summary?${search.toString()}`, {
     method: "GET",
   });
 }
 
-export async function getAdminMemberDetail(memberId, { refreshAccess = false } = {}) {
+export async function refreshAdminGlobalAccessSummary({ windowDays = 7 } = {}) {
   const search = new URLSearchParams();
-  if (refreshAccess) {
-    search.set("refreshAccess", "true");
-  }
-  const suffix = search.toString() ? `?${search.toString()}` : "";
-  return apiRequest(`/api/admin/members/${encodeURIComponent(memberId)}${suffix}`, {
+  search.set("windowDays", String(windowDays));
+  return apiRequest(`/api/admin/members/access-summary/refresh?${search.toString()}`, {
+    method: "POST",
+  });
+}
+
+export async function getAdminMemberDetail(memberId) {
+  return apiRequest(`/api/admin/members/${encodeURIComponent(memberId)}`, {
     method: "GET",
+  });
+}
+
+export async function refreshAdminMemberDetail(memberId) {
+  return apiRequest(`/api/admin/members/${encodeURIComponent(memberId)}/refresh-access`, {
+    method: "POST",
   });
 }
 

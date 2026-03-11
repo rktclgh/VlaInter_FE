@@ -1,4 +1,5 @@
 import { LegalDocumentLayout } from "../components/LegalDocumentLayout";
+import { LegalSection } from "../components/LegalSection";
 
 const collectionRows = [
   {
@@ -108,49 +109,42 @@ const Table = ({ headers, rows, renderRow }) => (
   </div>
 );
 
-const Section = ({ title, children }) => (
-  <section>
-    <h2 className="text-[18px] font-semibold text-[#171b24]">{title}</h2>
-    <div className="mt-3 space-y-3">{children}</div>
-  </section>
-);
-
 export const PrivacyPolicyPage = () => {
   return (
     <LegalDocumentLayout title="개인정보처리방침" updatedAt="2026-03-11">
-      <Section title="1. 총칙">
+      <LegalSection title="1. 총칙">
         <p>VlaInter는 개인정보 보호법 제30조에 따라 정보주체의 개인정보를 보호하고, 관련 고충을 신속하고 원활하게 처리하기 위하여 본 개인정보처리방침을 수립·공개합니다.</p>
         <p>본 방침은 VlaInter 서비스의 회원가입, 로그인, 문서 업로드, 면접 세션, 포인트 결제, 문의 접수 등 서비스 전반에 적용됩니다.</p>
-      </Section>
+      </LegalSection>
 
-      <Section title="2. 수집하는 개인정보 항목, 목적 및 보유기간">
+      <LegalSection title="2. 수집하는 개인정보 항목, 목적 및 보유기간">
         <Table
           headers={["수집 목적", "수집 항목", "보유기간"]}
           rows={collectionRows}
           renderRow={(row) => [row.purpose, row.items, row.retention]}
         />
-      </Section>
+      </LegalSection>
 
-      <Section title="3. 법령에 따른 보관">
+      <LegalSection title="3. 법령에 따른 보관">
         <p>서비스는 관계 법령이 개인정보 또는 거래기록의 보관을 요구하는 경우, 해당 법령이 정한 기간 동안 별도로 분리 보관할 수 있습니다.</p>
         <Table
           headers={["법적 근거", "보관 항목", "보관기간"]}
           rows={legalRetentionRows}
           renderRow={(row) => [row.basis, row.items, row.retention]}
         />
-      </Section>
+      </LegalSection>
 
-      <Section title="4. 개인정보의 파기">
+      <LegalSection title="4. 개인정보의 파기">
         <p>개인정보의 보유기간이 경과하거나 처리 목적이 달성된 경우에는 지체 없이 해당 정보를 파기합니다.</p>
         <p>전자적 파일 형태의 정보는 복구가 불가능한 방법으로 삭제하며, 종이 문서는 분쇄 또는 소각 등의 방법으로 파기합니다.</p>
-      </Section>
+      </LegalSection>
 
-      <Section title="5. 개인정보의 제3자 제공">
+      <LegalSection title="5. 개인정보의 제3자 제공">
         <p>서비스는 원칙적으로 이용자의 개인정보를 외부에 제공하지 않습니다.</p>
         <p>다만, 정보주체의 별도 동의가 있는 경우, 법령에 특별한 규정이 있는 경우, 수사기관 등 적법한 절차에 따른 요구가 있는 경우에는 예외로 합니다.</p>
-      </Section>
+      </LegalSection>
 
-      <Section title="6. 개인정보 처리업무의 위탁">
+      <LegalSection title="6. 개인정보 처리업무의 위탁">
         <p>서비스는 원활한 운영을 위해 다음과 같이 개인정보 처리업무를 위탁할 수 있습니다.</p>
         <Table
           headers={["수탁자", "위탁 업무"]}
@@ -158,34 +152,34 @@ export const PrivacyPolicyPage = () => {
           renderRow={(row) => [row.name, row.work]}
         />
         <p>위탁계약 체결 시 개인정보 보호법에 따라 안전성 확보조치, 재위탁 제한, 관리·감독 등을 계약서 등에 반영합니다.</p>
-      </Section>
+      </LegalSection>
 
-      <Section title="7. 국외 이전 가능성">
+      <LegalSection title="7. 국외 이전 가능성">
         <p>서비스 운영 과정에서 국외 클라우드 또는 외부 API 사업자가 사용될 수 있습니다. 서비스는 개인정보의 국외 이전이 발생하는 경우 관련 법령에 따라 필요한 고지 또는 동의 절차를 이행합니다.</p>
-      </Section>
+      </LegalSection>
 
-      <Section title="8. 정보주체의 권리와 행사 방법">
+      <LegalSection title="8. 정보주체의 권리와 행사 방법">
         <p>이용자는 언제든지 본인의 개인정보에 대해 열람, 정정, 삭제, 처리정지, 회원탈퇴를 요청할 수 있습니다.</p>
         <p>권리 행사는 서비스 내 기능 또는 아래 문의 이메일을 통해 요청할 수 있으며, 서비스는 관계 법령에서 정한 예외 사유가 없는 한 지체 없이 조치합니다.</p>
-      </Section>
+      </LegalSection>
 
-      <Section title="9. 쿠키 및 세션 사용">
+      <LegalSection title="9. 쿠키 및 세션 사용">
         <p>서비스는 로그인 상태 유지, 인증 검증, 보안 강화를 위해 쿠키 및 세션 식별자를 사용할 수 있습니다.</p>
         <p>브라우저 설정을 통해 쿠키 저장을 거부할 수 있으나, 이 경우 로그인 유지 등 일부 기능 이용이 제한될 수 있습니다.</p>
-      </Section>
+      </LegalSection>
 
-      <Section title="10. 안전성 확보 조치">
+      <LegalSection title="10. 안전성 확보 조치">
         <p>서비스는 개인정보의 안전한 처리를 위해 접근권한 관리, 비밀번호 암호화, 주요 민감정보 암호화 저장, 접속기록 관리, 보안 업데이트 및 접근 통제 등 합리적인 보호조치를 시행합니다.</p>
-      </Section>
+      </LegalSection>
 
-      <Section title="11. 개인정보 보호책임자 및 문의">
+      <LegalSection title="11. 개인정보 보호책임자 및 문의">
         <p>개인정보 보호 및 권리 행사 관련 문의는 아래 이메일로 접수할 수 있습니다.</p>
         <p>문의 이메일: songchih@icloud.com</p>
-      </Section>
+      </LegalSection>
 
-      <Section title="12. 방침의 변경">
+      <LegalSection title="12. 방침의 변경">
         <p>본 개인정보처리방침은 법령, 서비스 내용, 처리 항목이 변경되는 경우 개정될 수 있으며, 중요한 변경이 있는 경우 서비스 내 공지사항 또는 연결 화면을 통해 안내합니다.</p>
-      </Section>
+      </LegalSection>
     </LegalDocumentLayout>
   );
 };

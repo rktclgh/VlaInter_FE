@@ -129,6 +129,7 @@ export async function getLatestIncompleteTechSession(sessionMode = null) {
 export async function dismissTechSession(sessionId) {
   return apiRequest(`/api/interview/tech/sessions/${encodeURIComponent(sessionId)}/dismiss`, {
     method: "POST",
+    retryOnUnauthorized: false,
   });
 }
 
@@ -160,6 +161,7 @@ export async function getLatestIncompleteMockSession() {
 export async function dismissMockSession(sessionId) {
   return apiRequest(`/api/interview/mock/sessions/${encodeURIComponent(sessionId)}/dismiss`, {
     method: "POST",
+    retryOnUnauthorized: false,
   });
 }
 

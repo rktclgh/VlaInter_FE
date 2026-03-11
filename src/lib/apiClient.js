@@ -35,7 +35,8 @@ export async function refreshAuthSession() {
 
 export async function apiRequest(path, options = {}) {
   const retryOnUnauthorizedOption = options.retryOnUnauthorized;
-  const retryOnUnauthorized = retryOnUnauthorizedOption !== false;
+  const requestMethod = String(options.method || "GET").trim().toUpperCase();
+  const retryOnUnauthorized = retryOnUnauthorizedOption ?? ["GET", "HEAD", "OPTIONS"].includes(requestMethod);
 
   let response = await executeJsonRequest(path, options);
   if (response.status === 401 && retryOnUnauthorized && path !== "/api/auth/refresh") {

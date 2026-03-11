@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-labelledby="title desc">
+  <title id="title">VlaInter social preview</title>
+  <desc id="desc">VlaInter AI interview training platform preview image.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#f8fbff" />
+      <stop offset="100%" stop-color="#e8eef8" />
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="630" fill="url(#bg)" />
+  <rect x="72" y="72" width="1056" height="486" rx="36" fill="#ffffff" stroke="#dbe3ef" />
+  <text x="108" y="170" fill="#6b7ba1" font-family="Arial, sans-serif" font-size="28" font-weight="700" letter-spacing="6">AI INTERVIEW TRAINING</text>
+  <text x="108" y="274" fill="#171b24" font-family="Arial, sans-serif" font-size="78" font-weight="800">VlaInter</text>
+  <text x="108" y="348" fill="#334155" font-family="Arial, sans-serif" font-size="34">사용자 맞춤형 AI 면접대비 플랫폼</text>
+  <rect x="108" y="404" width="272" height="74" rx="22" fill="#171b24" />
+  <text x="152" y="451" fill="#ffffff" font-family="Arial, sans-serif" font-size="30" font-weight="700">Tech Interview</text>
+  <rect x="404" y="404" width="272" height="74" rx="22" fill="#ffffff" stroke="#d9e2ef" />
+  <text x="451" y="451" fill="#171b24" font-family="Arial, sans-serif" font-size="30" font-weight="700">Document RAG</text>
+  <rect x="700" y="404" width="272" height="74" rx="22" fill="#fff2a8" />
+  <text x="755" y="451" fill="#171b24" font-family="Arial, sans-serif" font-size="30" font-weight="700">AI Feedback</text>
+</svg>

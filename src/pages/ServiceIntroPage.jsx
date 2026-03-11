@@ -39,8 +39,8 @@ const Section = ({ title, body }) => (
   <section className="rounded-[28px] border border-[#edf1f5] bg-white px-6 py-7 shadow-[0_18px_60px_rgba(23,27,36,0.05)] md:px-9">
     <h2 className="text-[21px] font-semibold text-[#171b24]">{title}</h2>
     <div className="mt-4 space-y-4 text-[15px] leading-[1.9] text-[#313948]">
-      {body.map((line) => (
-        <p key={line}>{line}</p>
+      {body.map((line, index) => (
+        <p key={`${index}-${line.slice(0, 24)}`}>{line}</p>
       ))}
     </div>
   </section>
