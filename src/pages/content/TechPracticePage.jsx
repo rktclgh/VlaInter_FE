@@ -5,15 +5,17 @@ import { MobileSidebarDrawer } from "../../components/MobileSidebarDrawer";
 import { GeminiOverloadModal } from "../../components/GeminiOverloadModal";
 import { PointChargeModal } from "../../components/PointChargeModal";
 import { PointChargeSuccessModal } from "../../components/PointChargeSuccessModal";
+import { ResumeSessionModal } from "../../components/ResumeSessionModal";
 import { Sidebar } from "../../components/Sidebar";
 import { StarIcons } from "../../components/DifficultyStars";
 import tempProfileImage from "../../assets/icon/temp.png";
 import { logout } from "../../lib/authApi";
 import { filterSkillCategoriesByBranchAndJob, getCategoryDisplayName, searchCategoryByText } from "../../lib/categoryPresentation";
 import { ratingToDifficulty } from "../../lib/difficultyRating";
+import { buildResumedSessionSnapshot } from "../../lib/resumeInterviewSession";
 import { saveTechInterviewSession } from "../../lib/interviewSessionFlow";
 import { consumePointChargeSuccessResult } from "../../lib/pointChargeFlow";
-import { createInterviewCategory, getInterviewCategories, startTechInterview } from "../../lib/interviewApi";
+import { createInterviewCategory, dismissTechSession, getInterviewCategories, getLatestIncompleteTechSession, startTechInterview } from "../../lib/interviewApi";
 import { isGeminiOverloadError } from "../../lib/geminiErrorUtils";
 import { extractProfile } from "../../lib/profileUtils";
 import { getMyProfile, getMyProfileImageUrl } from "../../lib/userApi";
@@ -78,6 +80,9 @@ export const TechPracticePage = () => {
   const [pageErrorMessage, setPageErrorMessage] = useState("");
   const [showGeminiOverloadModal, setShowGeminiOverloadModal] = useState(false);
   const [creatingCategory, setCreatingCategory] = useState(false);
+  const [pendingResumeSession, setPendingResumeSession] = useState(null);
+  const [resumeModalBusy, setResumeModalBusy] = useState(false);
+  const [resumeSessionChecked, setResumeSessionChecked] = useState(false);
   const isStartingPractice = startingCategoryId !== null;
 
   const loadCatalog = async ({ preferredBranchName = "", preferredJobName = "", preferredSkillName = "" } = {}) => {
@@ -162,6 +167,33 @@ export const TechPracticePage = () => {
 
     void load();
   }, [navigate]);
+
+  useEffect(() => {
+    if (loading || resumeSessionChecked) return;
+    let cancelled = false;
+
+    const loadIncompleteSession = async () => {
+      try {
+        const response = await getLatestIncompleteTechSession("TECH");
+        if (!cancelled) {
+          setPendingResumeSession(response || null);
+        }
+      } catch {
+        if (!cancelled) {
+          setPendingResumeSession(null);
+        }
+      } finally {
+        if (!cancelled) {
+          setResumeSessionChecked(true);
+        }
+      }
+    };
+
+    void loadIncompleteSession();
+    return () => {
+      cancelled = true;
+    };
+  }, [loading, resumeSessionChecked]);
 
   const branchItems = useMemo(() => categories.filter((item) => Number(item.depth) === 0), [categories]);
   const visibleBranches = useMemo(() => branchItems.filter((branch) => searchCategoryByText(branch, branchQuery)), [branchItems, branchQuery]);
@@ -354,6 +386,40 @@ export const TechPracticePage = () => {
     }
   };
 
+  const handleResumePractice = async () => {
+    if (!pendingResumeSession) return;
+    setResumeModalBusy(true);
+    try {
+      const snapshot = buildResumedSessionSnapshot(pendingResumeSession, {
+        apiBasePath: "/api/interview/tech",
+      });
+      if (!snapshot) {
+        setPendingResumeSession(null);
+        return;
+      }
+      saveTechInterviewSession(snapshot);
+      navigate("/content/interview/session");
+    } finally {
+      setResumeModalBusy(false);
+    }
+  };
+
+  const handleDismissPracticeResume = async () => {
+    if (!pendingResumeSession?.sessionId) {
+      setPendingResumeSession(null);
+      return;
+    }
+    setResumeModalBusy(true);
+    try {
+      await dismissTechSession(pendingResumeSession.sessionId);
+      setPendingResumeSession(null);
+    } catch (error) {
+      setPageErrorMessage(error?.message || "미완료 기술질문 세션 종료에 실패했습니다.");
+    } finally {
+      setResumeModalBusy(false);
+    }
+  };
+
   return (
     <div className="min-h-screen overflow-x-hidden bg-white pt-[54px]">
       <ContentTopNav point={formatPoint(userPoint)} onClickCharge={() => { if (!isStartingPractice) setShowPointChargeModal(true); }} onOpenMenu={() => { if (!isStartingPractice) setIsMobileMenuOpen(true); }} />
@@ -503,6 +569,14 @@ export const TechPracticePage = () => {
       }} /> : null}
       {showPointChargeSuccessModal ? <PointChargeSuccessModal onClose={() => setShowPointChargeSuccessModal(false)} currentPoint={userPoint} /> : null}
       {showGeminiOverloadModal ? <GeminiOverloadModal onClose={() => setShowGeminiOverloadModal(false)} /> : null}
+      <ResumeSessionModal
+        open={Boolean(pendingResumeSession)}
+        title="완료하지 못한 기술질문 세션이 있습니다"
+        description="이전에 진행 중이던 기술질문 연습 세션이 남아 있습니다. 이어서 진행하시겠습니까?"
+        onContinue={() => void handleResumePractice()}
+        onDismiss={() => void handleDismissPracticeResume()}
+        busy={resumeModalBusy}
+      />
       {isStartingPractice ? (
         <div className="fixed inset-0 z-[200] flex items-center justify-center bg-[#0f172acc]">
           <div className="rounded-[18px] border border-[#334155] bg-[#111827] px-6 py-5 text-center">

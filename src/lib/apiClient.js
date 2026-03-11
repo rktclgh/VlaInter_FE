@@ -35,10 +35,10 @@ export async function refreshAuthSession() {
 
 export async function apiRequest(path, options = {}) {
   const retryOnUnauthorizedOption = options.retryOnUnauthorized;
-  const retryOnUnauthorized = retryOnUnauthorizedOption !== false;
-  const method = String(options.method || "GET").toUpperCase();
+  const requestMethod = String(options.method || "GET").trim().toUpperCase();
   const safeRetryMethods = new Set(["GET", "HEAD", "OPTIONS"]);
-  const canRetryUnauthorized = retryOnUnauthorizedOption === true || safeRetryMethods.has(method);
+  const retryOnUnauthorized = retryOnUnauthorizedOption !== false;
+  const canRetryUnauthorized = retryOnUnauthorizedOption === true || safeRetryMethods.has(requestMethod);
 
   let response = await executeJsonRequest(path, options);
   if (

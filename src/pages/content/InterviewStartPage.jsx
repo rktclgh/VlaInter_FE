@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { ContentTopNav } from "../../components/ContentTopNav";
 import { MobileSidebarDrawer } from "../../components/MobileSidebarDrawer";
 import { OcrInfoBadge } from "../../components/OcrInfoBadge";
+import { ResumeSessionModal } from "../../components/ResumeSessionModal";
 import { Sidebar } from "../../components/Sidebar";
 import { GeminiOverloadModal } from "../../components/GeminiOverloadModal";
 import { PointChargeModal } from "../../components/PointChargeModal";
@@ -12,7 +13,8 @@ import tempProfileImage from "../../assets/icon/temp.png";
 import { logout } from "../../lib/authApi";
 import { filterSkillCategoriesByBranchAndJob, searchCategoryByText } from "../../lib/categoryPresentation";
 import { ratingToDifficulty } from "../../lib/difficultyRating";
-import { createInterviewCategory, getInterviewCategories, getMyInterviewSets, getReadyMockDocuments, startMockInterview } from "../../lib/interviewApi";
+import { createInterviewCategory, dismissMockSession, getInterviewCategories, getLatestIncompleteMockSession, getMyInterviewSets, getReadyMockDocuments, startMockInterview } from "../../lib/interviewApi";
+import { buildResumedSessionSnapshot } from "../../lib/resumeInterviewSession";
 import { saveTechInterviewSession } from "../../lib/interviewSessionFlow";
 import { consumePointChargeSuccessResult } from "../../lib/pointChargeFlow";
 import { extractProfile, formatPoint, parsePoint } from "../../lib/profileUtils";
@@ -100,11 +102,11 @@ const InterviewPrerequisiteGuideModal = ({ onClose, onMoveToUpload }) => (
     >
       <p id="interview-prereq-title" className="text-[16px] font-semibold text-[#1f2937]">면접 시작 전 필수 준비가 필요합니다</p>
       <p id="interview-prereq-description" className="mt-2 text-[13px] leading-[1.7] text-[#4f5664]">
-        이력서/자기소개서 업로드와 AI 분석이 완료되어야 면접을 시작하실 수 있습니다.
+        이력서 업로드와 AI 분석이 완료되어야 면접을 시작하실 수 있습니다. 자기소개서와 포트폴리오는 선택 사항입니다.
       </p>
       <div className="mt-5 flex justify-end gap-2">
         <button type="button" onClick={onClose} className="rounded-[10px] border border-[#d6d6d6] px-3 py-1.5 text-[12px] text-[#666]">닫기</button>
-        <button type="button" onClick={onMoveToUpload} className="rounded-[10px] border border-[#171b24] bg-[#171b24] px-3 py-1.5 text-[12px] text-white">이력서 및 자기소개서 업로드 페이지로 이동</button>
+        <button type="button" onClick={onMoveToUpload} className="rounded-[10px] border border-[#171b24] bg-[#171b24] px-3 py-1.5 text-[12px] text-white">이력서 업로드 페이지로 이동</button>
       </div>
     </div>
   </div>
@@ -175,6 +177,9 @@ export const InterviewStartPage = () => {
   const [pageErrorMessage, setPageErrorMessage] = useState("");
   const [showGeminiOverloadModal, setShowGeminiOverloadModal] = useState(false);
   const [showPrereqGuideModal, setShowPrereqGuideModal] = useState(false);
+  const [pendingResumeSession, setPendingResumeSession] = useState(null);
+  const [resumeModalBusy, setResumeModalBusy] = useState(false);
+  const [resumeSessionChecked, setResumeSessionChecked] = useState(false);
 
   useEffect(() => {
     const charged = consumePointChargeSuccessResult();
@@ -251,6 +256,33 @@ export const InterviewStartPage = () => {
   useEffect(() => {
     void loadPageData();
   }, [loadPageData]);
+
+  useEffect(() => {
+    if (loadingPage || resumeSessionChecked) return;
+    let cancelled = false;
+
+    const loadIncompleteSession = async () => {
+      try {
+        const response = await getLatestIncompleteMockSession();
+        if (!cancelled) {
+          setPendingResumeSession(response || null);
+        }
+      } catch {
+        if (!cancelled) {
+          setPendingResumeSession(null);
+        }
+      } finally {
+        if (!cancelled) {
+          setResumeSessionChecked(true);
+        }
+      }
+    };
+
+    void loadIncompleteSession();
+    return () => {
+      cancelled = true;
+    };
+  }, [loadingPage, resumeSessionChecked]);
 
   const jobs = useMemo(
     () => (categoryTree || [])
@@ -474,7 +506,7 @@ export const InterviewStartPage = () => {
   };
 
   const handleStartInterview = async () => {
-    const hasRequiredDocuments = Boolean(selectedFileObjects.RESUME && selectedFileObjects.INTRODUCE);
+    const hasRequiredDocuments = Boolean(selectedFileObjects.RESUME);
     const selectedDocumentIds = DOCUMENT_TYPES
       .map((item) => selectedFiles[item.key])
       .filter((value, index, array) => value && array.indexOf(value) === index)
@@ -482,7 +514,7 @@ export const InterviewStartPage = () => {
 
     if (!hasRequiredDocuments) {
       setShowPrereqGuideModal(true);
-      setPageErrorMessage("이력서와 자기소개서를 모두 선택해 주세요.");
+      setPageErrorMessage("이력서를 선택해 주세요.");
       return;
     }
     const resolvedJobName = (selectedJob?.displayName || selectedJob?.name || jobQuery.trim()).trim();
@@ -556,6 +588,41 @@ export const InterviewStartPage = () => {
     }
   };
 
+  const handleResumeInterview = async () => {
+    if (!pendingResumeSession) return;
+    setResumeModalBusy(true);
+    try {
+      const snapshot = buildResumedSessionSnapshot(pendingResumeSession, {
+        apiBasePath: "/api/interview/mock",
+        requestedQuestionCount: Math.max(Number(pendingResumeSession.questionCount || 0), 1),
+      });
+      if (!snapshot) {
+        setPendingResumeSession(null);
+        return;
+      }
+      saveTechInterviewSession(snapshot);
+      navigate("/content/interview/session");
+    } finally {
+      setResumeModalBusy(false);
+    }
+  };
+
+  const handleDismissInterviewResume = async () => {
+    if (!pendingResumeSession?.sessionId) {
+      setPendingResumeSession(null);
+      return;
+    }
+    setResumeModalBusy(true);
+    try {
+      await dismissMockSession(pendingResumeSession.sessionId);
+      setPendingResumeSession(null);
+    } catch (error) {
+      setPageErrorMessage(error?.message || "미완료 면접 세션 종료에 실패했습니다.");
+    } finally {
+      setResumeModalBusy(false);
+    }
+  };
+
   return (
     <div className="min-h-screen overflow-x-hidden bg-white pt-13.5">
       <ContentTopNav
@@ -609,7 +676,7 @@ export const InterviewStartPage = () => {
                   실전처럼 면접을 시작합니다
                 </h1>
                 <p className="mt-3 max-w-180 text-[14px] leading-[1.7] text-[#5e6472] sm:text-[15px]">
-                  분석 완료된 서류만 선택하실 수 있습니다. 직무와 기술 카테고리를 함께 선택하시면 문서 질문과 기술 질문을 섞어 면접을 생성합니다.
+                  분석 완료된 서류만 선택하실 수 있습니다. 이력서는 필수이고, 자기소개서와 포트폴리오는 선택 사항입니다. 직무와 기술 카테고리를 함께 선택하시면 문서 질문과 기술 질문을 섞어 면접을 생성합니다.
                 </p>
               </section>
 
@@ -789,7 +856,7 @@ export const InterviewStartPage = () => {
                     <p className="mt-3 text-[12px] text-[#7a8190]">세트를 선택하면 기술질문은 AI 생성 대신 해당 세트 문답에서 랜덤하게 대체됩니다.</p>
                   </CategoryCard>
 
-                  <CategoryCard title="서류 선택" description="AI 분석이 끝난 서류만 노출됩니다. 이력서와 자기소개서는 필수이며, 포트폴리오는 선택 사항입니다. OCR fallback이 사용된 문서는 배지를 함께 표시합니다.">
+                  <CategoryCard title="서류 선택" description="AI 분석이 끝난 서류만 노출됩니다. 이력서는 필수이며, 자기소개서와 포트폴리오는 선택 사항입니다. OCR fallback이 사용된 문서는 배지를 함께 표시합니다.">
                     <div className="grid gap-4 md:grid-cols-3">
                       {DOCUMENT_TYPES.map((documentType) => {
                         const files = filesByType[documentType.key] || [];
@@ -829,7 +896,7 @@ export const InterviewStartPage = () => {
                     </div>
                     <div className="mt-4 rounded-[14px] border border-[#e6eaf2] bg-[#fbfcfe] px-4 py-3">
                       <p className="text-[12px] leading-[1.7] text-[#5e6472]">
-                        면접 시작 전, 이력서/자기소개서 업로드 및 AI 분석 완료가 반드시 선행되어야 합니다.
+                        면접 시작 전, 이력서 업로드 및 AI 분석 완료가 반드시 선행되어야 합니다. 자기소개서와 포트폴리오는 선택 사항입니다.
                       </p>
                       <div className="mt-2 flex justify-end">
                         <button
@@ -837,7 +904,7 @@ export const InterviewStartPage = () => {
                           onClick={() => navigate("/content/files")}
                           className="rounded-[10px] border border-[#171b24] px-3 py-1.5 text-[12px] font-semibold text-[#171b24]"
                         >
-                          이력서 및 자기소개서 업로드 페이지로 이동
+                          이력서 업로드 페이지로 이동
                         </button>
                       </div>
                     </div>
@@ -970,6 +1037,14 @@ export const InterviewStartPage = () => {
           }}
         />
       ) : null}
+      <ResumeSessionModal
+        open={Boolean(pendingResumeSession)}
+        title="완료하지 못한 면접 세션이 있습니다"
+        description="이전에 진행 중이던 실전 모의면접이 남아 있습니다. 이어서 진행하시겠습니까?"
+        onContinue={() => void handleResumeInterview()}
+        onDismiss={() => void handleDismissInterviewResume()}
+        busy={resumeModalBusy}
+      />
     </div>
   );
 };
