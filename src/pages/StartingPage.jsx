@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { TopNav } from "../components/TopNav";
+import { AuthFooter } from "../components/AuthFooter";
 import { Link, useNavigate } from "react-router-dom";
 import { getMyProfile } from "../lib/userApi";
 import { hasAuthenticatedBrowserSession } from "../lib/authSessionMarker";
@@ -305,6 +306,7 @@ export const StartingPage = () => {
         </section>
 
       </main>
+      <AuthFooter />
     </div>
   );
 };
