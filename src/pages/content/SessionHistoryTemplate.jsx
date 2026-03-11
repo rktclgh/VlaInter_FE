@@ -8,6 +8,7 @@ import { PointChargeModal } from "../../components/PointChargeModal";
 import { PointChargeSuccessModal } from "../../components/PointChargeSuccessModal";
 import { Sidebar } from "../../components/Sidebar";
 import tempProfileImage from "../../assets/icon/temp.png";
+import { isAuthenticationError } from "../../lib/apiClient";
 import { logout } from "../../lib/authApi";
 import { bookmarkInterviewTurn, getInterviewSessionHistory, getInterviewSessionResults } from "../../lib/interviewApi";
 import { getQuestionCategoryDisplayName } from "../../lib/categoryPresentation";
@@ -218,9 +219,11 @@ export const SessionHistoryTemplate = ({ title, description, apiBasePath, active
       setUserName(profile?.name || "사용자");
       setUserPoint(parsePoint(profile?.point));
       setProfileImageUrl(getMyProfileImageUrl());
-    } catch {
-      navigate("/login", { replace: true });
-      return;
+    } catch (error) {
+      if (isAuthenticationError(error)) {
+        navigate("/login", { replace: true });
+        return;
+      }
     }
 
     try {

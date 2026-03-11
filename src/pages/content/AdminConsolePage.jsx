@@ -5,6 +5,7 @@ import { MobileSidebarDrawer } from "../../components/MobileSidebarDrawer";
 import { PointChargeModal } from "../../components/PointChargeModal";
 import { Sidebar } from "../../components/Sidebar";
 import tempProfileImage from "../../assets/icon/temp.png";
+import { isAuthenticationError } from "../../lib/apiClient";
 import { logout } from "../../lib/authApi";
 import {
   activateAdminMember,
@@ -333,10 +334,14 @@ export const AdminConsolePage = () => {
         setUserName(profile?.name || "관리자");
         setUserPoint(parsePoint(profile?.point));
         setProfileImageUrl(getMyProfileImageUrl());
-      } catch {
-        if (!cancelled) {
+      } catch (error) {
+        if (cancelled) return;
+        if (isAuthenticationError(error)) {
           navigate("/login", { replace: true });
+          return;
         }
+        setPageErrorMessage("관리자 정보를 불러오지 못했습니다.");
+        setLoadingPage(false);
         return;
       }
 

@@ -1,4 +1,4 @@
-const AUTH_USER_ID_KEY = "vlainter_auth_user_id";
+const AUTH_SESSION_KEY = "vlainter_auth_session";
 const AUTH_VERIFIED_AT_KEY = "vlainter_auth_verified_at";
 const KAKAO_STATE_KEY = "kakao_oauth_state";
 
@@ -21,30 +21,24 @@ function getSessionStorage() {
   return typeof window !== "undefined" && canUseStorage(window.sessionStorage) ? window.sessionStorage : null;
 }
 
-export function markAuthenticatedBrowserSession(userId) {
+export function markAuthenticatedBrowserSession() {
   const storage = getLocalStorage();
   if (!storage) return;
-  storage.setItem(AUTH_USER_ID_KEY, String(userId));
+  storage.setItem(AUTH_SESSION_KEY, "1");
   storage.setItem(AUTH_VERIFIED_AT_KEY, String(Date.now()));
 }
 
 export function clearAuthenticatedBrowserSession() {
   const storage = getLocalStorage();
   if (!storage) return;
-  storage.removeItem(AUTH_USER_ID_KEY);
+  storage.removeItem(AUTH_SESSION_KEY);
   storage.removeItem(AUTH_VERIFIED_AT_KEY);
 }
 
 export function hasAuthenticatedBrowserSession() {
   const storage = getLocalStorage();
   if (!storage) return false;
-  return Boolean(storage.getItem(AUTH_USER_ID_KEY));
-}
-
-export function getAuthenticatedBrowserUserId() {
-  const storage = getLocalStorage();
-  if (!storage) return null;
-  return storage.getItem(AUTH_USER_ID_KEY);
+  return Boolean(storage.getItem(AUTH_SESSION_KEY));
 }
 
 export function storeKakaoOAuthState(state) {

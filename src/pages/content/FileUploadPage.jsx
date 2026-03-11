@@ -9,6 +9,7 @@ import { PointChargeSuccessModal } from "../../components/PointChargeSuccessModa
 import dragDropIcon from "../../assets/icon/Drag_Drop.png";
 import plusIcon from "../../assets/icon/plus.png";
 import tempProfileImage from "../../assets/icon/temp.png";
+import { isAuthenticationError } from "../../lib/apiClient";
 import { logout } from "../../lib/authApi";
 import { ingestMockDocument } from "../../lib/interviewApi";
 import { consumePointChargeSuccessResult } from "../../lib/pointChargeFlow";
@@ -455,9 +456,11 @@ export const FileUploadPage = () => {
           chargedPointFromCallbackRef.current = null;
         }
         setProfileImageUrl(getMyProfileImageUrl());
-      } catch {
-        navigate("/login", { replace: true });
-        return;
+      } catch (error) {
+        if (isAuthenticationError(error)) {
+          navigate("/login", { replace: true });
+          return;
+        }
       }
 
       try {

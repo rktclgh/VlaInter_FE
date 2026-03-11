@@ -9,6 +9,7 @@ import { ResumeSessionModal } from "../../components/ResumeSessionModal";
 import { Sidebar } from "../../components/Sidebar";
 import { StarIcons } from "../../components/DifficultyStars";
 import tempProfileImage from "../../assets/icon/temp.png";
+import { isAuthenticationError } from "../../lib/apiClient";
 import { logout } from "../../lib/authApi";
 import { filterSkillCategoriesByBranchAndJob, getCategoryDisplayName, searchCategoryByText } from "../../lib/categoryPresentation";
 import { ratingToDifficulty } from "../../lib/difficultyRating";
@@ -151,9 +152,11 @@ export const TechPracticePage = () => {
         setUserName(profile?.name || "사용자");
         setUserPoint(parsePoint(profile?.point));
         setProfileImageUrl(getMyProfileImageUrl());
-      } catch {
-        navigate("/login", { replace: true });
-        return;
+      } catch (error) {
+        if (isAuthenticationError(error)) {
+          navigate("/login", { replace: true });
+          return;
+        }
       }
 
       try {

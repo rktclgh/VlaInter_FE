@@ -10,6 +10,7 @@ import { QuestionAnswerDetailModal } from "../../components/QuestionAnswerDetail
 import { ResumeSessionModal } from "../../components/ResumeSessionModal";
 import { Sidebar } from "../../components/Sidebar";
 import tempProfileImage from "../../assets/icon/temp.png";
+import { isAuthenticationError } from "../../lib/apiClient";
 import { logout } from "../../lib/authApi";
 import {
   buildCategoryMap,
@@ -895,9 +896,11 @@ export const QuestionSetsPage = () => {
         setUserName(profile?.name || "사용자");
         setUserPoint(parsePoint(profile?.point));
         setProfileImageUrl(getMyProfileImageUrl());
-      } catch {
-        navigate("/login", { replace: true });
-        return;
+      } catch (error) {
+        if (isAuthenticationError(error)) {
+          navigate("/login", { replace: true });
+          return;
+        }
       }
 
       try {

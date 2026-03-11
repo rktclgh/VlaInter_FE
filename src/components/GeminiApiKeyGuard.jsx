@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { getMyProfile } from "../lib/userApi";
+import { isAuthenticationError } from "../lib/apiClient";
 import guideImage1 from "../assets/api_guide/1.png";
 import guideImage2 from "../assets/api_guide/2.png";
 import guideImage3 from "../assets/api_guide/3.png";
@@ -138,8 +139,12 @@ export const GeminiApiKeyGuard = ({ children }) => {
         setHasGeminiApiKey(Boolean(profile?.hasGeminiApiKey));
       } catch (error) {
         if (cancelled) return;
+        if (isAuthenticationError(error)) {
+          navigate("/login", { replace: true });
+          return;
+        }
         console.error("GeminiApiKeyGuard profile check failed", error);
-        setHasGeminiApiKey(false);
+        setHasGeminiApiKey(true);
       } finally {
         if (!cancelled) {
           setLoading(false);
@@ -150,7 +155,7 @@ export const GeminiApiKeyGuard = ({ children }) => {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [navigate]);
 
   const showBlockingModal = !loading && !hasGeminiApiKey;
 

@@ -10,6 +10,7 @@ import { Sidebar } from "../../components/Sidebar";
 import { PointChargeModal } from "../../components/PointChargeModal";
 import { PointChargeSuccessModal } from "../../components/PointChargeSuccessModal";
 import tempProfileImage from "../../assets/icon/temp.png";
+import { isAuthenticationError } from "../../lib/apiClient";
 import { logout } from "../../lib/authApi";
 import { bookmarkInterviewTurn, getInterviewSessionResults, submitInterviewAnswer } from "../../lib/interviewApi";
 import { getQuestionCategoryDisplayName, sanitizeQuestionTag } from "../../lib/categoryPresentation";
@@ -168,8 +169,10 @@ export const InterviewSessionPage = () => {
         setUserName(profile?.name || "사용자");
         setUserPoint(parsePoint(profile?.point));
         setProfileImageUrl(getMyProfileImageUrl());
-      } catch {
-        navigate("/login", { replace: true });
+      } catch (error) {
+        if (isAuthenticationError(error)) {
+          navigate("/login", { replace: true });
+        }
       }
     };
 
