@@ -113,6 +113,7 @@ export async function getInterviewSetQuestions(setId) {
 export async function startTechInterview(payload) {
   return apiRequest("/api/interview/tech/sessions", {
     method: "POST",
+    retryOnUnauthorized: true,
     body: payload,
   });
 }
@@ -129,7 +130,7 @@ export async function getLatestIncompleteTechSession(sessionMode = null) {
 export async function dismissTechSession(sessionId) {
   return apiRequest(`/api/interview/tech/sessions/${encodeURIComponent(sessionId)}/dismiss`, {
     method: "POST",
-    retryOnUnauthorized: false,
+    retryOnUnauthorized: true,
   });
 }
 
@@ -148,6 +149,7 @@ export async function ingestMockDocument(fileId) {
 export async function startMockInterview(payload) {
   return apiRequest("/api/interview/mock/sessions", {
     method: "POST",
+    retryOnUnauthorized: true,
     body: payload,
   });
 }
@@ -161,13 +163,14 @@ export async function getLatestIncompleteMockSession() {
 export async function dismissMockSession(sessionId) {
   return apiRequest(`/api/interview/mock/sessions/${encodeURIComponent(sessionId)}/dismiss`, {
     method: "POST",
-    retryOnUnauthorized: false,
+    retryOnUnauthorized: true,
   });
 }
 
 export async function submitInterviewAnswer(apiBasePath, sessionId, answer) {
   return apiRequest(`${apiBasePath}/sessions/${encodeURIComponent(sessionId)}/answers`, {
     method: "POST",
+    retryOnUnauthorized: true,
     body: { answer },
   });
 }
@@ -191,6 +194,7 @@ export async function submitTechInterviewAnswer(sessionId, answer) {
 export async function bookmarkInterviewTurn(apiBasePath, turnId, note = null) {
   return apiRequest(`${apiBasePath}/turns/${encodeURIComponent(turnId)}/bookmark`, {
     method: "POST",
+    retryOnUnauthorized: true,
     body: note ? { note } : {},
   });
 }
@@ -204,6 +208,7 @@ export async function getSavedInterviewQuestions() {
 export async function saveInterviewQuestion(questionId, note = null) {
   return apiRequest(`/api/interview/tech/questions/${encodeURIComponent(questionId)}/save`, {
     method: "POST",
+    retryOnUnauthorized: true,
     body: note ? { note } : {},
   });
 }

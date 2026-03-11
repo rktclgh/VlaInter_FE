@@ -6,6 +6,7 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8080
 const myProfileCache = {
   hasProfileImage: false,
 };
+let myProfilePromise = null;
 
 export function getMyProfileImageUrl(cacheBust = true) {
   if (!myProfileCache.hasProfileImage) return defaultProfileImage;
@@ -17,20 +18,29 @@ export function getMyProfileImageUrl(cacheBust = true) {
 
 export function resetMyProfileCache() {
   myProfileCache.hasProfileImage = false;
+  myProfilePromise = null;
 }
 
 export async function getMyProfile() {
-  try {
-    const payload = await apiRequest("/api/users/me", {
-      method: "GET",
-    });
-    const profile = extractProfile(payload);
-    myProfileCache.hasProfileImage = Boolean(profile?.hasProfileImage);
-    return payload;
-  } catch (error) {
-    resetMyProfileCache();
-    throw error;
-  }
+  if (myProfilePromise) return myProfilePromise;
+
+  myProfilePromise = (async () => {
+    try {
+      const payload = await apiRequest("/api/users/me", {
+        method: "GET",
+      });
+      const profile = extractProfile(payload);
+      myProfileCache.hasProfileImage = Boolean(profile?.hasProfileImage);
+      return payload;
+    } catch (error) {
+      resetMyProfileCache();
+      throw error;
+    } finally {
+      myProfilePromise = null;
+    }
+  })();
+
+  return myProfilePromise;
 }
 
 export async function getMyFiles() {
