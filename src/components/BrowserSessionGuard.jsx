@@ -6,7 +6,6 @@ import {
 } from "../lib/authSessionMarker";
 import { logout } from "../lib/authApi";
 import { getMyProfile } from "../lib/userApi";
-import { extractProfile } from "../lib/profileUtils";
 
 export const BrowserSessionGuard = ({ children }) => {
   const navigate = useNavigate();
@@ -18,20 +17,12 @@ export const BrowserSessionGuard = ({ children }) => {
 
     const guard = async () => {
       try {
-        const payload = await getMyProfile();
-        const profile = extractProfile(payload);
-        if (profile?.userId != null) {
-          markAuthenticatedBrowserSession(profile.userId);
-          if (!cancelled) {
-            setReady(true);
-          }
-          return;
+        await getMyProfile();
+        markAuthenticatedBrowserSession();
+        if (!cancelled) {
+          setReady(true);
         }
-        try {
-          await logout();
-        } catch {
-          // ignore logout failure and continue clearing client marker
-        }
+        return;
       } catch {
         try {
           await logout();
