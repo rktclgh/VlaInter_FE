@@ -7,6 +7,7 @@ import { MobileSidebarDrawer } from "../../components/MobileSidebarDrawer";
 import { PointChargeModal } from "../../components/PointChargeModal";
 import { PointChargeSuccessModal } from "../../components/PointChargeSuccessModal";
 import { QuestionAnswerDetailModal } from "../../components/QuestionAnswerDetailModal";
+import { ResumeSessionModal } from "../../components/ResumeSessionModal";
 import { Sidebar } from "../../components/Sidebar";
 import tempProfileImage from "../../assets/icon/temp.png";
 import { logout } from "../../lib/authApi";
@@ -19,14 +20,17 @@ import {
   sanitizeQuestionTag,
 } from "../../lib/categoryPresentation";
 import { ratingToDifficulty } from "../../lib/difficultyRating";
+import { buildResumedSessionSnapshot } from "../../lib/resumeInterviewSession";
 import {
   addQuestionToInterviewSet,
   createInterviewCategory,
   createInterviewSet,
   deleteQuestionFromInterviewSet,
   deleteInterviewSet,
+  dismissTechSession,
   getInterviewCategories,
   getInterviewSetQuestions,
+  getLatestIncompleteTechSession,
   getMyInterviewSets,
   saveInterviewQuestion,
   startTechInterview,
@@ -841,6 +845,9 @@ export const QuestionSetsPage = () => {
   const [showGeminiOverloadModal, setShowGeminiOverloadModal] = useState(false);
   const [savingQuestionId, setSavingQuestionId] = useState(null);
   const [savedQuestionIds, setSavedQuestionIds] = useState([]);
+  const [pendingResumeSession, setPendingResumeSession] = useState(null);
+  const [resumeModalBusy, setResumeModalBusy] = useState(false);
+  const [resumeSessionChecked, setResumeSessionChecked] = useState(false);
 
   const loadPage = useCallback(async () => {
     const [setList, categoryList] = await Promise.all([getMyInterviewSets(), getInterviewCategories()]);
@@ -903,6 +910,33 @@ export const QuestionSetsPage = () => {
     };
     void load();
   }, [loadPage, navigate]);
+
+  useEffect(() => {
+    if (loading || resumeSessionChecked) return;
+    let cancelled = false;
+
+    const loadIncompleteSession = async () => {
+      try {
+        const response = await getLatestIncompleteTechSession("QUESTION_SET_PRACTICE");
+        if (!cancelled) {
+          setPendingResumeSession(response || null);
+        }
+      } catch {
+        if (!cancelled) {
+          setPendingResumeSession(null);
+        }
+      } finally {
+        if (!cancelled) {
+          setResumeSessionChecked(true);
+        }
+      }
+    };
+
+    void loadIncompleteSession();
+    return () => {
+      cancelled = true;
+    };
+  }, [loading, resumeSessionChecked]);
 
   const branchItems = useMemo(() => categories.filter((item) => Number(item.depth) === 0), [categories]);
   const jobItems = useMemo(() => categories.filter((item) => Number(item.depth) === 1), [categories]);
@@ -1407,6 +1441,42 @@ export const QuestionSetsPage = () => {
     }
   };
 
+  const handleResumeSetPractice = async () => {
+    if (!pendingResumeSession) return;
+    setResumeModalBusy(true);
+    try {
+      const snapshot = buildResumedSessionSnapshot(pendingResumeSession, {
+        apiBasePath: "/api/interview/tech",
+        fromQuestionSet: true,
+        saveHistory: false,
+      });
+      if (!snapshot) {
+        setPendingResumeSession(null);
+        return;
+      }
+      saveTechInterviewSession(snapshot);
+      navigate("/content/interview/session");
+    } finally {
+      setResumeModalBusy(false);
+    }
+  };
+
+  const handleDismissSetResume = async () => {
+    if (!pendingResumeSession?.sessionId) {
+      setPendingResumeSession(null);
+      return;
+    }
+    setResumeModalBusy(true);
+    try {
+      await dismissTechSession(pendingResumeSession.sessionId);
+      setPendingResumeSession(null);
+    } catch (error) {
+      setPageErrorMessage(error?.message || "미완료 질문 세트 세션 종료에 실패했습니다.");
+    } finally {
+      setResumeModalBusy(false);
+    }
+  };
+
   return (
     <div className="min-h-screen overflow-x-hidden bg-white pt-[54px]">
       <ContentTopNav point={formatPoint(userPoint)} onClickCharge={() => setShowPointChargeModal(true)} onOpenMenu={() => setIsMobileMenuOpen(true)} />
@@ -1814,6 +1884,14 @@ export const QuestionSetsPage = () => {
       ) : null}
       {showPointChargeSuccessModal ? <PointChargeSuccessModal onClose={() => setShowPointChargeSuccessModal(false)} currentPoint={userPoint} /> : null}
       {showGeminiOverloadModal ? <GeminiOverloadModal onClose={() => setShowGeminiOverloadModal(false)} /> : null}
+      <ResumeSessionModal
+        open={Boolean(pendingResumeSession)}
+        title="완료하지 못한 질문 세트 연습 세션이 있습니다"
+        description="이전에 진행 중이던 질문 세트 연습 세션이 남아 있습니다. 이어서 진행하시겠습니까?"
+        onContinue={() => void handleResumeSetPractice()}
+        onDismiss={() => void handleDismissSetResume()}
+        busy={resumeModalBusy}
+      />
     </div>
   );
 };

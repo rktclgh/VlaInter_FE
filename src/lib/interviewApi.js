@@ -117,6 +117,21 @@ export async function startTechInterview(payload) {
   });
 }
 
+export async function getLatestIncompleteTechSession(sessionMode = null) {
+  const search = new URLSearchParams();
+  if (sessionMode && String(sessionMode).trim()) search.set("sessionMode", String(sessionMode).trim());
+  const suffix = search.toString() ? `?${search.toString()}` : "";
+  return apiRequest(`/api/interview/tech/sessions/latest-incomplete${suffix}`, {
+    method: "GET",
+  });
+}
+
+export async function dismissTechSession(sessionId) {
+  return apiRequest(`/api/interview/tech/sessions/${encodeURIComponent(sessionId)}/dismiss`, {
+    method: "POST",
+  });
+}
+
 export async function getReadyMockDocuments() {
   return apiRequest("/api/interview/mock/documents", {
     method: "GET",
@@ -133,6 +148,18 @@ export async function startMockInterview(payload) {
   return apiRequest("/api/interview/mock/sessions", {
     method: "POST",
     body: payload,
+  });
+}
+
+export async function getLatestIncompleteMockSession() {
+  return apiRequest("/api/interview/mock/sessions/latest-incomplete", {
+    method: "GET",
+  });
+}
+
+export async function dismissMockSession(sessionId) {
+  return apiRequest(`/api/interview/mock/sessions/${encodeURIComponent(sessionId)}/dismiss`, {
+    method: "POST",
   });
 }
 

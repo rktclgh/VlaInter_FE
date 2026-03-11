@@ -1,16 +1,35 @@
 import { apiRequest } from "./apiClient";
 
-export async function getAdminMembers({ page = 0, size = 20 } = {}) {
+export async function getAdminMembers({ page = 0, size = 20, keyword = "" } = {}) {
   const search = new URLSearchParams();
   search.set("page", String(page));
   search.set("size", String(size));
+  if (String(keyword || "").trim()) {
+    search.set("keyword", String(keyword).trim());
+  }
   return apiRequest(`/api/admin/members?${search.toString()}`, {
     method: "GET",
   });
 }
 
-export async function getAdminMemberDetail(memberId) {
-  return apiRequest(`/api/admin/members/${encodeURIComponent(memberId)}`, {
+export async function getAdminGlobalAccessSummary({ windowDays = 7, refresh = false } = {}) {
+  const search = new URLSearchParams();
+  search.set("windowDays", String(windowDays));
+  if (refresh) {
+    search.set("refresh", "true");
+  }
+  return apiRequest(`/api/admin/members/access-summary?${search.toString()}`, {
+    method: "GET",
+  });
+}
+
+export async function getAdminMemberDetail(memberId, { refreshAccess = false } = {}) {
+  const search = new URLSearchParams();
+  if (refreshAccess) {
+    search.set("refreshAccess", "true");
+  }
+  const suffix = search.toString() ? `?${search.toString()}` : "";
+  return apiRequest(`/api/admin/members/${encodeURIComponent(memberId)}${suffix}`, {
     method: "GET",
   });
 }
@@ -36,6 +55,12 @@ export async function activateAdminMember(memberId) {
 
 export async function softDeleteAdminMember(memberId) {
   return apiRequest(`/api/admin/members/${encodeURIComponent(memberId)}/soft-delete`, {
+    method: "PATCH",
+  });
+}
+
+export async function restoreAdminMember(memberId) {
+  return apiRequest(`/api/admin/members/${encodeURIComponent(memberId)}/restore`, {
     method: "PATCH",
   });
 }

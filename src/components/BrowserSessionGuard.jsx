@@ -1,7 +1,12 @@
 import { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { hasAuthenticatedBrowserSession } from "../lib/authSessionMarker";
-import { logout } from "../lib/authApi";
+import {
+  clearAuthenticatedBrowserSession,
+  hasAuthenticatedBrowserSession,
+  markAuthenticatedBrowserSession,
+} from "../lib/authSessionMarker";
+import { getMyProfile } from "../lib/userApi";
+import { extractProfile } from "../lib/profileUtils";
 
 export const BrowserSessionGuard = ({ children }) => {
   const navigate = useNavigate();
@@ -20,9 +25,17 @@ export const BrowserSessionGuard = ({ children }) => {
       }
 
       try {
-        await logout();
+        const payload = await getMyProfile();
+        const profile = extractProfile(payload);
+        if (profile?.userId != null) {
+          markAuthenticatedBrowserSession(profile.userId);
+        }
+        if (!cancelled) {
+          setReady(true);
+        }
+        return;
       } catch {
-        // ignore logout failure and force fresh login flow
+        clearAuthenticatedBrowserSession();
       }
 
       if (!cancelled) {
