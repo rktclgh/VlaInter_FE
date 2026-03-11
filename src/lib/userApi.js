@@ -113,3 +113,10 @@ export async function clearMyGeminiApiKey() {
     retryOnUnauthorized: true,
   });
 }
+
+export async function deleteMyAccount() {
+  return apiRequest("/api/users/me", {
+    method: "DELETE",
+    retryOnUnauthorized: true,
+  });
+}

@@ -16,6 +16,7 @@ import {
 import {
   changeMyPassword,
   clearMyGeminiApiKey,
+  deleteMyAccount,
   deleteMyFile,
   getMyFiles,
   getMyProfile,
@@ -321,6 +322,46 @@ const LogoutConfirmModal = ({ onCancel, onConfirm }) => {
   );
 };
 
+const DeleteAccountConfirmModal = ({ deleting, errorMessage, onCancel, onConfirm }) => {
+  return (
+    <div className="fixed inset-0 z-[81] flex items-center justify-center bg-black/40 px-4" onClick={deleting ? undefined : onCancel}>
+      <div
+        className="w-full max-w-[440px] rounded-[16px] border border-[#d9d9d9] bg-white p-5"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <h3 className="text-[18px] font-semibold text-[#1f1f1f]">회원 탈퇴</h3>
+        <p className="mt-2 text-[13px] leading-[1.65] text-[#575757]">
+          탈퇴 시 계정은 비활성화 처리되며 현재 세션은 즉시 종료됩니다.
+          <br />
+          법령상 보관 의무가 있는 정보를 제외한 서비스 이용 데이터는 정책에 따라 순차적으로 정리됩니다.
+        </p>
+        <p className="mt-3 rounded-[10px] bg-[#fff4f4] px-3 py-2 text-[12px] leading-[1.6] text-[#b43a3a]">
+          탈퇴 후에는 동일한 세션으로 복구할 수 없습니다. 계속 진행할 경우 즉시 로그아웃됩니다.
+        </p>
+        {errorMessage ? <p className="mt-3 text-[12px] text-[#dc4b4b]">{errorMessage}</p> : null}
+        <div className="mt-5 flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={deleting}
+            className="rounded-[10px] border border-[#d6d6d6] px-3 py-1.5 text-[12px] text-[#666] disabled:opacity-60"
+          >
+            취소
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            disabled={deleting}
+            className="rounded-[10px] border border-[#d84a4a] bg-[#d84a4a] px-3 py-1.5 text-[12px] text-white disabled:opacity-60"
+          >
+            {deleting ? "처리 중..." : "탈퇴하기"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 export const MyPage = () => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -333,6 +374,10 @@ export const MyPage = () => {
   const [showPointChargeModal, setShowPointChargeModal] = useState(false);
   const [showPointChargeSuccessModal, setShowPointChargeSuccessModal] = useState(false);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
+  const [showDeleteAccountModal, setShowDeleteAccountModal] = useState(false);
+  const [deleteAccountSubmitting, setDeleteAccountSubmitting] = useState(false);
+  const [deleteAccountErrorMessage, setDeleteAccountErrorMessage] = useState("");
+  const deleteAccountSubmittingRef = useRef(false);
 
   const [showPasswordChangeModal, setShowPasswordChangeModal] = useState(false);
   const [showReLoginGuideModal, setShowReLoginGuideModal] = useState(false);
@@ -605,6 +650,39 @@ export const MyPage = () => {
     }
   };
 
+  const openDeleteAccountModal = () => {
+    setDeleteAccountErrorMessage("");
+    setShowDeleteAccountModal(true);
+  };
+
+  const confirmDeleteAccount = async () => {
+    if (deleteAccountSubmittingRef.current) return;
+    deleteAccountSubmittingRef.current = true;
+    setDeleteAccountSubmitting(true);
+    setDeleteAccountErrorMessage("");
+    let accountDeleted = false;
+    try {
+      await deleteMyAccount();
+      accountDeleted = true;
+    } catch (error) {
+      setDeleteAccountErrorMessage(error?.message || "회원 탈퇴 처리에 실패했습니다.");
+    } finally {
+      deleteAccountSubmittingRef.current = false;
+      setDeleteAccountSubmitting(false);
+    }
+
+    if (!accountDeleted) return;
+
+    try {
+      await logout();
+    } catch {
+      // ignore logout failure and proceed to login screen after successful deletion
+    } finally {
+      setShowDeleteAccountModal(false);
+      navigate("/login", { replace: true });
+    }
+  };
+
   const handleRefund = async (chargeId) => {
     setRefundingChargeId(chargeId);
     setPaymentErrorMessage("");
@@ -750,7 +828,7 @@ export const MyPage = () => {
               <div className="mt-4 rounded-[16px] border border-[#e0e0e0] bg-white p-6">
                 <h2 className="text-[18px] font-medium text-[#1f1f1f]">보안 설정</h2>
                 <p className="mt-1 text-[12px] text-[#7a7a7a]">비밀번호 변경 시 현재 세션은 종료되며 다시 로그인해야 합니다.</p>
-                <div className="mt-4">
+                <div className="mt-4 flex flex-wrap items-center gap-2">
                   <button
                     type="button"
                     onClick={openPasswordChangeModal}
@@ -758,6 +836,19 @@ export const MyPage = () => {
                   >
                     비밀번호 변경
                   </button>
+                  <button
+                    type="button"
+                    onClick={openDeleteAccountModal}
+                    className="rounded-[10px] border border-[#d84a4a] bg-[#fff4f4] px-4 py-2 text-[12px] font-semibold text-[#d84a4a]"
+                  >
+                    회원 탈퇴
+                  </button>
+                </div>
+                <p className="mt-2 text-[11px] leading-[1.6] text-[#8a8a8a]">
+                  회원 탈퇴는 소프트 삭제 방식으로 처리되며, 법령상 보관 의무가 있는 정보는 관련 기준에 따라 일정 기간 보관될 수 있습니다.
+                </p>
+                <div className="mt-3 rounded-[12px] border border-[#ece3e3] bg-[#faf7f7] px-4 py-3 text-[11px] leading-[1.65] text-[#6f6666]">
+                  이용약관 및 운영정책에 따라, 회원이 생성한 질문 세트와 개별 질문은 운영자 검토 후 서비스 품질 향상을 위한 표준/공개 세트로 승격될 수 있습니다.
                 </div>
               </div>
 
@@ -956,6 +1047,14 @@ export const MyPage = () => {
           onSubmit={submitPasswordChange}
           submitting={passwordSubmitting}
           errorMessage={passwordErrorMessage}
+        />
+      ) : null}
+      {showDeleteAccountModal ? (
+        <DeleteAccountConfirmModal
+          deleting={deleteAccountSubmitting}
+          errorMessage={deleteAccountErrorMessage}
+          onCancel={() => setShowDeleteAccountModal(false)}
+          onConfirm={confirmDeleteAccount}
         />
       ) : null}
       {showReLoginGuideModal ? <ReLoginGuideModal onConfirm={moveToLoginAfterPasswordChange} /> : null}

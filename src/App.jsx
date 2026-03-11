@@ -4,6 +4,9 @@ import { Login } from './pages/auth/Login'
 import { Join } from './pages/auth/Join'
 import { ForgotPassword } from './pages/auth/ForgotPassword'
 import { KakaoCallback } from './pages/auth/KakaoCallback'
+import { TermsPage } from './pages/TermsPage'
+import { PrivacyPolicyPage } from './pages/PrivacyPolicyPage'
+import { ServiceIntroPage } from './pages/ServiceIntroPage'
 import { InterviewStartPage } from './pages/content/InterviewStartPage'
 import { TechPracticePage } from './pages/content/TechPracticePage'
 import { InterviewSessionPage } from './pages/content/InterviewSessionPage'
@@ -36,6 +39,9 @@ function App() {
       <Route path="/login" element={<Login />} />
       <Route path="/join" element={<Join />} />
       <Route path="/password/forgot" element={<ForgotPassword />} />
+      <Route path="/terms" element={<TermsPage />} />
+      <Route path="/privacy" element={<PrivacyPolicyPage />} />
+      <Route path="/about" element={<ServiceIntroPage />} />
       <Route path="/auth/kakao/callback" element={<KakaoCallback />} />
       <Route element={<GuardedContentRoutes />}>
         <Route path="/content/interview" element={<InterviewStartPage />} />

@@ -12,12 +12,12 @@ export const TopNav = () => {
                 </Link>
 
                 <div className="flex items-center gap-6 text-[13px] leading-[17px] text-black md:gap-9">
-                    <a href="#" className="hidden md:block">
+                    <Link to="/about" className="hidden md:block">
                         서비스 소개
-                    </a>
-                    <a href="#" className="hidden md:block">
-                        커뮤니티
-                    </a>
+                    </Link>
+                    <Link to="/join" className="hidden md:block">
+                        회원가입
+                    </Link>
                     <Link
                         to="/login"
                         className="bg-[linear-gradient(288deg,rgba(93,131,222,1)_0%,rgba(255,28,145,1)_100%)] bg-clip-text font-semibold text-transparent"

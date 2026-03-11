@@ -1,18 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { TopNav } from "../../components/TopNav";
 import eyeOpenIcon from "../../assets/icon/eye-open.svg";
 import eyeOffIcon from "../../assets/icon/eye-off.svg";
 import kakaoLoginButtonImage from "../../assets/icon/kakao_login_medium_wide.png";
 import { logout, sendVerificationEmail, signup, verifyEmailCode } from "../../lib/authApi";
 import { clearAuthenticatedBrowserSession, createKakaoOAuthState, storeKakaoOAuthState } from "../../lib/authSessionMarker";
-
-const footerLinks = [
-  { text: "이용약관", href: "#" },
-  { text: "개인정보처리방침", href: "#" },
-  { text: "고객센터", href: "#" },
-  { text: "회사소개", href: "#" },
-];
+import { AuthFooter } from "../../components/AuthFooter";
 
 const labelClass = "mb-1 block text-[11px] font-semibold text-[#2f2f2f]";
 const inputClass =
@@ -38,6 +32,7 @@ export const Join = () => {
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
   const [cooldownSeconds, setCooldownSeconds] = useState(0);
+  const [agreedToPolicies, setAgreedToPolicies] = useState(false);
   const kakaoClientId = import.meta.env.VITE_KAKAO_CLIENT_ID || "";
   const kakaoRedirectUriFromEnv = import.meta.env.VITE_KAKAO_REDIRECT_URI || "";
   const kakaoRedirectUri =
@@ -65,7 +60,7 @@ export const Join = () => {
     formData.password.length > 0 &&
     formData.passwordConfirm.length > 0 &&
     formData.password === formData.passwordConfirm;
-  const canSubmitSignup = isPasswordMatched && isEmailVerified;
+  const canSubmitSignup = isPasswordMatched && isEmailVerified && agreedToPolicies;
 
   const handleInputChange = (field, value) => {
     if (field === "email") {
@@ -130,6 +125,10 @@ export const Join = () => {
     }
     if (!isEmailVerified) {
       setErrorMessage("이메일 인증을 먼저 완료해 주세요.");
+      return;
+    }
+    if (!agreedToPolicies) {
+      setErrorMessage("이용약관 및 개인정보처리방침에 동의해 주세요.");
       return;
     }
 
@@ -309,6 +308,29 @@ export const Join = () => {
                 </div>
               </div>
 
+              <label className="mb-6 flex items-start gap-3 rounded-[10px] border border-[#e4e4e4] bg-[#fafafa] px-3 py-3">
+                <input
+                  type="checkbox"
+                  checked={agreedToPolicies}
+                  onChange={(event) => setAgreedToPolicies(event.target.checked)}
+                  className="peer sr-only"
+                />
+                <span className="mt-[1px] inline-flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-[5px] border border-[#bfc4ce] bg-white text-[12px] font-bold text-white peer-checked:border-[#171b24] peer-checked:bg-[#171b24]">
+                  {agreedToPolicies ? "✓" : ""}
+                </span>
+                <span className="text-[11px] leading-[1.7] text-[#4a4a4a]">
+                  <span className="font-semibold text-[#222]">[필수]</span>{" "}
+                  <Link to="/terms" target="_blank" rel="noreferrer" className="font-semibold text-[#171b24] underline underline-offset-2">
+                    이용약관
+                  </Link>
+                  {" "}및{" "}
+                  <Link to="/privacy" target="_blank" rel="noreferrer" className="font-semibold text-[#171b24] underline underline-offset-2">
+                    개인정보처리방침
+                  </Link>
+                  에 동의합니다.
+                </span>
+              </label>
+
               <button
                 type="button"
                 onClick={handleJoin}
@@ -336,16 +358,7 @@ export const Join = () => {
           </section>
         </main>
 
-        <footer className="border-t border-[#ececec] py-9">
-          <p className="text-center text-[12px] text-[#7a7a7a]">합격의 페이스메이커 AI 면접 솔루션</p>
-          <nav className="mt-4 flex items-center justify-center gap-6">
-            {footerLinks.map((item) => (
-              <a key={item.text} href={item.href} className="text-[10px] text-[#7a7a7a]">
-                {item.text}
-              </a>
-            ))}
-          </nav>
-        </footer>
+        <AuthFooter />
       </div>
     </div>
   );

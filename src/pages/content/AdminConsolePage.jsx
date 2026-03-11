@@ -11,15 +11,19 @@ import {
   createAdminInterviewCategory,
   deleteAdminInterviewCategory,
   deactivateAdminMember,
+  getAdminGlobalAccessSummary,
   getAdminInterviewCategories,
   getAdminInterviewSets,
   getAdminMemberDetail,
   getAdminMembers,
+  refreshAdminGlobalAccessSummary,
+  refreshAdminMemberDetail,
   deleteAdminInterviewSet,
   hardDeleteAdminMember,
   mergeAdminInterviewCategory,
   moveAdminInterviewCategory,
   promoteAdminInterviewSet,
+  restoreAdminMember,
   softDeleteAdminMember,
   updateAdminInterviewSet,
   updateAdminInterviewCategory,
@@ -63,10 +67,80 @@ const InlineSpinner = ({ label }) => (
   </div>
 );
 
+const formatDateTime = (value) => {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "-";
+  return new Intl.DateTimeFormat("ko-KR", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
+};
+
 const toInt = (value, fallback = 0) => {
   const parsed = Number.parseInt(String(value ?? ""), 10);
   return Number.isFinite(parsed) ? parsed : fallback;
 };
+
+const formatDecimal = (value, digits = 1) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed.toFixed(digits) : "-";
+};
+
+const normalizeDailyLoginCounts = (items) => (Array.isArray(items) ? items : []).map((item) => ({
+  date: String(item?.date || ""),
+  loginCount: toInt(item?.loginCount, 0),
+}));
+
+const normalizeRecentAccessLogs = (items) => (Array.isArray(items) ? items : []).map((item) => ({
+  sessionIdPrefix: String(item?.sessionIdPrefix || ""),
+  authProvider: String(item?.authProvider || "-"),
+  browser: String(item?.browser || "-"),
+  deviceType: String(item?.deviceType || "-"),
+  active: item?.active === true,
+  loginAt: item?.loginAt || null,
+  lastActivityAt: item?.lastActivityAt || null,
+  logoutAt: item?.logoutAt || null,
+  ipAddress: item?.ipAddress || "",
+  actionCount: toInt(item?.actionCount, 0),
+}));
+
+const normalizeAccessSummary = (summary) => ({
+  recentLoginCount: toInt(summary?.recentLoginCount, 0),
+  activeSessionCount: toInt(summary?.activeSessionCount, 0),
+  totalActionCount: toInt(summary?.totalActionCount, 0),
+  averageActionCount: Number(summary?.averageActionCount) || 0,
+  averageSessionMinutes: toInt(summary?.averageSessionMinutes, 0),
+  interviewCompletionRate: Number(summary?.interviewCompletionRate) || 0,
+  completedInterviewCount: toInt(summary?.completedInterviewCount, 0),
+  totalInterviewCount: toInt(summary?.totalInterviewCount, 0),
+  lastLoginAt: summary?.lastLoginAt || null,
+  lastLoginIpAddress: summary?.lastLoginIpAddress || "",
+  calculatedAt: summary?.calculatedAt || null,
+  dailyLoginCounts: normalizeDailyLoginCounts(summary?.dailyLoginCounts),
+});
+
+const normalizeMemberDetail = (payload) => ({
+  ...payload,
+  accessSummary: normalizeAccessSummary(payload?.accessSummary),
+  recentAccessLogs: normalizeRecentAccessLogs(payload?.recentAccessLogs),
+});
+
+const normalizeMemberGlobalSummary = (payload) => ({
+  ...payload,
+  totalMemberCount: toInt(payload?.totalMemberCount, 0),
+  totalLoginCount: toInt(payload?.totalLoginCount, 0),
+  totalActionCount: toInt(payload?.totalActionCount, 0),
+  averageLoginCount: Number(payload?.averageLoginCount) || 0,
+  averageActionCount: Number(payload?.averageActionCount) || 0,
+  averageSessionMinutes: Number(payload?.averageSessionMinutes) || 0,
+  averageActiveSessionCount: Number(payload?.averageActiveSessionCount) || 0,
+  calculatedAt: payload?.calculatedAt || null,
+  dailyMetrics: Array.isArray(payload?.dailyMetrics) ? payload.dailyMetrics : [],
+});
 
 const isBranchCommonCategory = (category) =>
   Number(category?.depth) === 1 && String(category?.name || "").trim() === "공통";
@@ -103,6 +177,8 @@ export const AdminConsolePage = () => {
   const [activeTab, setActiveTab] = useState("members");
 
   const [members, setMembers] = useState([]);
+  const [memberKeywordInput, setMemberKeywordInput] = useState("");
+  const [memberKeyword, setMemberKeyword] = useState("");
   const [memberPage, setMemberPage] = useState(0);
   const [memberSize] = useState(20);
   const [memberTotalCount, setMemberTotalCount] = useState(0);
@@ -110,6 +186,11 @@ export const AdminConsolePage = () => {
   const [selectedMemberDetail, setSelectedMemberDetail] = useState(null);
   const [loadingMembers, setLoadingMembers] = useState(false);
   const [loadingMemberDetail, setLoadingMemberDetail] = useState(false);
+  const [refreshingMemberAccess, setRefreshingMemberAccess] = useState(false);
+  const [memberSummaryWindowDays, setMemberSummaryWindowDays] = useState(7);
+  const [memberGlobalSummary, setMemberGlobalSummary] = useState(null);
+  const [loadingMemberGlobalSummary, setLoadingMemberGlobalSummary] = useState(false);
+  const [refreshingMemberGlobalSummary, setRefreshingMemberGlobalSummary] = useState(false);
   const [memberActionLoading, setMemberActionLoading] = useState("");
 
   const [sets, setSets] = useState([]);
@@ -157,10 +238,10 @@ export const AdminConsolePage = () => {
   const [categoryDepth2Filter, setCategoryDepth2Filter] = useState("");
   const [newCategoryDepth, setNewCategoryDepth] = useState("0");
 
-  const loadMembers = useCallback(async (targetPage = 0) => {
+  const loadMembers = useCallback(async (targetPage = 0, keyword = "") => {
     setLoadingMembers(true);
     try {
-      const payload = await getAdminMembers({ page: targetPage, size: memberSize });
+      const payload = await getAdminMembers({ page: targetPage, size: memberSize, keyword });
       const nextMembers = Array.isArray(payload?.members) ? payload.members : [];
       const nextTotal = toInt(payload?.totalCount, nextMembers.length);
       setMembers(nextMembers);
@@ -178,6 +259,25 @@ export const AdminConsolePage = () => {
       setLoadingMembers(false);
     }
   }, [memberSize]);
+
+  const loadGlobalAccessSummary = useCallback(async (windowDays = memberSummaryWindowDays, refresh = false) => {
+    if (refresh) {
+      setRefreshingMemberGlobalSummary(true);
+    } else {
+      setLoadingMemberGlobalSummary(true);
+    }
+    try {
+      const payload = refresh
+        ? await refreshAdminGlobalAccessSummary({ windowDays })
+        : await getAdminGlobalAccessSummary({ windowDays });
+      setMemberGlobalSummary(normalizeMemberGlobalSummary(payload));
+    } catch (error) {
+      setPageErrorMessage(error?.message || "전체 회원 접속 집계를 불러오지 못했습니다.");
+    } finally {
+      setLoadingMemberGlobalSummary(false);
+      setRefreshingMemberGlobalSummary(false);
+    }
+  }, [memberSummaryWindowDays]);
 
   const loadSets = useCallback(async (keyword = "") => {
     setLoadingSets(true);
@@ -265,7 +365,7 @@ export const AdminConsolePage = () => {
       try {
         const payload = await getAdminMemberDetail(selectedMemberId);
         if (cancelled) return;
-        setSelectedMemberDetail(payload);
+        setSelectedMemberDetail(normalizeMemberDetail(payload));
       } catch (error) {
         if (!cancelled) {
           setSelectedMemberDetail(null);
@@ -283,6 +383,33 @@ export const AdminConsolePage = () => {
       cancelled = true;
     };
   }, [selectedMemberId]);
+
+  const handleRefreshMemberAccess = useCallback(async () => {
+    if (!selectedMemberId || refreshingMemberAccess) return;
+    setRefreshingMemberAccess(true);
+    try {
+      const payload = await refreshAdminMemberDetail(selectedMemberId);
+      setSelectedMemberDetail(normalizeMemberDetail(payload));
+    } catch (error) {
+      setPageErrorMessage(error?.message || "접속 기록을 새로 불러오지 못했습니다.");
+    } finally {
+      setRefreshingMemberAccess(false);
+    }
+  }, [refreshingMemberAccess, selectedMemberId]);
+
+  const handleSearchMembers = useCallback(() => {
+    const nextKeyword = memberKeywordInput.trim();
+    setMemberKeyword(nextKeyword);
+    void loadMembers(0, nextKeyword);
+  }, [loadMembers, memberKeywordInput]);
+
+  const handleRefreshMemberGlobalSummary = useCallback(() => {
+    void loadGlobalAccessSummary(memberSummaryWindowDays, true);
+  }, [loadGlobalAccessSummary, memberSummaryWindowDays]);
+
+  useEffect(() => {
+    void loadGlobalAccessSummary(memberSummaryWindowDays, false);
+  }, [loadGlobalAccessSummary, memberSummaryWindowDays]);
 
   useEffect(() => {
     if (!selectedSetId) {
@@ -464,8 +591,8 @@ export const AdminConsolePage = () => {
     try {
       await deactivateAdminMember(selectedMemberId);
       const refreshed = await getAdminMemberDetail(selectedMemberId);
-      setSelectedMemberDetail(refreshed);
-      await loadMembers(memberPage);
+      setSelectedMemberDetail(normalizeMemberDetail(refreshed));
+      await loadMembers(memberPage, memberKeyword);
     } catch (error) {
       setPageErrorMessage(error?.message || "회원 비활성화(로그인 차단) 처리에 실패했습니다.");
     } finally {
@@ -483,8 +610,8 @@ export const AdminConsolePage = () => {
     try {
       await activateAdminMember(selectedMemberId);
       const refreshed = await getAdminMemberDetail(selectedMemberId);
-      setSelectedMemberDetail(refreshed);
-      await loadMembers(memberPage);
+      setSelectedMemberDetail(normalizeMemberDetail(refreshed));
+      await loadMembers(memberPage, memberKeyword);
     } catch (error) {
       setPageErrorMessage(error?.message || "회원 활성화 처리에 실패했습니다.");
     } finally {
@@ -503,13 +630,32 @@ export const AdminConsolePage = () => {
       await softDeleteAdminMember(selectedMemberId);
       try {
         const refreshed = await getAdminMemberDetail(selectedMemberId);
-        setSelectedMemberDetail(refreshed);
+        setSelectedMemberDetail(normalizeMemberDetail(refreshed));
       } catch {
         setSelectedMemberDetail(null);
       }
-      await loadMembers(memberPage);
+      await loadMembers(memberPage, memberKeyword);
     } catch (error) {
       setPageErrorMessage(error?.message || "회원 소프트 삭제 처리에 실패했습니다.");
+    } finally {
+      setMemberActionLoading("");
+    }
+  };
+
+  const handleRestoreMember = async () => {
+    if (!selectedMemberId) return;
+    const confirmed = window.confirm("소프트 삭제된 회원 계정을 복구하시겠습니까?");
+    if (!confirmed) return;
+
+    setMemberActionLoading("restore");
+    setPageErrorMessage("");
+    try {
+      await restoreAdminMember(selectedMemberId);
+      const refreshed = await getAdminMemberDetail(selectedMemberId);
+      setSelectedMemberDetail(normalizeMemberDetail(refreshed));
+      await loadMembers(memberPage, memberKeyword);
+    } catch (error) {
+      setPageErrorMessage(error?.message || "회원 복구에 실패했습니다.");
     } finally {
       setMemberActionLoading("");
     }
@@ -524,7 +670,10 @@ export const AdminConsolePage = () => {
     setPageErrorMessage("");
     try {
       await hardDeleteAdminMember(selectedMemberId);
-      await loadMembers(Math.max(0, memberPage - (members.length === 1 && memberPage > 0 ? 1 : 0)));
+      await loadMembers(
+        Math.max(0, memberPage - (members.length === 1 && memberPage > 0 ? 1 : 0)),
+        memberKeyword
+      );
     } catch (error) {
       setPageErrorMessage(error?.message || "회원 영구 삭제에 실패했습니다.");
     } finally {
@@ -800,11 +949,126 @@ export const AdminConsolePage = () => {
           </section>
 
           {activeTab === "members" ? (
-            <section className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]">
+            <section className="mt-4 space-y-4">
               <article className="rounded-[20px] border border-[#dfe4ef] bg-white p-4 shadow-[0_12px_28px_rgba(15,23,42,0.04)]">
-                <div className="flex items-center justify-between gap-2">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <h2 className="text-[16px] font-semibold text-[#1f2937]">전체 회원 접속 집계</h2>
+                    <p className="mt-1 text-[12px] text-[#64748b]">12시간마다 자동 집계되며, 필요 시 즉시 갱신할 수 있습니다.</p>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <select
+                      value={memberSummaryWindowDays}
+                      onChange={(event) => setMemberSummaryWindowDays(toInt(event.target.value, 7))}
+                      className="rounded-[10px] border border-[#d9dde5] bg-white px-3 py-2 text-[12px] text-[#334155]"
+                    >
+                      <option value={7}>최근 7일</option>
+                      <option value={30}>최근 30일</option>
+                    </select>
+                    <button
+                      type="button"
+                      disabled={refreshingMemberGlobalSummary}
+                      onClick={handleRefreshMemberGlobalSummary}
+                      className="rounded-[10px] border border-[#d9dde5] bg-white px-3 py-2 text-[12px] text-[#334155] disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {refreshingMemberGlobalSummary ? "갱신 중..." : "지금 갱신"}
+                    </button>
+                  </div>
+                </div>
+                {loadingMemberGlobalSummary && !memberGlobalSummary ? (
+                  <div className="mt-4">
+                    <InlineSpinner label="전체 회원 집계를 불러오는 중입니다." />
+                  </div>
+                ) : memberGlobalSummary ? (
+                  <div className="mt-4 space-y-4">
+                    <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-5">
+                      <div className="rounded-[12px] border border-[#e5eaf2] bg-[#fafbfd] px-3 py-3">
+                        <p className="text-[11px] text-[#64748b]">전체 회원 수</p>
+                        <p className="mt-1 text-[18px] font-semibold text-[#0f172a]">{memberGlobalSummary.totalMemberCount}</p>
+                      </div>
+                      <div className="rounded-[12px] border border-[#e5eaf2] bg-[#fafbfd] px-3 py-3">
+                        <p className="text-[11px] text-[#64748b]">평균 로그인 수</p>
+                        <p className="mt-1 text-[18px] font-semibold text-[#0f172a]">{formatDecimal(memberGlobalSummary.averageLoginCount)}</p>
+                      </div>
+                      <div className="rounded-[12px] border border-[#e5eaf2] bg-[#fafbfd] px-3 py-3">
+                        <p className="text-[11px] text-[#64748b]">평균 액션 수</p>
+                        <p className="mt-1 text-[18px] font-semibold text-[#0f172a]">{formatDecimal(memberGlobalSummary.averageActionCount)}</p>
+                      </div>
+                      <div className="rounded-[12px] border border-[#e5eaf2] bg-[#fafbfd] px-3 py-3">
+                        <p className="text-[11px] text-[#64748b]">평균 세션 시간</p>
+                        <p className="mt-1 text-[18px] font-semibold text-[#0f172a]">{formatDecimal(memberGlobalSummary.averageSessionMinutes)}분</p>
+                      </div>
+                      <div className="rounded-[12px] border border-[#e5eaf2] bg-[#fafbfd] px-3 py-3">
+                        <p className="text-[11px] text-[#64748b]">평균 활성 세션 수</p>
+                        <p className="mt-1 text-[18px] font-semibold text-[#0f172a]">{formatDecimal(memberGlobalSummary.averageActiveSessionCount)}</p>
+                      </div>
+                    </div>
+                    <div className="grid gap-4 xl:grid-cols-3">
+                      {[
+                        { key: "averageLoginCount", label: "평균 로그인 수", color: "#dbe7ff", text: "#1d4ed8" },
+                        { key: "averageActionCount", label: "평균 액션 수", color: "#dcfce7", text: "#15803d" },
+                        { key: "averageSessionMinutes", label: "평균 세션 시간", color: "#fef3c7", text: "#b45309" },
+                      ].map((metric) => {
+                        const maxValue = Math.max(
+                          ...(memberGlobalSummary.dailyMetrics || []).map((item) => Number(item?.[metric.key]) || 0),
+                          1
+                        );
+                        return (
+                          <div key={metric.key} className="rounded-[14px] border border-[#eef2f8] bg-white p-3">
+                            <p className="text-[12px] font-semibold text-[#334155]">{metric.label}</p>
+                            <div className="mt-3 flex items-end gap-2">
+                              {(memberGlobalSummary.dailyMetrics || []).map((item) => {
+                                const rawValue = Number(item?.[metric.key]) || 0;
+                                const height = Math.max(8, Math.round((rawValue / maxValue) * 72));
+                                return (
+                                  <div key={`${metric.key}-${item.date}`} className="flex flex-1 flex-col items-center gap-1">
+                                    <div className="text-[10px]" style={{ color: metric.text }}>{formatDecimal(rawValue)}</div>
+                                    <div className="w-full rounded-[8px]" style={{ height, backgroundColor: metric.color }} />
+                                    <div className="text-[10px] text-[#94a3b8]">{item.date.slice(5)}</div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <p className="text-[12px] text-[#64748b]">
+                      총 로그인 수 <strong className="text-[#111827]">{memberGlobalSummary.totalLoginCount}</strong>,
+                      총 액션 수 <strong className="text-[#111827]">{memberGlobalSummary.totalActionCount}</strong>,
+                      집계 기준 시각 <strong className="text-[#111827]">{formatDateTime(memberGlobalSummary.calculatedAt)}</strong>
+                    </p>
+                  </div>
+                ) : null}
+              </article>
+
+              <section className="grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]">
+              <article className="rounded-[20px] border border-[#dfe4ef] bg-white p-4 shadow-[0_12px_28px_rgba(15,23,42,0.04)]">
+                <div className="flex flex-wrap items-center justify-between gap-2">
                   <h2 className="text-[16px] font-semibold text-[#1f2937]">회원 목록</h2>
-                  {loadingMembers ? <InlineSpinner label="불러오는 중" /> : null}
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={memberKeywordInput}
+                      onChange={(event) => setMemberKeywordInput(event.target.value)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter") {
+                          event.preventDefault();
+                          handleSearchMembers();
+                        }
+                      }}
+                      placeholder="이메일, 이름, 회원 ID 검색"
+                      className="w-[220px] rounded-[10px] border border-[#d9dde5] px-3 py-2 text-[12px] text-[#334155]"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleSearchMembers}
+                      className="rounded-[10px] border border-[#d9dde5] bg-white px-3 py-2 text-[12px] text-[#334155]"
+                    >
+                      검색
+                    </button>
+                    {loadingMembers ? <InlineSpinner label="불러오는 중" /> : null}
+                  </div>
                 </div>
                 <div className="mt-3 overflow-x-auto">
                   <table className="min-w-full text-left text-[12px]">
@@ -851,7 +1115,7 @@ export const AdminConsolePage = () => {
                     <button
                       type="button"
                       disabled={memberPage <= 0 || loadingMembers}
-                      onClick={() => void loadMembers(Math.max(0, memberPage - 1))}
+                      onClick={() => void loadMembers(Math.max(0, memberPage - 1), memberKeyword)}
                       className="rounded-[10px] border border-[#d9dde5] px-3 py-1 text-[12px] text-[#4f5664] disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       이전
@@ -859,7 +1123,7 @@ export const AdminConsolePage = () => {
                     <button
                       type="button"
                       disabled={memberPage + 1 >= totalMemberPages || loadingMembers}
-                      onClick={() => void loadMembers(memberPage + 1)}
+                      onClick={() => void loadMembers(memberPage + 1, memberKeyword)}
                       className="rounded-[10px] border border-[#d9dde5] px-3 py-1 text-[12px] text-[#4f5664] disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       다음
@@ -913,6 +1177,16 @@ export const AdminConsolePage = () => {
                           {memberActionLoading === "softDelete" ? "처리 중..." : "회원 삭제(소프트 딜리트)"}
                         </button>
                       ) : null}
+                      {selectedMemberDetail.status === "DELETED" ? (
+                        <button
+                          type="button"
+                          disabled={memberActionLoading !== ""}
+                          onClick={() => void handleRestoreMember()}
+                          className="rounded-[10px] border border-[#9ed6ab] px-3 py-1.5 text-[12px] text-[#1b7f3a] disabled:opacity-60"
+                        >
+                          {memberActionLoading === "restore" ? "처리 중..." : "회원 복구"}
+                        </button>
+                      ) : null}
                       <button
                         type="button"
                         disabled={memberActionLoading !== ""}
@@ -922,11 +1196,100 @@ export const AdminConsolePage = () => {
                         {memberActionLoading === "delete" ? "삭제 중..." : "회원 영구 삭제"}
                       </button>
                     </div>
+                    <div className="rounded-[14px] border border-[#eef2f8] bg-[#fafbfd] p-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="text-[12px] font-semibold text-[#334155]">최근 7일 접속 요약</p>
+                        <button
+                          type="button"
+                          disabled={refreshingMemberAccess}
+                          onClick={() => void handleRefreshMemberAccess()}
+                          className="rounded-[10px] border border-[#d9dde5] bg-white px-3 py-1.5 text-[11px] text-[#334155] disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          {refreshingMemberAccess ? "조회 중..." : "지금 조회"}
+                        </button>
+                      </div>
+                      <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                        <div className="rounded-[12px] border border-[#e5eaf2] bg-white px-3 py-2">
+                          <p className="text-[11px] text-[#64748b]">로그인 수</p>
+                          <p className="mt-1 text-[16px] font-semibold text-[#0f172a]">{selectedMemberDetail.accessSummary.recentLoginCount}회</p>
+                        </div>
+                        <div className="rounded-[12px] border border-[#e5eaf2] bg-white px-3 py-2">
+                          <p className="text-[11px] text-[#64748b]">활성 세션</p>
+                          <p className="mt-1 text-[16px] font-semibold text-[#0f172a]">{selectedMemberDetail.accessSummary.activeSessionCount}개</p>
+                        </div>
+                        <div className="rounded-[12px] border border-[#e5eaf2] bg-white px-3 py-2">
+                          <p className="text-[11px] text-[#64748b]">총 액션 수</p>
+                          <p className="mt-1 text-[16px] font-semibold text-[#0f172a]">{selectedMemberDetail.accessSummary.totalActionCount}</p>
+                        </div>
+                        <div className="rounded-[12px] border border-[#e5eaf2] bg-white px-3 py-2">
+                          <p className="text-[11px] text-[#64748b]">평균 액션 수</p>
+                          <p className="mt-1 text-[16px] font-semibold text-[#0f172a]">{formatDecimal(selectedMemberDetail.accessSummary.averageActionCount, 1)}</p>
+                        </div>
+                        <div className="rounded-[12px] border border-[#e5eaf2] bg-white px-3 py-2">
+                          <p className="text-[11px] text-[#64748b]">평균 세션 시간</p>
+                          <p className="mt-1 text-[16px] font-semibold text-[#0f172a]">{selectedMemberDetail.accessSummary.averageSessionMinutes}분</p>
+                        </div>
+                      </div>
+                      <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                        <p className="text-[12px] text-[#4b5563]">마지막 로그인: <strong className="text-[#111827]">{formatDateTime(selectedMemberDetail.accessSummary.lastLoginAt)}</strong></p>
+                        <p className="text-[12px] text-[#4b5563]">마지막 로그인 IP: <strong className="text-[#111827]">{selectedMemberDetail.accessSummary.lastLoginIpAddress || "-"}</strong></p>
+                        <p className="text-[12px] text-[#4b5563]">집계 기준 시각: <strong className="text-[#111827]">{formatDateTime(selectedMemberDetail.accessSummary.calculatedAt)}</strong></p>
+                        <p className="text-[12px] text-[#4b5563]">
+                          면접 완료율: <strong className="text-[#111827]">{formatDecimal(selectedMemberDetail.accessSummary.interviewCompletionRate * 100, 0)}%</strong>
+                          <span className="ml-1 text-[#64748b]">({selectedMemberDetail.accessSummary.completedInterviewCount}/{selectedMemberDetail.accessSummary.totalInterviewCount})</span>
+                        </p>
+                      </div>
+                      <div className="mt-3">
+                        <p className="text-[11px] font-semibold text-[#64748b]">일별 로그인 추이</p>
+                        <div className="mt-2 flex items-end gap-2">
+                          {(selectedMemberDetail.accessSummary.dailyLoginCounts || []).map((item) => {
+                            const maxCount = Math.max(...(selectedMemberDetail.accessSummary.dailyLoginCounts || []).map((stat) => stat.loginCount), 1);
+                            const height = Math.max(8, Math.round((item.loginCount / maxCount) * 56));
+                            return (
+                              <div key={item.date} className="flex flex-1 flex-col items-center gap-1">
+                                <div className="text-[10px] text-[#475569]">{item.loginCount}</div>
+                                <div className="w-full rounded-[8px] bg-[#dbe7ff]" style={{ height }} />
+                                <div className="text-[10px] text-[#94a3b8]">{item.date.slice(5)}</div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="rounded-[14px] border border-[#eef2f8] bg-white p-3">
+                      <p className="text-[12px] font-semibold text-[#334155]">최근 접속 기록</p>
+                      <div className="mt-2 space-y-2">
+                        {(selectedMemberDetail.recentAccessLogs || []).map((log) => (
+                          <div key={`${log.sessionIdPrefix}-${log.loginAt}`} className="rounded-[12px] border border-[#eef2f8] px-3 py-2">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="rounded-full bg-[#eff6ff] px-2 py-0.5 text-[10px] font-semibold text-[#1d4ed8]">{log.authProvider}</span>
+                              <span className="rounded-full bg-[#f8fafc] px-2 py-0.5 text-[10px] text-[#475569]">{log.browser}</span>
+                              <span className="rounded-full bg-[#f8fafc] px-2 py-0.5 text-[10px] text-[#475569]">{log.deviceType}</span>
+                              <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${log.active ? "bg-[#e8f7ef] text-[#18784a]" : "bg-[#f1f5f9] text-[#64748b]"}`}>
+                                {log.active ? "ACTIVE" : "종료"}
+                              </span>
+                            </div>
+                            <div className="mt-2 grid gap-1 text-[12px] text-[#4b5563]">
+                              <p>세션: <strong className="text-[#111827]">{log.sessionIdPrefix}</strong></p>
+                              <p>로그인: <strong className="text-[#111827]">{formatDateTime(log.loginAt)}</strong></p>
+                              <p>마지막 활동: <strong className="text-[#111827]">{formatDateTime(log.lastActivityAt)}</strong></p>
+                              <p>로그아웃: <strong className="text-[#111827]">{formatDateTime(log.logoutAt)}</strong></p>
+                              <p>IP: <strong className="text-[#111827]">{log.ipAddress || "-"}</strong></p>
+                              <p>액션 수: <strong className="text-[#111827]">{log.actionCount}</strong></p>
+                            </div>
+                          </div>
+                        ))}
+                        {(selectedMemberDetail.recentAccessLogs || []).length === 0 ? (
+                          <p className="text-[12px] text-[#64748b]">최근 접속 기록이 없습니다.</p>
+                        ) : null}
+                      </div>
+                    </div>
                   </div>
                 ) : (
                   <p className="mt-4 text-[13px] text-[#6b7280]">회원을 선택해 주세요.</p>
                 )}
               </article>
+              </section>
             </section>
           ) : null}
 
