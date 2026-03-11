@@ -36,10 +36,17 @@ export async function refreshAuthSession() {
 export async function apiRequest(path, options = {}) {
   const retryOnUnauthorizedOption = options.retryOnUnauthorized;
   const requestMethod = String(options.method || "GET").trim().toUpperCase();
-  const retryOnUnauthorized = retryOnUnauthorizedOption ?? ["GET", "HEAD", "OPTIONS"].includes(requestMethod);
+  const safeRetryMethods = new Set(["GET", "HEAD", "OPTIONS"]);
+  const retryOnUnauthorized = retryOnUnauthorizedOption !== false;
+  const canRetryUnauthorized = retryOnUnauthorizedOption === true || safeRetryMethods.has(requestMethod);
 
   let response = await executeJsonRequest(path, options);
-  if (response.status === 401 && retryOnUnauthorized && path !== "/api/auth/refresh") {
+  if (
+    response.status === 401 &&
+    retryOnUnauthorized &&
+    canRetryUnauthorized &&
+    path !== "/api/auth/refresh"
+  ) {
     const refreshed = await refreshAuthSession();
     if (refreshed) {
       response = await executeJsonRequest(path, {

@@ -660,16 +660,26 @@ export const MyPage = () => {
     deleteAccountSubmittingRef.current = true;
     setDeleteAccountSubmitting(true);
     setDeleteAccountErrorMessage("");
+    let accountDeleted = false;
     try {
       await deleteMyAccount();
-      await logout();
-      setShowDeleteAccountModal(false);
-      navigate("/login", { replace: true });
+      accountDeleted = true;
     } catch (error) {
       setDeleteAccountErrorMessage(error?.message || "회원 탈퇴 처리에 실패했습니다.");
     } finally {
       deleteAccountSubmittingRef.current = false;
       setDeleteAccountSubmitting(false);
+    }
+
+    if (!accountDeleted) return;
+
+    try {
+      await logout();
+    } catch {
+      // ignore logout failure and proceed to login screen after successful deletion
+    } finally {
+      setShowDeleteAccountModal(false);
+      navigate("/login", { replace: true });
     }
   };
 

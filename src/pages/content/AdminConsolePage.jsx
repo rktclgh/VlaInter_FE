@@ -592,7 +592,7 @@ export const AdminConsolePage = () => {
       await deactivateAdminMember(selectedMemberId);
       const refreshed = await getAdminMemberDetail(selectedMemberId);
       setSelectedMemberDetail(normalizeMemberDetail(refreshed));
-      await loadMembers(memberPage);
+      await loadMembers(memberPage, memberKeyword);
     } catch (error) {
       setPageErrorMessage(error?.message || "회원 비활성화(로그인 차단) 처리에 실패했습니다.");
     } finally {
@@ -611,7 +611,7 @@ export const AdminConsolePage = () => {
       await activateAdminMember(selectedMemberId);
       const refreshed = await getAdminMemberDetail(selectedMemberId);
       setSelectedMemberDetail(normalizeMemberDetail(refreshed));
-      await loadMembers(memberPage);
+      await loadMembers(memberPage, memberKeyword);
     } catch (error) {
       setPageErrorMessage(error?.message || "회원 활성화 처리에 실패했습니다.");
     } finally {
@@ -634,7 +634,7 @@ export const AdminConsolePage = () => {
       } catch {
         setSelectedMemberDetail(null);
       }
-      await loadMembers(memberPage);
+      await loadMembers(memberPage, memberKeyword);
     } catch (error) {
       setPageErrorMessage(error?.message || "회원 소프트 삭제 처리에 실패했습니다.");
     } finally {
@@ -653,7 +653,7 @@ export const AdminConsolePage = () => {
       await restoreAdminMember(selectedMemberId);
       const refreshed = await getAdminMemberDetail(selectedMemberId);
       setSelectedMemberDetail(normalizeMemberDetail(refreshed));
-      await loadMembers(memberPage);
+      await loadMembers(memberPage, memberKeyword);
     } catch (error) {
       setPageErrorMessage(error?.message || "회원 복구에 실패했습니다.");
     } finally {
@@ -670,7 +670,10 @@ export const AdminConsolePage = () => {
     setPageErrorMessage("");
     try {
       await hardDeleteAdminMember(selectedMemberId);
-      await loadMembers(Math.max(0, memberPage - (members.length === 1 && memberPage > 0 ? 1 : 0)));
+      await loadMembers(
+        Math.max(0, memberPage - (members.length === 1 && memberPage > 0 ? 1 : 0)),
+        memberKeyword
+      );
     } catch (error) {
       setPageErrorMessage(error?.message || "회원 영구 삭제에 실패했습니다.");
     } finally {
