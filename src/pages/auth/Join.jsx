@@ -13,6 +13,8 @@ const inputClass =
   "h-7 w-full border-b border-[#d9d9d9] text-[11px] text-[#2f2f2f] placeholder:text-[#c0c0c0]";
 const EMAIL_REGEX = /^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+$/;
 const EMAIL_SEND_COOLDOWN_SECONDS = 60;
+const PASSWORD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z\d]).{8,100}$/;
+const PASSWORD_GUIDE_TEXT = "8~100자, 영문 대/소문자, 숫자, 특수문자를 각각 1개 이상 포함해 주세요.";
 
 export const Join = () => {
   const navigate = useNavigate();
@@ -56,11 +58,12 @@ export const Join = () => {
   const hasVerificationCodeInput = formData.verificationCode.trim().length > 0;
   const canSendVerificationCode = isEmailFormatValid && cooldownSeconds === 0 && !sendingCode;
   const canVerifyCode = isEmailFormatValid && hasVerificationCodeInput && !verifyingCode;
+  const isPasswordFormatValid = PASSWORD_REGEX.test(formData.password);
   const isPasswordMatched =
     formData.password.length > 0 &&
     formData.passwordConfirm.length > 0 &&
     formData.password === formData.passwordConfirm;
-  const canSubmitSignup = isPasswordMatched && isEmailVerified && agreedToPolicies;
+  const canSubmitSignup = isPasswordMatched && isPasswordFormatValid && isEmailVerified && agreedToPolicies;
 
   const handleInputChange = (field, value) => {
     if (field === "email") {
@@ -121,6 +124,10 @@ export const Join = () => {
     }
     if (formData.password !== formData.passwordConfirm) {
       setErrorMessage("비밀번호와 비밀번호 확인이 일치하지 않습니다.");
+      return;
+    }
+    if (!isPasswordFormatValid) {
+      setErrorMessage(PASSWORD_GUIDE_TEXT);
       return;
     }
     if (!isEmailVerified) {
@@ -282,6 +289,9 @@ export const Join = () => {
                     <img src={showPassword ? eyeOffIcon : eyeOpenIcon} alt="" className="h-4 w-4" />
                   </button>
                 </div>
+                <p className={`mt-1 text-[10px] ${formData.password && !isPasswordFormatValid ? "text-[#ff3a3a]" : "text-[#7e7e7e]"}`}>
+                  {PASSWORD_GUIDE_TEXT}
+                </p>
               </div>
 
               <div className="mb-6">
@@ -306,6 +316,11 @@ export const Join = () => {
                     <img src={showPasswordConfirm ? eyeOffIcon : eyeOpenIcon} alt="" className="h-4 w-4" />
                   </button>
                 </div>
+                {formData.passwordConfirm ? (
+                  <p className={`mt-1 text-[10px] ${isPasswordMatched ? "text-[#2f8f4e]" : "text-[#ff3a3a]"}`}>
+                    {isPasswordMatched ? "비밀번호가 일치합니다." : "비밀번호가 일치하지 않습니다."}
+                  </p>
+                ) : null}
               </div>
 
               <label className="mb-6 flex items-start gap-3 rounded-[10px] border border-[#e4e4e4] bg-[#fafafa] px-3 py-3">
