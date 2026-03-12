@@ -163,9 +163,14 @@ export const GeminiApiKeyGuard = ({ children }) => {
   if (!loading && profileCheckError) {
     return (
       <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/55 px-4">
-        <div className="w-full max-w-[520px] rounded-[20px] border border-[#e5e7eb] bg-white p-6 shadow-[0_24px_80px_rgba(15,23,42,0.24)]">
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="gemini-profile-check-error-title"
+          className="w-full max-w-[520px] rounded-[20px] border border-[#e5e7eb] bg-white p-6 shadow-[0_24px_80px_rgba(15,23,42,0.24)]"
+        >
           <p className="text-[12px] font-semibold tracking-[0.08em] text-[#6b7280]">PROFILE CHECK FAILED</p>
-          <h2 className="mt-2 text-[24px] font-semibold text-[#111827]">계정 정보를 다시 확인해 주세요</h2>
+          <h2 id="gemini-profile-check-error-title" className="mt-2 text-[24px] font-semibold text-[#111827]">계정 정보를 다시 확인해 주세요</h2>
           <p className="mt-3 whitespace-pre-line text-[14px] leading-[1.7] text-[#4b5563]">
             {profileCheckError}
           </p>

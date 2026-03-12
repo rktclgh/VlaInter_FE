@@ -334,6 +334,7 @@ const UploadDropZone = ({
         </button>
 
         <FileRow
+          badge={resolveDocumentBadge(pendingFile.name)}
           fileName={pendingFile.name}
           uploadedDate={formatDate(new Date().toISOString())}
           sizeLabel={formatBytes(pendingFile.size)}
@@ -359,49 +360,53 @@ const UploadDropZone = ({
     return (
       <div>
         <div className="space-y-2 rounded-[14px] border border-[#dedede] bg-white px-4 py-4">
-          {savedFiles.map((file) => (
-            <FileRow
-              key={file?.fileId || `${file?.fileName}-${file?.createdAt}`}
-              fileName={resolveDisplayFileName(file)}
-              uploadedDate={formatDate(file?.createdAt ?? file?.created_at)}
-              sizeLabel={resolveDocumentBadge(resolveDisplayFileName(file)).label}
-              badge={resolveDocumentBadge(resolveDisplayFileName(file))}
-              ocrUsed={Boolean(file?.ocrUsed)}
-              statusLabel={formatIngestionStatus(
-                file?.ingestionStatus,
-                file?.ingested,
-                file?.extractionMethod,
-                file?.ocrUsed
-              )}
-              actionNode={
-                <div className="flex items-center gap-2">
-                  {file?.ingested ? (
-                    <span className="rounded-full bg-[#e9f5ee] px-2 py-1 text-[10px] font-semibold text-[#2f7a4d]">
-                      READY
-                    </span>
-                  ) : (
+          {savedFiles.map((file) => {
+            const displayName = resolveDisplayFileName(file);
+            const badge = resolveDocumentBadge(displayName);
+            return (
+              <FileRow
+                key={file?.fileId || `${file?.fileName}-${file?.createdAt}`}
+                fileName={displayName}
+                uploadedDate={formatDate(file?.createdAt ?? file?.created_at)}
+                sizeLabel={badge.label}
+                badge={badge}
+                ocrUsed={Boolean(file?.ocrUsed)}
+                statusLabel={formatIngestionStatus(
+                  file?.ingestionStatus,
+                  file?.ingested,
+                  file?.extractionMethod,
+                  file?.ocrUsed
+                )}
+                actionNode={
+                  <div className="flex items-center gap-2">
+                    {file?.ingested ? (
+                      <span className="rounded-full bg-[#e9f5ee] px-2 py-1 text-[10px] font-semibold text-[#2f7a4d]">
+                        READY
+                      </span>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => onAnalyzeSaved(file?.fileId)}
+                        disabled={analyzingFileId === String(file?.fileId) || isIngestionRunning(file?.ingestionStatus)}
+                        className="rounded-full border border-[#5d6ef8] px-2 py-1 text-[10px] font-semibold text-[#5d6ef8] disabled:opacity-60"
+                      >
+                        {analyzingFileId === String(file?.fileId) || isIngestionRunning(file?.ingestionStatus)
+                          ? "분석 중..."
+                          : "AI 분석"}
+                      </button>
+                    )}
                     <button
                       type="button"
-                      onClick={() => onAnalyzeSaved(file?.fileId)}
-                      disabled={analyzingFileId === String(file?.fileId) || isIngestionRunning(file?.ingestionStatus)}
-                      className="rounded-full border border-[#5d6ef8] px-2 py-1 text-[10px] font-semibold text-[#5d6ef8] disabled:opacity-60"
+                      onClick={() => onDeleteSaved(file?.fileId)}
+                      className="rounded-full bg-[#ff4a4a] px-2 py-1 text-[10px] font-semibold text-white"
                     >
-                      {analyzingFileId === String(file?.fileId) || isIngestionRunning(file?.ingestionStatus)
-                        ? "분석 중..."
-                        : "AI 분석"}
+                      삭제
                     </button>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => onDeleteSaved(file?.fileId)}
-                    className="rounded-full bg-[#ff4a4a] px-2 py-1 text-[10px] font-semibold text-white"
-                  >
-                    삭제
-                  </button>
-                </div>
-              }
-            />
-          ))}
+                  </div>
+                }
+              />
+            );
+          })}
         </div>
 
         <div

@@ -45,8 +45,8 @@ export const JobSkillExampleModal = ({ open, onClose }) => {
         <div className="mt-5 overflow-y-auto pr-1">
           <div className="rounded-[18px] border border-[#e7ebf2] bg-[#fafbfd] p-4">
           <ul className="space-y-2 text-[13px] leading-[1.7] text-[#4f5664]">
-            {JOB_SKILL_INPUT_GUIDE.map((item) => (
-              <li key={item}>{item}</li>
+            {JOB_SKILL_INPUT_GUIDE.map((item, index) => (
+              <li key={index}>{item}</li>
             ))}
           </ul>
           </div>

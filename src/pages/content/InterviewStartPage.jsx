@@ -176,11 +176,11 @@ const prioritizeCreatedSelection = (prev, nextId, limit = 3) => {
   return [...deduped.slice(-(limit - 1)), nextId];
 };
 
-const initialDraft = loadInterviewStartDraft();
-const hasAnySelectedFile = (value) => Boolean(value?.RESUME || value?.INTRODUCE || value?.PORTFOLIO);
+const getFirstFileId = (options = []) => String(options[0]?.fileId || options[0]?.file_id || "");
 
 export const InterviewStartPage = () => {
   const navigate = useNavigate();
+  const initialDraft = useMemo(() => loadInterviewStartDraft(), []);
   const [userName, setUserName] = useState("사용자");
   const [userPoint, setUserPoint] = useState(0);
   const [profileImageUrl, setProfileImageUrl] = useState(tempProfileImage);
@@ -202,7 +202,7 @@ export const InterviewStartPage = () => {
   const [selectedQuestionSetId, setSelectedQuestionSetId] = useState(initialDraft?.selectedQuestionSetId || "");
   const [selectedRating, setSelectedRating] = useState(initialDraft?.selectedRating || 3);
   const [selectedQuestionCount, setSelectedQuestionCount] = useState(initialDraft?.selectedQuestionCount || 5);
-  const [selectedLanguage, setSelectedLanguage] = useState(initialDraft?.selectedLanguage || "KO");
+  const [selectedLanguage, setSelectedLanguage] = useState(normalizeInterviewLanguage(initialDraft?.selectedLanguage));
   const [includeSelfIntroduction, setIncludeSelfIntroduction] = useState(initialDraft?.includeSelfIntroduction || false);
   const [loadingPage, setLoadingPage] = useState(true);
   const [startingInterview, setStartingInterview] = useState(false);
@@ -275,14 +275,6 @@ export const InterviewStartPage = () => {
       setCategoryTree(nextCategoryTree);
       setMyQuestionSets(Array.isArray(mySetsPayload) ? mySetsPayload.filter((item) => !item?.aiGenerated && Number(item?.questionCount || 0) > 0) : []);
       setFilesByType(nextFilesByType);
-      setSelectedFiles((prev) => {
-        if (hasAnySelectedFile(prev)) return prev;
-        return {
-          RESUME: String(nextFilesByType.RESUME[0]?.fileId || nextFilesByType.RESUME[0]?.file_id || ""),
-          INTRODUCE: String(nextFilesByType.INTRODUCE[0]?.fileId || nextFilesByType.INTRODUCE[0]?.file_id || ""),
-          PORTFOLIO: String(nextFilesByType.PORTFOLIO[0]?.fileId || nextFilesByType.PORTFOLIO[0]?.file_id || ""),
-        };
-      });
       setBranchFilter((prev) => prev || defaultBranch);
       setJobFilter((prev) => prev || defaultJob);
     } catch (error) {
@@ -442,8 +434,17 @@ export const InterviewStartPage = () => {
         const options = filesByType[item.key] || [];
         const current = String(prev[item.key] || "");
         const exists = options.some((file) => String(file?.fileId || file?.file_id || "") === current);
-        if (!exists) {
-          next[item.key] = String(options[0]?.fileId || options[0]?.file_id || "");
+        if (exists) return;
+        if (item.key === "RESUME") {
+          const fallbackValue = getFirstFileId(options);
+          if (current !== fallbackValue) {
+            next[item.key] = fallbackValue;
+            changed = true;
+          }
+          return;
+        }
+        if (current !== "") {
+          next[item.key] = "";
           changed = true;
         }
       });

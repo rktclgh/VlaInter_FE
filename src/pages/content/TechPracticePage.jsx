@@ -334,6 +334,7 @@ export const TechPracticePage = () => {
           language: normalizeInterviewLanguage(response.language || selectedLanguage),
           categoryName: category.name,
           difficultyLabel: ratingToDifficulty(selectedRating),
+          difficultyRating: selectedRating,
           questionCount: QUESTION_COUNT,
           selectedDocuments: {},
           providerUsed: response.providerUsed || null,

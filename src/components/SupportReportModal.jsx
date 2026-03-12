@@ -179,7 +179,7 @@ export const SupportReportModal = ({ open, onClose }) => {
               onChange={(event) => setScreenshot(event.target.files?.[0] || null)}
               className="block w-full text-[13px] text-[#4f5664] file:mr-3 file:rounded-[12px] file:border-0 file:bg-[#f3f5f9] file:px-3 file:py-2 file:text-[12px] file:font-semibold file:text-[#171b24]"
             />
-            <p className="text-[12px] text-[#7a8190]">{screenshot ? screenshot.name : "이미지가 없어도 메일을 보낼 수 있습니다."}</p>
+            <p className="text-[12px] text-[#7a8190]">{screenshot ? screenshot.name : "이미지가 없어도 디스코드로 전송할 수 있습니다."}</p>
           </label>
 
           {errorMessage ? <p className="rounded-[14px] bg-[#fff2f2] px-4 py-3 text-[13px] text-[#d12f2f]">{errorMessage}</p> : null}

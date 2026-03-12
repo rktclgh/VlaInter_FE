@@ -27,6 +27,7 @@ export function looksEnglishEnough(text) {
   const englishWords = value.match(/\b[A-Za-z]{2,}\b/g) || [];
   const englishLetters = (value.match(/[A-Za-z]/g) || []).length;
   const hangulLetters = (value.match(/[가-힣]/g) || []).length;
+  if (hangulLetters === 0 && englishLetters >= 2 && englishWords.length >= 1) return true;
   if (englishWords.length >= 5 && englishLetters >= hangulLetters * 2) return true;
   if (englishWords.length >= 3 && hangulLetters === 0 && englishLetters >= 12) return true;
   return englishWords.length >= 8;

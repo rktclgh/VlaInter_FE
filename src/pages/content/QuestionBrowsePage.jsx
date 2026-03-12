@@ -45,8 +45,9 @@ const InlineSpinner = ({ label }) => (
   </div>
 );
 
-const LanguageSelect = ({ value, onChange }) => (
+const LanguageSelect = ({ id, value, onChange }) => (
   <select
+    id={id}
     value={value}
     onChange={(event) => onChange(event.target.value)}
     className="rounded-[12px] border border-[#d9dde5] bg-white px-3 py-2 text-[12px] outline-none focus:border-[#9aa9cd]"
@@ -77,6 +78,7 @@ const LogoutConfirmModal = ({ onCancel, onConfirm }) => (
 
 export const QuestionBrowsePage = () => {
   const navigate = useNavigate();
+  const languageSelectId = "question-browse-language-select";
   const [userName, setUserName] = useState("사용자");
   const [userPoint, setUserPoint] = useState(0);
   const [profileImageUrl, setProfileImageUrl] = useState(tempProfileImage);
@@ -445,7 +447,10 @@ export const QuestionBrowsePage = () => {
                     <p className="mt-2 text-[12px] text-[#6b7280]">{formatDate(selectedSet.createdAt)}</p>
                     <p className="mt-2 text-[12px] leading-[1.7] text-[#5e6472]">{selectedSet.description || "세트 설명이 없습니다."}</p>
                     <div className="mt-3 flex flex-wrap items-center gap-2">
-                      <LanguageSelect value={selectedLanguage} onChange={setSelectedLanguage} />
+                      <label htmlFor={languageSelectId} className="text-[11px] font-semibold text-[#4b5563]">
+                        연습 언어
+                      </label>
+                      <LanguageSelect id={languageSelectId} value={selectedLanguage} onChange={setSelectedLanguage} />
                       <span className="text-[11px] text-[#6b7280]">연습 언어: {getInterviewLanguageLabel(selectedLanguage)}</span>
                     </div>
                     <div className="mt-3 flex justify-end">
