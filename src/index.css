@@ -99,6 +99,37 @@
     --marquee-duration: 14s;
     --marquee-delay: 0s;
   }
+
+  button:disabled,
+  [role="button"][aria-disabled="true"] {
+    cursor: not-allowed;
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    button:not(:disabled),
+    [role="button"]:not([aria-disabled="true"]),
+    a[href],
+    label[for],
+    summary,
+    input[type="checkbox"],
+    input[type="radio"] {
+      cursor: pointer;
+      transition:
+        filter 0.16s ease,
+        opacity 0.16s ease,
+        transform 0.16s ease;
+    }
+
+    button:not(:disabled):hover,
+    [role="button"]:not([aria-disabled="true"]):hover,
+    a[href]:hover,
+    label[for]:hover,
+    summary:hover,
+    input[type="checkbox"]:hover,
+    input[type="radio"]:hover {
+      filter: brightness(0.98);
+    }
+  }
 }
 
 @layer utilities {
