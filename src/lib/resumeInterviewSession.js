@@ -1,3 +1,5 @@
+import { normalizeInterviewLanguage } from "./interviewLanguage";
+
 const toDocumentMeta = (document) => {
   if (!document || typeof document !== "object") return null;
   const label = String(document.label || "").trim();
@@ -30,6 +32,7 @@ export function buildResumedSessionSnapshot(session, metadata = {}) {
     metadata: {
       selectedDocuments: mapSelectedDocumentsByType(session.selectedDocuments),
       questionCount: Number(session.questionCount || 0),
+      language: session.language ? normalizeInterviewLanguage(session.language) : null,
       difficulty: session.difficulty || null,
       difficultyLabel: session.difficulty || null,
       difficultyRating: session.difficultyRating ?? null,

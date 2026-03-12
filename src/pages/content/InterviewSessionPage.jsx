@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { FaRegStar, FaStar } from "react-icons/fa6";
 import { ContentTopNav } from "../../components/ContentTopNav";
+import { StarIcons } from "../../components/DifficultyStars";
 import { InlineSpinner } from "../../components/InlineSpinner";
 import { LogoutConfirmModal } from "../../components/LogoutConfirmModal";
 import { MobileSidebarDrawer } from "../../components/MobileSidebarDrawer";
@@ -22,6 +23,8 @@ import {
 import { consumePointChargeSuccessResult } from "../../lib/pointChargeFlow";
 import { extractProfile, formatPoint, parsePoint } from "../../lib/profileUtils";
 import { isAlreadySavedQuestionError } from "../../lib/savedQuestionUtils";
+import { difficultyToRating } from "../../lib/difficultyRating";
+import { getInterviewAnswerPlaceholder, getInterviewLanguageLabel, isEnglishInterview, looksEnglishEnough, normalizeInterviewLanguage } from "../../lib/interviewLanguage";
 import { getMyProfile, getMyProfileImageUrl } from "../../lib/userApi";
 
 const QuestionMetaChip = ({ label }) => (
@@ -29,6 +32,17 @@ const QuestionMetaChip = ({ label }) => (
     {label}
   </span>
 );
+
+const DifficultyMetaChip = ({ rating }) => {
+  if (!rating) return null;
+  return (
+    <span className="inline-flex items-center gap-2 rounded-full border border-[#f3ddad] bg-[#fff8e8] px-2.5 py-1 text-[11px] text-[#8a5a00]">
+      <span className="font-medium">난이도</span>
+      <StarIcons rating={rating} sizeClass="text-[11px]" />
+      <span className="font-medium">{rating} / 5</span>
+    </span>
+  );
+};
 
 const DocumentMetaChip = ({ label, ocrUsed }) => (
   <span className="inline-flex items-center gap-1.5 rounded-full border border-[#d9dde5] bg-[#f7f8fb] px-2.5 py-1 text-[11px] text-[#505866]">
@@ -199,10 +213,16 @@ export const InterviewSessionPage = () => {
     currentQuestion.turnNo >= Number(sessionMetadata.questionCount || 0)
   );
   const usedBedrockAtStart = String(sessionMetadata?.providerUsed || "").toUpperCase() === "BEDROCK";
+  const sessionLanguage = normalizeInterviewLanguage(sessionMetadata?.language);
   const usedBedrockInResults = useMemo(
     () => Boolean((sessionResults?.turns || []).some((turn) => String(turn?.evaluation?.providerUsed || "").toUpperCase() === "BEDROCK")),
     [sessionResults]
   );
+  const sessionDifficultyRating = useMemo(() => {
+    const explicitRating = Number(sessionMetadata?.difficultyRating || 0);
+    if (explicitRating > 0) return explicitRating;
+    return difficultyToRating(sessionMetadata?.difficultyLabel || sessionMetadata?.difficulty);
+  }, [sessionMetadata?.difficulty, sessionMetadata?.difficultyLabel, sessionMetadata?.difficultyRating]);
 
   useEffect(() => {
     if (sessionMetadata?.paidFallbackNoticeDismissed) return;
@@ -277,6 +297,10 @@ export const InterviewSessionPage = () => {
     }
     if (!answer.trim()) {
       setSubmitErrorMessage("답변을 입력해 주세요.");
+      return;
+    }
+    if (isEnglishInterview(sessionLanguage) && !looksEnglishEnough(answer)) {
+      setSubmitErrorMessage("영어 면접에서는 영어 답변으로 작성해 주세요.");
       return;
     }
 
@@ -421,7 +445,8 @@ export const InterviewSessionPage = () => {
                     />
                   ))
                 : <QuestionMetaChip label="문서 미선택" />}
-              {sessionMetadata.difficultyLabel ? <QuestionMetaChip label={`난이도 ${sessionMetadata.difficultyLabel}`} /> : null}
+              <QuestionMetaChip label={`언어 ${getInterviewLanguageLabel(sessionLanguage)}`} />
+              <DifficultyMetaChip rating={sessionDifficultyRating} />
               {sessionMetadata.categoryName ? <QuestionMetaChip label={sessionMetadata.categoryName} /> : null}
             </div>
           </div>
@@ -481,10 +506,15 @@ export const InterviewSessionPage = () => {
                           <textarea
                             value={answer}
                             onChange={(event) => setAnswer(event.target.value)}
-                            placeholder="질문의 의도, 핵심 개념, 실무 사례 순서로 답변을 구성해 보세요."
+                            placeholder={getInterviewAnswerPlaceholder(sessionLanguage)}
                             className="min-h-[220px] w-full rounded-[18px] border border-[#dfe3eb] bg-white px-4 py-4 text-[14px] leading-[1.7] text-[#171b24] outline-none focus:border-[#8aa2e8]"
                           />
                         </label>
+                        {isEnglishInterview(sessionLanguage) ? (
+                          <p className="mt-3 text-[12px] text-[#6b7280]">
+                            영어 세션입니다. 답변과 피드백은 영어 기준으로 진행되며, 문법과 문장 완성도도 함께 평가됩니다.
+                          </p>
+                        ) : null}
 
                         {submitErrorMessage ? <p className="mt-3 text-[12px] text-[#dc4b4b]">{submitErrorMessage}</p> : null}
 
