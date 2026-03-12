@@ -127,11 +127,14 @@ export const GeminiApiKeyGuard = ({ children }) => {
   const [hasGeminiApiKey, setHasGeminiApiKey] = useState(true);
   const [loading, setLoading] = useState(true);
   const [showGuideModal, setShowGuideModal] = useState(false);
+  const [profileCheckError, setProfileCheckError] = useState("");
+  const [reloadSeed, setReloadSeed] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
       setLoading(true);
+      setProfileCheckError("");
       try {
         const payload = await getMyProfile();
         if (cancelled) return;
@@ -144,7 +147,7 @@ export const GeminiApiKeyGuard = ({ children }) => {
           return;
         }
         console.error("GeminiApiKeyGuard profile check failed", error);
-        setHasGeminiApiKey(true);
+        setProfileCheckError("계정 상태를 확인하지 못했습니다. 네트워크를 확인한 뒤 다시 시도해 주세요.");
       } finally {
         if (!cancelled) {
           setLoading(false);
@@ -155,7 +158,37 @@ export const GeminiApiKeyGuard = ({ children }) => {
     return () => {
       cancelled = true;
     };
-  }, [navigate]);
+  }, [navigate, reloadSeed]);
+
+  if (!loading && profileCheckError) {
+    return (
+      <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/55 px-4">
+        <div className="w-full max-w-[520px] rounded-[20px] border border-[#e5e7eb] bg-white p-6 shadow-[0_24px_80px_rgba(15,23,42,0.24)]">
+          <p className="text-[12px] font-semibold tracking-[0.08em] text-[#6b7280]">PROFILE CHECK FAILED</p>
+          <h2 className="mt-2 text-[24px] font-semibold text-[#111827]">계정 정보를 다시 확인해 주세요</h2>
+          <p className="mt-3 whitespace-pre-line text-[14px] leading-[1.7] text-[#4b5563]">
+            {profileCheckError}
+          </p>
+          <div className="mt-5 flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => setReloadSeed((prev) => prev + 1)}
+              className="rounded-[12px] border border-[#d1d5db] px-4 py-2.5 text-[13px] font-semibold text-[#374151]"
+            >
+              다시 시도
+            </button>
+            <button
+              type="button"
+              onClick={() => navigate("/")}
+              className="rounded-[12px] bg-[#111827] px-4 py-2.5 text-[13px] font-semibold text-white"
+            >
+              홈으로 이동
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   const showBlockingModal = !loading && !hasGeminiApiKey;
 
