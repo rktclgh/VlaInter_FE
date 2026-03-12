@@ -6,6 +6,7 @@ import { OcrInfoBadge } from "../../components/OcrInfoBadge";
 import { ResumeSessionModal } from "../../components/ResumeSessionModal";
 import { Sidebar } from "../../components/Sidebar";
 import { GeminiOverloadModal } from "../../components/GeminiOverloadModal";
+import { JobSkillExampleModal } from "../../components/JobSkillExampleModal";
 import { PointChargeModal } from "../../components/PointChargeModal";
 import { PointChargeSuccessModal } from "../../components/PointChargeSuccessModal";
 import { StarRatingInput, StarIcons } from "../../components/DifficultyStars";
@@ -135,6 +136,17 @@ const FilterChip = ({ label, active = false, onClick }) => (
   </button>
 );
 
+const HelpIconButton = ({ onClick }) => (
+  <button
+    type="button"
+    onClick={onClick}
+    className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-[#d9dde5] bg-white text-[13px] font-semibold text-[#556070] transition hover:bg-[#f8fafc]"
+    aria-label="직무와 기술 입력 예시 보기"
+  >
+    ?
+  </button>
+);
+
 const LanguageSelect = ({ value, onChange }) => (
   <select
     value={value}
@@ -201,6 +213,7 @@ export const InterviewStartPage = () => {
   const [pendingResumeSession, setPendingResumeSession] = useState(null);
   const [resumeModalBusy, setResumeModalBusy] = useState(false);
   const [resumeSessionChecked, setResumeSessionChecked] = useState(false);
+  const [showExampleModal, setShowExampleModal] = useState(false);
 
   useEffect(() => {
     const charged = consumePointChargeSuccessResult();
@@ -762,6 +775,21 @@ export const InterviewStartPage = () => {
 
               <div className="grid grid-cols-1 gap-5 xl:grid-cols-[1.15fr_0.85fr]">
                 <div className="space-y-5">
+                  <section className="rounded-3xl border border-[#e4e7ee] bg-white p-5 sm:p-6">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <p className="text-[12px] font-semibold tracking-[0.08em] text-[#7a8190]">입력 가이드</p>
+                        <p className="mt-1 text-[13px] leading-[1.7] text-[#5e6472]">계열, 직무, 기술의 범위가 헷갈리면 예시를 먼저 확인하고 같은 방식으로 선택해 주세요.</p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <HelpIconButton onClick={() => setShowExampleModal(true)} />
+                        <button type="button" onClick={() => setShowExampleModal(true)} className="text-[12px] font-semibold text-[#556070] underline-offset-2 hover:underline">
+                          예시 보기
+                        </button>
+                      </div>
+                    </div>
+                  </section>
+
                   <CategoryCard title="계열 선택" description="최상위 루트(계열)를 먼저 선택하면 직무/기술 후보를 더 빠르게 좁힐 수 있습니다.">
                     <div className="grid gap-3 md:grid-cols-[1fr_auto]">
                       <input
@@ -1118,6 +1146,7 @@ export const InterviewStartPage = () => {
       ) : null}
       {showPointChargeSuccessModal ? <PointChargeSuccessModal onClose={() => setShowPointChargeSuccessModal(false)} /> : null}
       {showGeminiOverloadModal ? <GeminiOverloadModal onClose={() => setShowGeminiOverloadModal(false)} /> : null}
+      <JobSkillExampleModal open={showExampleModal} onClose={() => setShowExampleModal(false)} />
       {showPrereqGuideModal ? (
         <InterviewPrerequisiteGuideModal
           onClose={() => setShowPrereqGuideModal(false)}

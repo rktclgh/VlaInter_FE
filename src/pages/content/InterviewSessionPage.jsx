@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { FaRegStar, FaStar } from "react-icons/fa6";
 import { ContentTopNav } from "../../components/ContentTopNav";
+import { StarIcons } from "../../components/DifficultyStars";
 import { InlineSpinner } from "../../components/InlineSpinner";
 import { LogoutConfirmModal } from "../../components/LogoutConfirmModal";
 import { MobileSidebarDrawer } from "../../components/MobileSidebarDrawer";
@@ -22,6 +23,7 @@ import {
 import { consumePointChargeSuccessResult } from "../../lib/pointChargeFlow";
 import { extractProfile, formatPoint, parsePoint } from "../../lib/profileUtils";
 import { isAlreadySavedQuestionError } from "../../lib/savedQuestionUtils";
+import { difficultyToRating } from "../../lib/difficultyRating";
 import { getInterviewAnswerPlaceholder, getInterviewLanguageLabel, isEnglishInterview, looksEnglishEnough, normalizeInterviewLanguage } from "../../lib/interviewLanguage";
 import { getMyProfile, getMyProfileImageUrl } from "../../lib/userApi";
 
@@ -30,6 +32,17 @@ const QuestionMetaChip = ({ label }) => (
     {label}
   </span>
 );
+
+const DifficultyMetaChip = ({ rating }) => {
+  if (!rating) return null;
+  return (
+    <span className="inline-flex items-center gap-2 rounded-full border border-[#f3ddad] bg-[#fff8e8] px-2.5 py-1 text-[11px] text-[#8a5a00]">
+      <span className="font-medium">난이도</span>
+      <StarIcons rating={rating} sizeClass="text-[11px]" />
+      <span className="font-medium">{rating} / 5</span>
+    </span>
+  );
+};
 
 const DocumentMetaChip = ({ label, ocrUsed }) => (
   <span className="inline-flex items-center gap-1.5 rounded-full border border-[#d9dde5] bg-[#f7f8fb] px-2.5 py-1 text-[11px] text-[#505866]">
@@ -205,6 +218,11 @@ export const InterviewSessionPage = () => {
     () => Boolean((sessionResults?.turns || []).some((turn) => String(turn?.evaluation?.providerUsed || "").toUpperCase() === "BEDROCK")),
     [sessionResults]
   );
+  const sessionDifficultyRating = useMemo(() => {
+    const explicitRating = Number(sessionMetadata?.difficultyRating || 0);
+    if (explicitRating > 0) return explicitRating;
+    return difficultyToRating(sessionMetadata?.difficultyLabel || sessionMetadata?.difficulty);
+  }, [sessionMetadata?.difficulty, sessionMetadata?.difficultyLabel, sessionMetadata?.difficultyRating]);
 
   useEffect(() => {
     if (sessionMetadata?.paidFallbackNoticeDismissed) return;
@@ -428,7 +446,7 @@ export const InterviewSessionPage = () => {
                   ))
                 : <QuestionMetaChip label="문서 미선택" />}
               <QuestionMetaChip label={`언어 ${getInterviewLanguageLabel(sessionLanguage)}`} />
-              {sessionMetadata.difficultyLabel ? <QuestionMetaChip label={`난이도 ${sessionMetadata.difficultyLabel}`} /> : null}
+              <DifficultyMetaChip rating={sessionDifficultyRating} />
               {sessionMetadata.categoryName ? <QuestionMetaChip label={sessionMetadata.categoryName} /> : null}
             </div>
           </div>

@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { ContentTopNav } from "../../components/ContentTopNav";
 import { MobileSidebarDrawer } from "../../components/MobileSidebarDrawer";
 import { GeminiOverloadModal } from "../../components/GeminiOverloadModal";
+import { JobSkillExampleModal } from "../../components/JobSkillExampleModal";
 import { PointChargeModal } from "../../components/PointChargeModal";
 import { PointChargeSuccessModal } from "../../components/PointChargeSuccessModal";
 import { ResumeSessionModal } from "../../components/ResumeSessionModal";
@@ -74,6 +75,17 @@ const LanguageSelect = ({ value, onChange }) => (
   </select>
 );
 
+const HelpIconButton = ({ onClick }) => (
+  <button
+    type="button"
+    onClick={onClick}
+    className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-[#d9dde5] bg-white text-[13px] font-semibold text-[#556070] transition hover:bg-[#f8fafc]"
+    aria-label="직무와 기술 입력 예시 보기"
+  >
+    ?
+  </button>
+);
+
 export const TechPracticePage = () => {
   const navigate = useNavigate();
   const [userName, setUserName] = useState("사용자");
@@ -100,6 +112,7 @@ export const TechPracticePage = () => {
   const [pendingResumeSession, setPendingResumeSession] = useState(null);
   const [resumeModalBusy, setResumeModalBusy] = useState(false);
   const [resumeSessionChecked, setResumeSessionChecked] = useState(false);
+  const [showExampleModal, setShowExampleModal] = useState(false);
   const isStartingPractice = startingCategoryId !== null;
 
   const loadCatalog = async ({ preferredBranchName = "", preferredJobName = "", preferredSkillName = "" } = {}) => {
@@ -461,6 +474,18 @@ export const TechPracticePage = () => {
             </section>
 
             <section className="mt-5 rounded-[24px] border border-[#e4e7ee] bg-white p-5 sm:p-6">
+              <div className="mb-4 flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-[12px] font-semibold tracking-[0.08em] text-[#7a8190]">입력 가이드</p>
+                  <p className="mt-1 text-[13px] leading-[1.7] text-[#5e6472]">계열, 직무, 기술이 헷갈리면 예시를 먼저 보고 같은 구조로 입력해 주세요.</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <HelpIconButton onClick={() => setShowExampleModal(true)} />
+                  <button type="button" onClick={() => setShowExampleModal(true)} className="text-[12px] font-semibold text-[#556070] underline-offset-2 hover:underline">
+                    예시 보기
+                  </button>
+                </div>
+              </div>
               <div className="space-y-5">
                 <div className="rounded-[20px] border border-[#edf1f7] bg-[#fafbfd] p-4">
                   <p className="text-[12px] font-semibold tracking-[0.08em] text-[#7a8190]">1. 계열 선택</p>
@@ -595,6 +620,7 @@ export const TechPracticePage = () => {
       }} /> : null}
       {showPointChargeSuccessModal ? <PointChargeSuccessModal onClose={() => setShowPointChargeSuccessModal(false)} currentPoint={userPoint} /> : null}
       {showGeminiOverloadModal ? <GeminiOverloadModal onClose={() => setShowGeminiOverloadModal(false)} /> : null}
+      <JobSkillExampleModal open={showExampleModal} onClose={() => setShowExampleModal(false)} />
       <ResumeSessionModal
         open={Boolean(pendingResumeSession)}
         title="완료하지 못한 기술질문 세션이 있습니다"

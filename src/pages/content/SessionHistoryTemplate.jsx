@@ -170,7 +170,7 @@ const ResultCard = ({ turn, onBookmark, bookmarking }) => {
               <p className="mt-3 whitespace-pre-wrap text-[13px] leading-[1.7] text-[#2d3645]">{turn.evaluation.feedback || "-"}</p>
               {turn.evaluation.bestPractice?.trim() ? (
                 <div className="mt-3 rounded-[12px] border border-[#eceff4] bg-white p-3">
-                  <p className="text-[11px] font-semibold text-[#7a8190]">가이드</p>
+                  <p className="text-[11px] font-semibold text-[#7a8190]">보완 포인트</p>
                   <p className="mt-2 whitespace-pre-wrap text-[13px] leading-[1.7] text-[#2d3645]">{turn.evaluation.bestPractice}</p>
                 </div>
               ) : null}
