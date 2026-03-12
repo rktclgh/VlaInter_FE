@@ -99,11 +99,12 @@ export async function apiRequest(path, options = {}) {
     canRetryUnauthorized &&
     path !== "/api/auth/refresh"
   ) {
-    const refreshed = getKnownLastSuccessfulRefreshAt() > requestStartedAt
+    const alreadyRefreshedBeforeRetry = getKnownLastSuccessfulRefreshAt() > requestStartedAt;
+    const refreshed = alreadyRefreshedBeforeRetry
       ? true
       : await refreshAuthSession();
-    const refreshedByAnotherContext = getKnownLastSuccessfulRefreshAt() > requestStartedAt;
-    if (refreshed || refreshedByAnotherContext) {
+    const refreshedAfterRetryAttempt = refreshed || getKnownLastSuccessfulRefreshAt() > requestStartedAt;
+    if (refreshedAfterRetryAttempt) {
       response = await executeJsonRequest(path, {
         ...options,
         retryOnUnauthorized: false,

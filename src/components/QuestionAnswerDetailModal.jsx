@@ -105,7 +105,7 @@ export const QuestionAnswerDetailModal = ({ item, onClose }) => {
 
         {guideText ? (
           <div className="mt-4 rounded-[20px] border border-[#e8ecf3] bg-white p-5">
-            <p className="text-[12px] font-semibold text-[#738094]">가이드</p>
+            <p className="text-[12px] font-semibold text-[#738094]">보완 포인트</p>
             <p className="mt-3 whitespace-pre-wrap text-[14px] leading-[1.8] text-[#4f5664]">{guideText}</p>
           </div>
         ) : null}

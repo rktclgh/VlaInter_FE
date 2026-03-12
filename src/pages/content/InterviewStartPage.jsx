@@ -6,6 +6,7 @@ import { OcrInfoBadge } from "../../components/OcrInfoBadge";
 import { ResumeSessionModal } from "../../components/ResumeSessionModal";
 import { Sidebar } from "../../components/Sidebar";
 import { GeminiOverloadModal } from "../../components/GeminiOverloadModal";
+import { JobSkillExampleModal } from "../../components/JobSkillExampleModal";
 import { PointChargeModal } from "../../components/PointChargeModal";
 import { PointChargeSuccessModal } from "../../components/PointChargeSuccessModal";
 import { StarRatingInput, StarIcons } from "../../components/DifficultyStars";
@@ -17,10 +18,12 @@ import { ratingToDifficulty } from "../../lib/difficultyRating";
 import { createInterviewCategory, dismissMockSession, getInterviewCategories, getLatestIncompleteMockSession, getMyInterviewSets, getReadyMockDocuments, startMockInterview } from "../../lib/interviewApi";
 import { buildResumedSessionSnapshot } from "../../lib/resumeInterviewSession";
 import { saveTechInterviewSession } from "../../lib/interviewSessionFlow";
+import { clearInterviewStartDraft, loadInterviewStartDraft, saveInterviewStartDraft } from "../../lib/interviewStartDraft";
 import { consumePointChargeSuccessResult } from "../../lib/pointChargeFlow";
 import { extractProfile, formatPoint, parsePoint } from "../../lib/profileUtils";
 import { getMyProfile, getMyProfileImageUrl } from "../../lib/userApi";
 import { isGeminiOverloadError } from "../../lib/geminiErrorUtils";
+import { getInterviewLanguageLabel, INTERVIEW_LANGUAGE_OPTIONS, normalizeInterviewLanguage } from "../../lib/interviewLanguage";
 
 const DOCUMENT_TYPES = [
   { key: "RESUME", label: "이력서" },
@@ -133,6 +136,31 @@ const FilterChip = ({ label, active = false, onClick }) => (
   </button>
 );
 
+const HelpIconButton = ({ onClick }) => (
+  <button
+    type="button"
+    onClick={onClick}
+    className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-[#d9dde5] bg-white text-[13px] font-semibold text-[#556070] transition hover:bg-[#f8fafc]"
+    aria-label="직무와 기술 입력 예시 보기"
+  >
+    ?
+  </button>
+);
+
+const LanguageSelect = ({ value, onChange }) => (
+  <select
+    value={value}
+    onChange={(event) => onChange(event.target.value)}
+    className="rounded-[14px] border border-[#dfe3eb] bg-white px-4 py-3 text-[13px] outline-none focus:border-[#8aa2e8]"
+  >
+    {INTERVIEW_LANGUAGE_OPTIONS.map((option) => (
+      <option key={option.value} value={option.value}>
+        {option.label}
+      </option>
+    ))}
+  </select>
+);
+
 const toggleSkillSelection = (prev, nextId) => {
   if (prev.includes(nextId)) {
     return prev.filter((id) => id !== nextId);
@@ -148,8 +176,11 @@ const prioritizeCreatedSelection = (prev, nextId, limit = 3) => {
   return [...deduped.slice(-(limit - 1)), nextId];
 };
 
+const getFirstFileId = (options = []) => String(options[0]?.fileId || options[0]?.file_id || "");
+
 export const InterviewStartPage = () => {
   const navigate = useNavigate();
+  const initialDraft = useMemo(() => loadInterviewStartDraft(), []);
   const [userName, setUserName] = useState("사용자");
   const [userPoint, setUserPoint] = useState(0);
   const [profileImageUrl, setProfileImageUrl] = useState(tempProfileImage);
@@ -160,18 +191,19 @@ export const InterviewStartPage = () => {
 
   const [categoryTree, setCategoryTree] = useState([]);
   const [filesByType, setFilesByType] = useState({ RESUME: [], INTRODUCE: [], PORTFOLIO: [] });
-  const [selectedFiles, setSelectedFiles] = useState({ RESUME: "", INTRODUCE: "", PORTFOLIO: "" });
-  const [branchFilter, setBranchFilter] = useState("");
-  const [branchQuery, setBranchQuery] = useState("");
-  const [jobFilter, setJobFilter] = useState("");
-  const [jobQuery, setJobQuery] = useState("");
-  const [skillQuery, setSkillQuery] = useState("");
-  const [selectedCategoryIds, setSelectedCategoryIds] = useState([]);
+  const [selectedFiles, setSelectedFiles] = useState(initialDraft?.selectedFiles || { RESUME: "", INTRODUCE: "", PORTFOLIO: "" });
+  const [branchFilter, setBranchFilter] = useState(initialDraft?.branchFilter || "");
+  const [branchQuery, setBranchQuery] = useState(initialDraft?.branchQuery || "");
+  const [jobFilter, setJobFilter] = useState(initialDraft?.jobFilter || "");
+  const [jobQuery, setJobQuery] = useState(initialDraft?.jobQuery || "");
+  const [skillQuery, setSkillQuery] = useState(initialDraft?.skillQuery || "");
+  const [selectedCategoryIds, setSelectedCategoryIds] = useState(initialDraft?.selectedCategoryIds || []);
   const [myQuestionSets, setMyQuestionSets] = useState([]);
-  const [selectedQuestionSetId, setSelectedQuestionSetId] = useState("");
-  const [selectedRating, setSelectedRating] = useState(3);
-  const [selectedQuestionCount, setSelectedQuestionCount] = useState(5);
-  const [includeSelfIntroduction, setIncludeSelfIntroduction] = useState(false);
+  const [selectedQuestionSetId, setSelectedQuestionSetId] = useState(initialDraft?.selectedQuestionSetId || "");
+  const [selectedRating, setSelectedRating] = useState(initialDraft?.selectedRating || 3);
+  const [selectedQuestionCount, setSelectedQuestionCount] = useState(initialDraft?.selectedQuestionCount || 5);
+  const [selectedLanguage, setSelectedLanguage] = useState(normalizeInterviewLanguage(initialDraft?.selectedLanguage));
+  const [includeSelfIntroduction, setIncludeSelfIntroduction] = useState(initialDraft?.includeSelfIntroduction || false);
   const [loadingPage, setLoadingPage] = useState(true);
   const [startingInterview, setStartingInterview] = useState(false);
   const [creatingCategory, setCreatingCategory] = useState(false);
@@ -181,6 +213,7 @@ export const InterviewStartPage = () => {
   const [pendingResumeSession, setPendingResumeSession] = useState(null);
   const [resumeModalBusy, setResumeModalBusy] = useState(false);
   const [resumeSessionChecked, setResumeSessionChecked] = useState(false);
+  const [showExampleModal, setShowExampleModal] = useState(false);
 
   useEffect(() => {
     const charged = consumePointChargeSuccessResult();
@@ -242,11 +275,6 @@ export const InterviewStartPage = () => {
       setCategoryTree(nextCategoryTree);
       setMyQuestionSets(Array.isArray(mySetsPayload) ? mySetsPayload.filter((item) => !item?.aiGenerated && Number(item?.questionCount || 0) > 0) : []);
       setFilesByType(nextFilesByType);
-      setSelectedFiles({
-        RESUME: String(nextFilesByType.RESUME[0]?.fileId || nextFilesByType.RESUME[0]?.file_id || ""),
-        INTRODUCE: String(nextFilesByType.INTRODUCE[0]?.fileId || nextFilesByType.INTRODUCE[0]?.file_id || ""),
-        PORTFOLIO: String(nextFilesByType.PORTFOLIO[0]?.fileId || nextFilesByType.PORTFOLIO[0]?.file_id || ""),
-      });
       setBranchFilter((prev) => prev || defaultBranch);
       setJobFilter((prev) => prev || defaultJob);
     } catch (error) {
@@ -397,6 +425,65 @@ export const InterviewStartPage = () => {
     setSelectedQuestionSetId("");
   }, [selectedQuestionSetId, visibleQuestionSets]);
 
+  useEffect(() => {
+    if (loadingPage) return;
+    setSelectedFiles((prev) => {
+      const next = { ...prev };
+      let changed = false;
+      DOCUMENT_TYPES.forEach((item) => {
+        const options = filesByType[item.key] || [];
+        const current = String(prev[item.key] || "");
+        const exists = options.some((file) => String(file?.fileId || file?.file_id || "") === current);
+        if (exists) return;
+        if (item.key === "RESUME") {
+          const fallbackValue = getFirstFileId(options);
+          if (current !== fallbackValue) {
+            next[item.key] = fallbackValue;
+            changed = true;
+          }
+          return;
+        }
+        if (current !== "") {
+          next[item.key] = "";
+          changed = true;
+        }
+      });
+      return changed ? next : prev;
+    });
+  }, [filesByType, loadingPage]);
+
+  useEffect(() => {
+    if (loadingPage) return;
+    saveInterviewStartDraft({
+      selectedFiles,
+      branchFilter,
+      branchQuery,
+      jobFilter,
+      jobQuery,
+      skillQuery,
+      selectedCategoryIds,
+      selectedQuestionSetId,
+      selectedRating,
+      selectedQuestionCount,
+      selectedLanguage,
+      includeSelfIntroduction,
+    });
+  }, [
+    branchFilter,
+    branchQuery,
+    includeSelfIntroduction,
+    jobFilter,
+    jobQuery,
+    loadingPage,
+    selectedCategoryIds,
+    selectedFiles,
+    selectedLanguage,
+    selectedQuestionCount,
+    selectedQuestionSetId,
+    selectedRating,
+    skillQuery,
+  ]);
+
   const selectedFileObjects = useMemo(() => DOCUMENT_TYPES.reduce((acc, item) => {
     acc[item.key] = filesByType[item.key].find((file) => String(file?.fileId || file?.file_id || "") === String(selectedFiles[item.key] || "")) || null;
     return acc;
@@ -416,6 +503,7 @@ export const InterviewStartPage = () => {
       // ignore
     } finally {
       setShowLogoutModal(false);
+      clearInterviewStartDraft();
       navigate("/login", { replace: true });
     }
   };
@@ -540,6 +628,7 @@ export const InterviewStartPage = () => {
         categoryIds: selectedCategoryIds.map((id) => Number(id)).filter(Number.isFinite),
         jobName: resolvedJobName,
         difficulty: ratingToDifficulty(selectedRating),
+        language: selectedLanguage,
         includeSelfIntroduction,
         questionCount: Math.max(5, Number(selectedQuestionCount) || 5),
       });
@@ -561,6 +650,7 @@ export const InterviewStartPage = () => {
             introduce: buildSelectedDocumentMeta(selectedFileObjects.INTRODUCE, "INTRODUCE"),
             portfolio: buildSelectedDocumentMeta(selectedFileObjects.PORTFOLIO, "PORTFOLIO"),
           },
+          language: normalizeInterviewLanguage(response.language || selectedLanguage),
           difficulty: ratingToDifficulty(selectedRating),
           difficultyRating: selectedRating,
           categoryId: null,
@@ -577,6 +667,7 @@ export const InterviewStartPage = () => {
           paidFallbackPopupPending: String(response.providerUsed || "").toUpperCase() === "BEDROCK",
         },
       });
+      clearInterviewStartDraft();
 
       navigate("/content/interview/session");
     } catch (error) {
@@ -685,6 +776,21 @@ export const InterviewStartPage = () => {
 
               <div className="grid grid-cols-1 gap-5 xl:grid-cols-[1.15fr_0.85fr]">
                 <div className="space-y-5">
+                  <section className="rounded-3xl border border-[#e4e7ee] bg-white p-5 sm:p-6">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <p className="text-[12px] font-semibold tracking-[0.08em] text-[#7a8190]">입력 가이드</p>
+                        <p className="mt-1 text-[13px] leading-[1.7] text-[#5e6472]">계열, 직무, 기술의 범위가 헷갈리면 예시를 먼저 확인하고 같은 방식으로 선택해 주세요.</p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <HelpIconButton onClick={() => setShowExampleModal(true)} />
+                        <button type="button" onClick={() => setShowExampleModal(true)} className="text-[12px] font-semibold text-[#556070] underline-offset-2 hover:underline">
+                          예시 보기
+                        </button>
+                      </div>
+                    </div>
+                  </section>
+
                   <CategoryCard title="계열 선택" description="최상위 루트(계열)를 먼저 선택하면 직무/기술 후보를 더 빠르게 좁힐 수 있습니다.">
                     <div className="grid gap-3 md:grid-cols-[1fr_auto]">
                       <input
@@ -964,9 +1070,19 @@ export const InterviewStartPage = () => {
                     </div>
                   </CategoryCard>
 
+                  <CategoryCard title="면접 언어" description="영어 면접을 선택하면 질문, 답변, 피드백이 영어 기준으로 진행됩니다. 영어 세션에서는 답변도 영어로 작성해야 합니다.">
+                    <LanguageSelect value={selectedLanguage} onChange={setSelectedLanguage} />
+                    <p className="mt-3 text-[12px] text-[#7a8190]">
+                      현재 선택: {getInterviewLanguageLabel(selectedLanguage)}
+                    </p>
+                  </CategoryCard>
+
                   <CategoryCard title="선택 요약" description="세션 상단에 그대로 표시되는 메타 정보입니다.">
                     <div className="flex flex-wrap gap-2">
                       {selectedJob ? <span className="rounded-full border border-[#d8dde7] bg-white px-3 py-1 text-[12px] text-[#4f5664]">{selectedJob.displayName || selectedJob.name}</span> : null}
+                      <span className="rounded-full border border-[#d8dde7] bg-white px-3 py-1 text-[12px] text-[#4f5664]">
+                        언어: {getInterviewLanguageLabel(selectedLanguage)}
+                      </span>
                       {selectedQuestionSet ? (
                         <span className="rounded-full border border-[#d8dde7] bg-[#f7f9fc] px-3 py-1 text-[12px] text-[#4f5664]">
                           질문 세트: {selectedQuestionSet.title}
@@ -1031,6 +1147,7 @@ export const InterviewStartPage = () => {
       ) : null}
       {showPointChargeSuccessModal ? <PointChargeSuccessModal onClose={() => setShowPointChargeSuccessModal(false)} /> : null}
       {showGeminiOverloadModal ? <GeminiOverloadModal onClose={() => setShowGeminiOverloadModal(false)} /> : null}
+      <JobSkillExampleModal open={showExampleModal} onClose={() => setShowExampleModal(false)} />
       {showPrereqGuideModal ? (
         <InterviewPrerequisiteGuideModal
           onClose={() => setShowPrereqGuideModal(false)}

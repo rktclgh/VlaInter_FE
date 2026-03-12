@@ -9,6 +9,7 @@ import { PointChargeSuccessModal } from "../../components/PointChargeSuccessModa
 import dragDropIcon from "../../assets/icon/Drag_Drop.png";
 import plusIcon from "../../assets/icon/plus.png";
 import tempProfileImage from "../../assets/icon/temp.png";
+import wordIcon from "../../assets/icon/word.png";
 import { isAuthenticationError } from "../../lib/apiClient";
 import { logout } from "../../lib/authApi";
 import { ingestMockDocument } from "../../lib/interviewApi";
@@ -114,11 +115,42 @@ const normalizeFileRecord = (file, fallbackName = "") => {
   };
 };
 
-const isPdfFile = (file) => {
+const INTERVIEW_DOCUMENT_ACCEPT = [
+  "application/pdf",
+  ".pdf",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  ".docx",
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  ".pptx",
+].join(",");
+
+const isSupportedInterviewDocumentFile = (file) => {
   const lowerName = (file?.name || "").toLowerCase();
-  const extensionValid = lowerName.endsWith(".pdf");
-  const mimeValid = !file?.type || file.type === "application/pdf";
+  const extensionValid = lowerName.endsWith(".pdf") || lowerName.endsWith(".docx") || lowerName.endsWith(".pptx");
+  const mimeValid = !file?.type || [
+    "application/pdf",
+    "application/octet-stream",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  ].includes(file.type);
   return extensionValid && mimeValid;
+};
+
+const resolveFileExtension = (fileName = "") => {
+  const extension = String(fileName).trim().toLowerCase().split(".").pop();
+  if (!extension || extension === fileName) return "file";
+  return extension;
+};
+
+const resolveDocumentBadge = (fileName = "") => {
+  const extension = resolveFileExtension(fileName);
+  if (extension === "docx") {
+    return { type: "icon", label: "DOCX", icon: wordIcon };
+  }
+  if (extension === "pptx") {
+    return { type: "text", label: "PPTX" };
+  }
+  return { type: "text", label: "PDF" };
 };
 
 const formatBytes = (bytes) => {
@@ -215,17 +247,23 @@ const FileRow = ({
   uploadedDate,
   sizeLabel,
   statusLabel = "",
-  showPdfBadge = true,
+  badge = { type: "text", label: "PDF" },
   actionNode = null,
   ocrUsed = false,
 }) => {
   return (
     <div className="flex flex-col gap-3 rounded-[12px] border border-[#dddddd] bg-[#f7f7f7] px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
       <div className="flex min-w-0 items-center gap-3">
-        {showPdfBadge ? (
-          <div className="flex h-9 w-7 shrink-0 flex-col items-center justify-center rounded-[4px] border border-[#ff5c5c] text-[9px] font-semibold text-[#ff3d3d]">
-            PDF
-          </div>
+        {badge ? (
+          badge.type === "icon" ? (
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[8px] border border-[#d9d9d9] bg-white">
+              <img src={badge.icon} alt={badge.label} className="h-6 w-6 object-contain" />
+            </div>
+          ) : (
+            <div className="flex h-9 w-9 shrink-0 flex-col items-center justify-center rounded-[8px] border border-[#d9d9d9] bg-white text-[9px] font-semibold text-[#4b4b4b]">
+              {badge.label}
+            </div>
+          )
         ) : null}
         <div className="min-w-0">
           <div className="flex min-w-0 items-center gap-2">
@@ -277,8 +315,8 @@ const UploadDropZone = ({
       <label htmlFor={inputId} className="mt-1 inline-block cursor-pointer text-[11px] text-[#8d8d8d] underline">
         또는 파일 불러오기
       </label>
-      <input id={inputId} type="file" accept="application/pdf,.pdf" onChange={onFileInput} className="hidden" />
-      <p className="mt-2 text-[10px] text-[#c0c0c0]">pdf</p>
+      <input id={inputId} type="file" accept={INTERVIEW_DOCUMENT_ACCEPT} onChange={onFileInput} className="hidden" />
+      <p className="mt-2 text-[10px] text-[#c0c0c0]">pdf, docx, pptx</p>
       {error ? <p className="mt-2 text-[11px] text-[#e34b4b]">{error}</p> : null}
     </div>
   );
@@ -296,6 +334,7 @@ const UploadDropZone = ({
         </button>
 
         <FileRow
+          badge={resolveDocumentBadge(pendingFile.name)}
           fileName={pendingFile.name}
           uploadedDate={formatDate(new Date().toISOString())}
           sizeLabel={formatBytes(pendingFile.size)}
@@ -321,48 +360,53 @@ const UploadDropZone = ({
     return (
       <div>
         <div className="space-y-2 rounded-[14px] border border-[#dedede] bg-white px-4 py-4">
-          {savedFiles.map((file) => (
-            <FileRow
-              key={file?.fileId || `${file?.fileName}-${file?.createdAt}`}
-              fileName={resolveDisplayFileName(file)}
-              uploadedDate={formatDate(file?.createdAt ?? file?.created_at)}
-              sizeLabel="PDF"
-              ocrUsed={Boolean(file?.ocrUsed)}
-              statusLabel={formatIngestionStatus(
-                file?.ingestionStatus,
-                file?.ingested,
-                file?.extractionMethod,
-                file?.ocrUsed
-              )}
-              actionNode={
-                <div className="flex items-center gap-2">
-                  {file?.ingested ? (
-                    <span className="rounded-full bg-[#e9f5ee] px-2 py-1 text-[10px] font-semibold text-[#2f7a4d]">
-                      READY
-                    </span>
-                  ) : (
+          {savedFiles.map((file) => {
+            const displayName = resolveDisplayFileName(file);
+            const badge = resolveDocumentBadge(displayName);
+            return (
+              <FileRow
+                key={file?.fileId || `${file?.fileName}-${file?.createdAt}`}
+                fileName={displayName}
+                uploadedDate={formatDate(file?.createdAt ?? file?.created_at)}
+                sizeLabel={badge.label}
+                badge={badge}
+                ocrUsed={Boolean(file?.ocrUsed)}
+                statusLabel={formatIngestionStatus(
+                  file?.ingestionStatus,
+                  file?.ingested,
+                  file?.extractionMethod,
+                  file?.ocrUsed
+                )}
+                actionNode={
+                  <div className="flex items-center gap-2">
+                    {file?.ingested ? (
+                      <span className="rounded-full bg-[#e9f5ee] px-2 py-1 text-[10px] font-semibold text-[#2f7a4d]">
+                        READY
+                      </span>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => onAnalyzeSaved(file?.fileId)}
+                        disabled={analyzingFileId === String(file?.fileId) || isIngestionRunning(file?.ingestionStatus)}
+                        className="rounded-full border border-[#5d6ef8] px-2 py-1 text-[10px] font-semibold text-[#5d6ef8] disabled:opacity-60"
+                      >
+                        {analyzingFileId === String(file?.fileId) || isIngestionRunning(file?.ingestionStatus)
+                          ? "분석 중..."
+                          : "AI 분석"}
+                      </button>
+                    )}
                     <button
                       type="button"
-                      onClick={() => onAnalyzeSaved(file?.fileId)}
-                      disabled={analyzingFileId === String(file?.fileId) || isIngestionRunning(file?.ingestionStatus)}
-                      className="rounded-full border border-[#5d6ef8] px-2 py-1 text-[10px] font-semibold text-[#5d6ef8] disabled:opacity-60"
+                      onClick={() => onDeleteSaved(file?.fileId)}
+                      className="rounded-full bg-[#ff4a4a] px-2 py-1 text-[10px] font-semibold text-white"
                     >
-                      {analyzingFileId === String(file?.fileId) || isIngestionRunning(file?.ingestionStatus)
-                        ? "분석 중..."
-                        : "AI 분석"}
+                      삭제
                     </button>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => onDeleteSaved(file?.fileId)}
-                    className="rounded-full bg-[#ff4a4a] px-2 py-1 text-[10px] font-semibold text-white"
-                  >
-                    삭제
-                  </button>
-                </div>
-              }
-            />
-          ))}
+                  </div>
+                }
+              />
+            );
+          })}
         </div>
 
         <div
@@ -519,8 +563,8 @@ export const FileUploadPage = () => {
 
   const handleFilePicked = (type, file) => {
     if (!file) return;
-    if (!isPdfFile(file)) {
-      setTypeError(type, "PDF 파일만 업로드할 수 있습니다.");
+    if (!isSupportedInterviewDocumentFile(file)) {
+      setTypeError(type, "PDF, DOCX, PPTX 파일만 업로드할 수 있습니다.");
       return;
     }
 

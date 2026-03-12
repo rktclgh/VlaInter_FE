@@ -38,7 +38,7 @@ export async function sendSupportReport({ category, title, message, screenshot, 
   }
 
   if (!response.ok) {
-    throw new Error(data?.message || "메일 전송에 실패했습니다.");
+    throw new Error(data?.message || "전송에 실패했습니다.");
   }
 
   return data;
