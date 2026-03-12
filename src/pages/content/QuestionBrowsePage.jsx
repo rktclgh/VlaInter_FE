@@ -14,6 +14,7 @@ import { consumePointChargeSuccessResult } from "../../lib/pointChargeFlow";
 import { extractProfile, formatPoint, parsePoint } from "../../lib/profileUtils";
 import { isAlreadySavedQuestionError } from "../../lib/savedQuestionUtils";
 import { getGlobalInterviewSets, getInterviewSetQuestions, saveInterviewQuestion, startTechInterview } from "../../lib/interviewApi";
+import { getInterviewLanguageLabel, INTERVIEW_LANGUAGE_OPTIONS, normalizeInterviewLanguage } from "../../lib/interviewLanguage";
 import { saveTechInterviewSession } from "../../lib/interviewSessionFlow";
 import { isGeminiOverloadError } from "../../lib/geminiErrorUtils";
 import { getMyProfile, getMyProfileImageUrl } from "../../lib/userApi";
@@ -42,6 +43,20 @@ const InlineSpinner = ({ label }) => (
     <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-[#cbd5e1] border-t-[#171b24]" />
     {label}
   </div>
+);
+
+const LanguageSelect = ({ value, onChange }) => (
+  <select
+    value={value}
+    onChange={(event) => onChange(event.target.value)}
+    className="rounded-[12px] border border-[#d9dde5] bg-white px-3 py-2 text-[12px] outline-none focus:border-[#9aa9cd]"
+  >
+    {INTERVIEW_LANGUAGE_OPTIONS.map((option) => (
+      <option key={option.value} value={option.value}>
+        {option.label}
+      </option>
+    ))}
+  </select>
 );
 
 const LogoutConfirmModal = ({ onCancel, onConfirm }) => (
@@ -74,6 +89,7 @@ export const QuestionBrowsePage = () => {
   const [selectedSetId, setSelectedSetId] = useState(null);
   const [query, setQuery] = useState("");
   const [startingSetId, setStartingSetId] = useState(null);
+  const [selectedLanguage, setSelectedLanguage] = useState("KO");
   const [isStartingSetLaunch, setIsStartingSetLaunch] = useState(false);
   const [pageErrorMessage, setPageErrorMessage] = useState("");
   const [showGeminiOverloadModal, setShowGeminiOverloadModal] = useState(false);
@@ -212,6 +228,7 @@ export const QuestionBrowsePage = () => {
         setId: setItem.setId,
         jobName: primaryJobName,
         skillName: (Array.isArray(setItem.skillNames) ? setItem.skillNames[0] : setItem.skillName) || null,
+        language: selectedLanguage,
         questionCount: 5,
         saveHistory: false,
       });
@@ -227,6 +244,7 @@ export const QuestionBrowsePage = () => {
         metadata: {
           apiBasePath: "/api/interview/tech",
           fromQuestionSet: true,
+          language: normalizeInterviewLanguage(response.language || selectedLanguage),
           saveHistory: false,
           categoryName: (Array.isArray(setItem.skillNames) ? setItem.skillNames.join(", ") : setItem.skillName) || null,
           jobName: primaryJobName,
@@ -426,6 +444,10 @@ export const QuestionBrowsePage = () => {
                     </div>
                     <p className="mt-2 text-[12px] text-[#6b7280]">{formatDate(selectedSet.createdAt)}</p>
                     <p className="mt-2 text-[12px] leading-[1.7] text-[#5e6472]">{selectedSet.description || "세트 설명이 없습니다."}</p>
+                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                      <LanguageSelect value={selectedLanguage} onChange={setSelectedLanguage} />
+                      <span className="text-[11px] text-[#6b7280]">연습 언어: {getInterviewLanguageLabel(selectedLanguage)}</span>
+                    </div>
                     <div className="mt-3 flex justify-end">
                       <button
                         type="button"

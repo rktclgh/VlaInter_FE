@@ -18,6 +18,7 @@ import { saveTechInterviewSession } from "../../lib/interviewSessionFlow";
 import { consumePointChargeSuccessResult } from "../../lib/pointChargeFlow";
 import { createInterviewCategory, dismissTechSession, getInterviewCategories, getLatestIncompleteTechSession, startTechInterview } from "../../lib/interviewApi";
 import { isGeminiOverloadError } from "../../lib/geminiErrorUtils";
+import { getInterviewLanguageLabel, INTERVIEW_LANGUAGE_OPTIONS, normalizeInterviewLanguage } from "../../lib/interviewLanguage";
 import { extractProfile } from "../../lib/profileUtils";
 import { getMyProfile, getMyProfileImageUrl } from "../../lib/userApi";
 
@@ -59,6 +60,20 @@ const DifficultyChip = ({ label, active = false, onClick }) => (
   </button>
 );
 
+const LanguageSelect = ({ value, onChange }) => (
+  <select
+    value={value}
+    onChange={(event) => onChange(event.target.value)}
+    className="rounded-[14px] border border-[#dfe3eb] bg-white px-4 py-3 text-[13px] outline-none focus:border-[#8aa2e8]"
+  >
+    {INTERVIEW_LANGUAGE_OPTIONS.map((option) => (
+      <option key={option.value} value={option.value}>
+        {option.label}
+      </option>
+    ))}
+  </select>
+);
+
 export const TechPracticePage = () => {
   const navigate = useNavigate();
   const [userName, setUserName] = useState("사용자");
@@ -78,6 +93,7 @@ export const TechPracticePage = () => {
   const [categoryQuery, setCategoryQuery] = useState("");
   const [selectedSkillId, setSelectedSkillId] = useState("");
   const [selectedRating, setSelectedRating] = useState(DEFAULT_RATING);
+  const [selectedLanguage, setSelectedLanguage] = useState("KO");
   const [pageErrorMessage, setPageErrorMessage] = useState("");
   const [showGeminiOverloadModal, setShowGeminiOverloadModal] = useState(false);
   const [creatingCategory, setCreatingCategory] = useState(false);
@@ -289,6 +305,7 @@ export const TechPracticePage = () => {
         categoryId: category.categoryId || null,
         questionCount: QUESTION_COUNT,
         difficulty: ratingToDifficulty(selectedRating),
+        language: selectedLanguage,
       });
       if (!response?.sessionId || !response?.currentQuestion) {
         setPageErrorMessage("연습 세션은 생성되었지만 첫 질문을 불러오지 못했습니다.");
@@ -301,6 +318,7 @@ export const TechPracticePage = () => {
         completed: false,
         metadata: {
           apiBasePath: "/api/interview/tech",
+          language: normalizeInterviewLanguage(response.language || selectedLanguage),
           categoryName: category.name,
           difficultyLabel: ratingToDifficulty(selectedRating),
           questionCount: QUESTION_COUNT,
@@ -535,6 +553,11 @@ export const TechPracticePage = () => {
 
               <div className="mt-5 flex flex-wrap gap-2">
                 {[1, 2, 3, 4, 5].map((rating) => <DifficultyChip key={rating} label={<StarIcons rating={rating} sizeClass="text-[11px]" />} active={Number(selectedRating) === rating} onClick={() => setSelectedRating(rating)} />)}
+              </div>
+              <div className="mt-4 flex flex-wrap items-center gap-3">
+                <span className="text-[12px] font-semibold tracking-[0.08em] text-[#7a8190]">4. 면접 언어</span>
+                <LanguageSelect value={selectedLanguage} onChange={setSelectedLanguage} />
+                <span className="text-[12px] text-[#7a8190]">현재 선택: {getInterviewLanguageLabel(selectedLanguage)}</span>
               </div>
             </section>
 

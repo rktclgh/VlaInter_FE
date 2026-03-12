@@ -30,6 +30,7 @@ export function buildResumedSessionSnapshot(session, metadata = {}) {
     metadata: {
       selectedDocuments: mapSelectedDocumentsByType(session.selectedDocuments),
       questionCount: Number(session.questionCount || 0),
+      language: session.language || null,
       difficulty: session.difficulty || null,
       difficultyLabel: session.difficulty || null,
       difficultyRating: session.difficultyRating ?? null,

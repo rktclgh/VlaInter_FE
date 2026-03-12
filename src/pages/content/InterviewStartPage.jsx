@@ -21,6 +21,7 @@ import { consumePointChargeSuccessResult } from "../../lib/pointChargeFlow";
 import { extractProfile, formatPoint, parsePoint } from "../../lib/profileUtils";
 import { getMyProfile, getMyProfileImageUrl } from "../../lib/userApi";
 import { isGeminiOverloadError } from "../../lib/geminiErrorUtils";
+import { getInterviewLanguageLabel, INTERVIEW_LANGUAGE_OPTIONS, normalizeInterviewLanguage } from "../../lib/interviewLanguage";
 
 const DOCUMENT_TYPES = [
   { key: "RESUME", label: "이력서" },
@@ -133,6 +134,20 @@ const FilterChip = ({ label, active = false, onClick }) => (
   </button>
 );
 
+const LanguageSelect = ({ value, onChange }) => (
+  <select
+    value={value}
+    onChange={(event) => onChange(event.target.value)}
+    className="rounded-[14px] border border-[#dfe3eb] bg-white px-4 py-3 text-[13px] outline-none focus:border-[#8aa2e8]"
+  >
+    {INTERVIEW_LANGUAGE_OPTIONS.map((option) => (
+      <option key={option.value} value={option.value}>
+        {option.label}
+      </option>
+    ))}
+  </select>
+);
+
 const toggleSkillSelection = (prev, nextId) => {
   if (prev.includes(nextId)) {
     return prev.filter((id) => id !== nextId);
@@ -171,6 +186,7 @@ export const InterviewStartPage = () => {
   const [selectedQuestionSetId, setSelectedQuestionSetId] = useState("");
   const [selectedRating, setSelectedRating] = useState(3);
   const [selectedQuestionCount, setSelectedQuestionCount] = useState(5);
+  const [selectedLanguage, setSelectedLanguage] = useState("KO");
   const [includeSelfIntroduction, setIncludeSelfIntroduction] = useState(false);
   const [loadingPage, setLoadingPage] = useState(true);
   const [startingInterview, setStartingInterview] = useState(false);
@@ -540,6 +556,7 @@ export const InterviewStartPage = () => {
         categoryIds: selectedCategoryIds.map((id) => Number(id)).filter(Number.isFinite),
         jobName: resolvedJobName,
         difficulty: ratingToDifficulty(selectedRating),
+        language: selectedLanguage,
         includeSelfIntroduction,
         questionCount: Math.max(5, Number(selectedQuestionCount) || 5),
       });
@@ -561,6 +578,7 @@ export const InterviewStartPage = () => {
             introduce: buildSelectedDocumentMeta(selectedFileObjects.INTRODUCE, "INTRODUCE"),
             portfolio: buildSelectedDocumentMeta(selectedFileObjects.PORTFOLIO, "PORTFOLIO"),
           },
+          language: normalizeInterviewLanguage(response.language || selectedLanguage),
           difficulty: ratingToDifficulty(selectedRating),
           difficultyRating: selectedRating,
           categoryId: null,
@@ -964,9 +982,19 @@ export const InterviewStartPage = () => {
                     </div>
                   </CategoryCard>
 
+                  <CategoryCard title="면접 언어" description="영어 면접을 선택하면 질문, 답변, 피드백이 영어 기준으로 진행됩니다. 영어 세션에서는 답변도 영어로 작성해야 합니다.">
+                    <LanguageSelect value={selectedLanguage} onChange={setSelectedLanguage} />
+                    <p className="mt-3 text-[12px] text-[#7a8190]">
+                      현재 선택: {getInterviewLanguageLabel(selectedLanguage)}
+                    </p>
+                  </CategoryCard>
+
                   <CategoryCard title="선택 요약" description="세션 상단에 그대로 표시되는 메타 정보입니다.">
                     <div className="flex flex-wrap gap-2">
                       {selectedJob ? <span className="rounded-full border border-[#d8dde7] bg-white px-3 py-1 text-[12px] text-[#4f5664]">{selectedJob.displayName || selectedJob.name}</span> : null}
+                      <span className="rounded-full border border-[#d8dde7] bg-white px-3 py-1 text-[12px] text-[#4f5664]">
+                        언어: {getInterviewLanguageLabel(selectedLanguage)}
+                      </span>
                       {selectedQuestionSet ? (
                         <span className="rounded-full border border-[#d8dde7] bg-[#f7f9fc] px-3 py-1 text-[12px] text-[#4f5664]">
                           질문 세트: {selectedQuestionSet.title}
