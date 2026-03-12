@@ -67,8 +67,8 @@ export const SupportReportModal = ({ open, onClose }) => {
 
   const helperText = useMemo(() => (
     category === "BUG_REPORT"
-      ? "오류가 난 화면과 재현 방법을 적어주시면 관리자 전원에게 메일이 전송됩니다."
-      : "운영자에게 남길 의견이나 요청사항을 적어주시면 관리자 전원에게 메일이 전송됩니다."
+      ? "오류가 난 화면과 재현 방법을 적어주시면 운영자 디스코드로 바로 전송됩니다."
+      : "운영자에게 남길 의견이나 요청사항을 적어주시면 운영자 디스코드로 전송됩니다."
   ), [category]);
 
   if (!open) return null;
@@ -87,12 +87,12 @@ export const SupportReportModal = ({ open, onClose }) => {
         message: message.trim(),
         screenshot,
       });
-      setSuccessMessage(response?.message || "운영자에게 메일을 전송했습니다.");
+      setSuccessMessage(response?.message || "운영자 디스코드로 전송했습니다.");
       setTitle("");
       setMessage("");
       setScreenshot(null);
     } catch (error) {
-      setErrorMessage(error?.message || "메일 전송에 실패했습니다.");
+      setErrorMessage(error?.message || "전송에 실패했습니다.");
     } finally {
       setSending(false);
     }
@@ -200,7 +200,7 @@ export const SupportReportModal = ({ open, onClose }) => {
               disabled={sending}
               className="rounded-[14px] bg-[#171b24] px-4 py-2.5 text-[13px] font-semibold text-white disabled:opacity-60"
             >
-              {sending ? "전송 중..." : "메일 보내기"}
+              {sending ? "전송 중..." : "전송하기"}
             </button>
           </div>
         </form>
