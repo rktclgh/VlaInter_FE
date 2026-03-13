@@ -187,4 +187,156 @@
     animation: dropdown-pop 0.16s ease-out;
     transform-origin: top center;
   }
+
+  @keyframes wave-image-float {
+    0% {
+      transform: translate3d(0, 0, 0) scale(1);
+    }
+
+    50% {
+      transform: translate3d(0, -1.15rem, 0) scale(1.025);
+    }
+
+    100% {
+      transform: translate3d(0, 0, 0) scale(1);
+    }
+  }
+
+  @keyframes wave-image-glow {
+    0% {
+      transform: translate3d(0, 0.2rem, 0) scale(1.01);
+      opacity: 0.28;
+    }
+
+    50% {
+      transform: translate3d(-1.5rem, -1rem, 0) scale(1.05);
+      opacity: 0.46;
+    }
+
+    100% {
+      transform: translate3d(0, 0.2rem, 0) scale(1.01);
+      opacity: 0.28;
+    }
+  }
+
+  @keyframes wave-ambient-glow {
+    0% {
+      transform: translate3d(0, 0, 0) scale(1);
+      opacity: 0.44;
+    }
+
+    50% {
+      transform: translate3d(1.5rem, -1rem, 0) scale(1.08);
+      opacity: 0.76;
+    }
+
+    100% {
+      transform: translate3d(0, 0, 0) scale(1);
+      opacity: 0.44;
+    }
+  }
+
+  @keyframes wave-ambient-glow-delayed {
+    0% {
+      transform: translate3d(0, 0, 0) scale(1);
+      opacity: 0.38;
+    }
+
+    50% {
+      transform: translate3d(-2rem, 1.25rem, 0) scale(1.1);
+      opacity: 0.68;
+    }
+
+    100% {
+      transform: translate3d(0, 0, 0) scale(1);
+      opacity: 0.38;
+    }
+  }
+
+  @keyframes wave-ambient-glow-slow {
+    0% {
+      transform: translate3d(0, 0, 0) scale(1);
+      opacity: 0.28;
+    }
+
+    50% {
+      transform: translate3d(0.75rem, -0.75rem, 0) scale(1.06);
+      opacity: 0.54;
+    }
+
+    100% {
+      transform: translate3d(0, 0, 0) scale(1);
+      opacity: 0.28;
+    }
+  }
+
+  @keyframes wave-mesh-primary {
+    0% {
+      transform: translate3d(0, 0, 0) rotate(-6deg) scale(1);
+    }
+
+    50% {
+      transform: translate3d(1.5rem, -1rem, 0) rotate(-4deg) scale(1.04);
+    }
+
+    100% {
+      transform: translate3d(0, 0, 0) rotate(-6deg) scale(1);
+    }
+  }
+
+  @keyframes wave-mesh-secondary {
+    0% {
+      transform: translate3d(0, 0, 0) rotate(8deg) scale(1);
+    }
+
+    50% {
+      transform: translate3d(-1.75rem, 0.85rem, 0) rotate(10deg) scale(1.05);
+    }
+
+    100% {
+      transform: translate3d(0, 0, 0) rotate(8deg) scale(1);
+    }
+  }
+
+  .wave-image-float {
+    animation: wave-image-float 8s ease-in-out infinite;
+    transform-origin: center bottom;
+    will-change: transform;
+  }
+
+  .wave-image-glow {
+    animation: wave-image-glow 10s ease-in-out infinite;
+    transform-origin: center bottom;
+    will-change: transform, opacity;
+  }
+
+  .wave-ambient-glow {
+    animation: wave-ambient-glow 9s ease-in-out infinite;
+    will-change: transform, opacity;
+  }
+
+  .wave-ambient-glow-delayed {
+    animation: wave-ambient-glow-delayed 12s ease-in-out infinite;
+    will-change: transform, opacity;
+  }
+
+  .wave-ambient-glow-slow {
+    animation: wave-ambient-glow-slow 14s ease-in-out infinite;
+    will-change: transform, opacity;
+  }
+
+  .wave-mesh-primary {
+    animation: wave-mesh-primary 11s ease-in-out infinite;
+    will-change: transform;
+  }
+
+  .wave-mesh-secondary {
+    animation: wave-mesh-secondary 12s ease-in-out infinite;
+    will-change: transform;
+  }
+
+  .wave-mesh-tertiary {
+    animation: wave-ambient-glow-slow 8s ease-in-out infinite;
+    will-change: transform, opacity;
+  }
 }

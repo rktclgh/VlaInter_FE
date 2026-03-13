@@ -1,9 +1,10 @@
-import { useEffect } from "react";
-import { TopNav } from "../components/TopNav";
-import { AuthFooter } from "../components/AuthFooter";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
 import { Link, useNavigate } from "react-router-dom";
 import { getMyProfile } from "../lib/userApi";
 import { hasAuthenticatedBrowserSession } from "../lib/authSessionMarker";
+import { WaveBackground } from "../components/WaveBackground";
+import logoMark from "../assets/logo/favicon.png";
 import icon11st from "../assets/icon/11st.png";
 import iconDaum from "../assets/icon/Daum.png";
 import iconHmail from "../assets/icon/Hmail.png";
@@ -29,8 +30,105 @@ import iconToss from "../assets/icon/toss.png";
 import iconTvn from "../assets/icon/tvn.png";
 import iconYogiyo from "../assets/icon/yogiyo.png";
 
+const heroPills = [
+  { label: "실전 모의 면접", to: "/content/interview" },
+  { label: "기술질문 연습", to: "/content/tech-practice" },
+  { label: "질문 공유하기", to: "/content/question-browse" },
+];
+
+const landingSections = [
+  { id: "service-introduce", label: "SERVICE INTRODUCE" },
+  { id: "credit", label: "CREDIT" },
+  { id: "patch-note", label: "PATCH NOTE" },
+];
+
+const productCards = [
+  {
+    title: "실전 모의 면접",
+    description: "이력서와 직무 기반으로 맞춤 문항을 생성하고 실제 면접 흐름처럼 연습합니다.",
+    to: "/content/interview",
+  },
+  {
+    title: "기술질문 연습",
+    description: "기술 카테고리별 예상 질문을 빠르게 반복 연습하고 즉시 피드백을 받습니다.",
+    to: "/content/tech-practice",
+  },
+  {
+    title: "파일 관리",
+    description: "이력서, 자기소개서, 포트폴리오를 업로드해 문서 기반 면접 준비 흐름으로 이어집니다.",
+    to: "/content/files",
+  },
+];
+
+const patchNotes = [
+  {
+    title: "Landing Refresh",
+    body: "웨이브 배경과 집중형 타이포 중심의 첫 화면으로 정리했습니다.",
+  },
+  {
+    title: "Interview Flow",
+    body: "실전 모의면접과 기술질문 연습으로 바로 진입할 수 있도록 CTA를 재배치했습니다.",
+  },
+  {
+    title: "Security Hardening",
+    body: "프록시 체인, rate limit, 재부팅 이후 blue/green 기동 정책을 다시 정리했습니다.",
+  },
+];
+
+const footerLinks = [
+  { label: "서비스 소개", to: "/about" },
+  { label: "이용약관", to: "/terms" },
+  { label: "개인정보처리방침", to: "/privacy" },
+];
+
+const logoColumns = [
+  [
+    { src: iconLotte, alt: "LOTTE" },
+    { src: iconHyundaicard, alt: "Hyundaicard" },
+    { src: iconKt, alt: "KT" },
+    { src: icon11st, alt: "11st" },
+    { src: iconDaum, alt: "Daum" },
+    { src: iconHmail, alt: "Hmail" },
+  ],
+  [
+    { src: iconNaver, alt: "Naver" },
+    { src: iconKasa, alt: "Kasa" },
+    { src: iconHana, alt: "Hana" },
+    { src: iconJtbc, alt: "JTBC" },
+    { src: iconKb, alt: "KB" },
+    { src: iconKbs, alt: "KBS" },
+  ],
+  [
+    { src: iconCgv, alt: "CGV" },
+    { src: iconToss, alt: "Toss" },
+    { src: iconCj, alt: "CJ" },
+    { src: iconLguplus, alt: "LG U+" },
+    { src: iconMbc, alt: "MBC" },
+    { src: iconSaramin, alt: "Saramin" },
+  ],
+  [
+    { src: iconSbs, alt: "SBS" },
+    { src: iconSeason, alt: "Season" },
+    { src: iconTvn, alt: "tvN" },
+    { src: iconShinhancard, alt: "Shinhan Card" },
+    { src: iconSktelecom, alt: "SK Telecom" },
+    { src: iconYogiyo, alt: "Yogiyo" },
+  ],
+];
+
+const sectionTitleClass =
+  "text-[clamp(1.55rem,3.2vw,2.55rem)] font-medium tracking-[-0.04em] text-white";
+const sectionBodyClass =
+  "max-w-[42rem] text-[0.95rem] leading-7 text-white/62 md:text-[1rem]";
+const MotionButton = motion.button;
+const MotionAside = motion.aside;
+const MotionDiv = motion.div;
+const MotionH1 = motion.h1;
+const MotionArticle = motion.article;
+
 export const StartingPage = () => {
   const navigate = useNavigate();
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   useEffect(() => {
     let unmounted = false;
@@ -56,257 +154,284 @@ export const StartingPage = () => {
     };
   }, [navigate]);
 
-  const heroTags = ["이력서 분석하기", "예상질문 50개", "대기업 인재상 Top5", "(어그로임)"];
+  const scrollToSection = useCallback((sectionId) => {
+    const element = document.getElementById(sectionId);
+    if (!element) return;
+    element.scrollIntoView({ behavior: "smooth", block: "start" });
+    setIsSidebarOpen(false);
+  }, []);
 
-  const statTagsOne = [
-    "Vlainter의 역대 입사면접 합격자가 몇명이야?",
-    "네이버 면접 사례 좀 알려줘",
-  ];
-
-  const statTagsTwo = [
-    "지금 내가 지원하는 회사의 면접질문 적중률은?",
-    "예상 면접질문 20개 뽑아줘",
-  ];
-
-  const logoColumnsDesktop = [
-    [
-      { src: iconLotte, alt: "LOTTE" },
-      { src: iconHyundaicard, alt: "Hyundaicard" },
-      { src: iconKt, alt: "kt" },
-      { src: icon11st, alt: "11st" },
-      { src: iconDaum, alt: "Daum" },
-      { src: iconHmail, alt: "Hmail" },
-    ],
-    [
-      { src: iconNaver, alt: "Naver" },
-      { src: iconKasa, alt: "kasa" },
-      { src: iconHana, alt: "Hana" },
-      { src: iconJtbc, alt: "JTBC" },
-      { src: iconKb, alt: "KB" },
-      { src: iconKbs, alt: "KBS" },
-    ],
-    [
-      { src: iconCgv, alt: "CGV" },
-      { src: iconToss, alt: "toss" },
-      { src: iconCj, alt: "CJ" },
-      { src: iconLguplus, alt: "LG U+" },
-      { src: iconMbc, alt: "MBC" },
-      { src: iconSaramin, alt: "Saramin" },
-    ],
-    [
-      { src: iconSbs, alt: "SBS" },
-      { src: iconSeason, alt: "Season" },
-      { src: iconTvn, alt: "tvN" },
-      { src: iconShinhancard, alt: "Shinhan Card" },
-      { src: iconSktelecom, alt: "SK Telecom" },
-      { src: iconYogiyo, alt: "Yogiyo" },
-    ],
-  ];
-
-  const logoColumnsTablet = logoColumnsDesktop.slice(0, 3);
-  const logoColumnsMobile = logoColumnsDesktop.slice(0, 2);
-
-  const chipClass =
-    "relative inline-flex h-[20px] items-center justify-center rounded-full bg-white px-3 text-[12px] text-[#636363] shadow-[inset_0_0_0_1px_rgba(93,131,222,0.45)]";
+  const logoMarqueeColumns = useMemo(() => logoColumns, []);
 
   return (
-    <div className="min-h-screen w-full overflow-x-hidden bg-white text-black">
-      <TopNav />
-
-      <section className="mt-[54px] h-auto min-h-[365px] w-full bg-[#f2f2f2] lg:h-[365px]">
-        <div className="relative mx-auto h-full w-full max-w-[1256px] overflow-hidden px-6 pb-10 pt-8 md:px-10 md:pt-12 lg:pb-0 lg:pt-0">
-          <div className="flex h-full flex-col lg:grid lg:grid-cols-[420px_minmax(0,1fr)] lg:gap-8">
-            <div className="w-full lg:pt-[94px]">
-            <p className="text-[13px] font-light text-[#767676]">
-              사용자 맞춤 AI 가상면접도우미
-            </p>
-
-            <h1 className="mt-2 text-[30px] leading-[1.2] tracking-[0.3px] md:text-[40px]">
-              <span className="font-light text-[#767676]">
-                이력서는 문을 열어주고
-              </span>
-              <br />
-              <span className="font-bold text-black">
-                이야기는
-                <br />
-                합격을 만들어줍니다.
-              </span>
-            </h1>
-
-            <div className="mt-4 flex flex-wrap gap-2">
-              {heroTags.map((tag) => (
-                <span key={tag} className={chipClass}>
-                  {tag}
-                </span>
-              ))}
-            </div>
-
-            <Link
-              to="/login"
-              className="mt-5 mb-10 inline-flex h-10 w-[189px] items-center justify-center rounded-[20px] bg-[linear-gradient(324deg,rgba(93,131,222,1)_0%,rgba(255,28,145,1)_100%)] text-[20px] font-semibold text-white md:mb-12 lg:mb-0"
+    <div className="min-h-screen overflow-x-hidden bg-[#111111] text-white">
+      <AnimatePresence>
+        {isSidebarOpen ? (
+          <>
+            <MotionButton
+              type="button"
+              aria-label="사이드바 닫기"
+              className="fixed inset-0 z-40 bg-black/54 backdrop-blur-[2px]"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsSidebarOpen(false)}
+            />
+            <MotionAside
+              className="fixed left-0 top-0 z-50 flex h-screen w-[min(18rem,88vw)] flex-col border-r border-white/8 bg-[#171717]/96 px-6 py-5 shadow-[1.5rem_0_3.5rem_rgba(0,0,0,0.35)] backdrop-blur-xl"
+              initial={{ x: "-100%", opacity: 0.6 }}
+              animate={{ x: 0, opacity: 1 }}
+              exit={{ x: "-100%", opacity: 0.6 }}
+              transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
             >
-              로그인 후 이용하기
+              <div className="flex items-center justify-end border-b border-white/8 pb-4">
+                <button
+                  type="button"
+                  className="text-[0.76rem] tracking-[0.02em] text-white/72 transition hover:text-white"
+                  onClick={() => setIsSidebarOpen(false)}
+                >
+                  Close <span className="ml-1 text-[0.95rem]">×</span>
+                </button>
+              </div>
+
+              <nav className="mt-7 flex flex-col gap-2.5">
+                {landingSections.map((section) => (
+                  <button
+                    key={section.id}
+                    type="button"
+                    className="rounded-[0.55rem] px-3 py-3 text-left text-[0.9rem] tracking-[0.01em] text-white/82 transition hover:bg-white/8 hover:text-white"
+                    onClick={() => scrollToSection(section.id)}
+                  >
+                    {section.label}
+                  </button>
+                ))}
+              </nav>
+
+              <p className="mt-auto text-[0.7rem] tracking-[0.14em] text-white/28">v0.4</p>
+            </MotionAside>
+          </>
+        ) : null}
+      </AnimatePresence>
+
+      <section className="relative isolate min-h-screen overflow-hidden bg-[#050816]">
+        <WaveBackground />
+
+        <div className="relative z-10 mx-auto flex min-h-screen w-full max-w-[112rem] flex-col px-4 pb-12 pt-4 sm:px-6 lg:px-8">
+          <header className="mx-auto flex w-full max-w-[95rem] items-center justify-between gap-4 rounded-[1.1rem] border border-white/8 bg-black/18 px-4 py-3 backdrop-blur-md md:px-6">
+            <button
+              type="button"
+              className="inline-flex items-center gap-2 text-[0.72rem] tracking-[0.12em] text-white/78 transition hover:text-white"
+              onClick={() => setIsSidebarOpen(true)}
+            >
+              <span className="flex h-8 w-8 items-center justify-center rounded-full border border-white/12 bg-white/6 text-[0.95rem]">
+                ☰
+              </span>
+              <span className="hidden sm:inline">SERVICE</span>
+            </button>
+
+            <Link to="/" className="absolute left-1/2 -translate-x-1/2">
+              <img src={logoMark} alt="Vlainter" className="h-8 w-auto md:h-9" />
             </Link>
-            </div>
 
-            <div className="mt-2 w-full overflow-hidden lg:mt-0 lg:h-full">
-              <div className="grid grid-cols-2 gap-2.5 md:hidden">
-              {logoColumnsMobile.map((column, index) => (
-                  <div key={`mobile-logo-col-${index}`} className="h-[158px] overflow-hidden rounded-[12px]">
-                  <div
-                    className={`logo-marquee-track flex flex-col gap-2.5 ${index % 2 === 1 ? "logo-marquee-track-down" : ""}`}
-                    style={{
-                      "--marquee-distance": "336px",
-                      "--marquee-start": index % 2 === 1 ? "-28px" : "0px",
-                      "--marquee-duration": "26s",
-                      "--marquee-delay": "0s",
-                    }}
-                  >
-                      <div className="flex flex-col gap-2.5">
-                        {column.map((icon) => (
-                          <div
-                            key={`mobile-${icon.alt}`}
-                            className="flex h-[46px] shrink-0 items-center justify-center rounded-[14px] bg-white text-[15px] font-semibold text-[#404040] shadow-[0_1px_4px_rgba(0,0,0,0.12)]"
-                          >
-                            <img src={icon.src} alt={icon.alt} className="max-h-[20px] w-auto object-contain px-4" />
-                          </div>
-                        ))}
-                      </div>
-                      <div className="flex flex-col gap-2.5" aria-hidden="true">
-                        {column.map((icon) => (
-                          <div
-                            key={`mobile-copy-${icon.alt}`}
-                            className="flex h-[46px] shrink-0 items-center justify-center rounded-[14px] bg-white text-[15px] font-semibold text-[#404040] shadow-[0_1px_4px_rgba(0,0,0,0.12)]"
-                          >
-                            <img src={icon.src} alt={icon.alt} className="max-h-[20px] w-auto object-contain px-4" />
-                          </div>
-                        ))}
-                      </div>
-                  </div>
-                </div>
-              ))}
+            <div className="ml-auto flex items-center gap-4 text-[0.72rem] tracking-[0.12em] text-white/82 md:gap-8">
+              <Link to="/join" className="transition hover:text-white">
+                JOIN
+              </Link>
+              <Link to="/login" className="transition hover:text-white">
+                LOG IN
+              </Link>
+              <button type="button" className="hidden items-center gap-1 text-white/82 md:inline-flex">
+                KOR <span className="text-[0.62rem]">▼</span>
+              </button>
             </div>
+          </header>
 
-              <div className="hidden grid-cols-3 gap-3 md:grid lg:hidden">
-              {logoColumnsTablet.map((column, index) => (
-                  <div key={`tablet-logo-col-${index}`} className="h-[186px] overflow-hidden rounded-[12px]">
-                  <div
-                    className={`logo-marquee-track flex flex-col gap-3 ${index % 2 === 1 ? "logo-marquee-track-down" : ""}`}
-                    style={{
-                      "--marquee-distance": "396px",
-                      "--marquee-start": index % 2 === 1 ? "-33px" : "0px",
-                      "--marquee-duration": "30s",
-                      "--marquee-delay": "0s",
-                    }}
-                  >
-                      <div className="flex flex-col gap-3">
-                        {column.map((icon) => (
-                          <div
-                            key={`tablet-${icon.alt}`}
-                            className="flex h-[54px] shrink-0 items-center justify-center rounded-[15px] bg-white text-[19px] font-semibold text-[#404040] shadow-[0_1px_4px_rgba(0,0,0,0.12)]"
-                          >
-                            <img src={icon.src} alt={icon.alt} className="max-h-[24px] w-auto object-contain px-4" />
-                          </div>
-                        ))}
-                      </div>
-                      <div className="flex flex-col gap-3" aria-hidden="true">
-                        {column.map((icon) => (
-                          <div
-                            key={`tablet-copy-${icon.alt}`}
-                            className="flex h-[54px] shrink-0 items-center justify-center rounded-[15px] bg-white text-[19px] font-semibold text-[#404040] shadow-[0_1px_4px_rgba(0,0,0,0.12)]"
-                          >
-                            <img src={icon.src} alt={icon.alt} className="max-h-[24px] w-auto object-contain px-4" />
-                          </div>
-                        ))}
-                      </div>
-                  </div>
-                </div>
-              ))}
-            </div>
+          <div className="mx-auto flex w-full max-w-[95rem] flex-1 flex-col justify-center">
+            <div className="relative mt-8 overflow-hidden rounded-[1.5rem] border border-white/8 bg-black/10 px-6 py-12 backdrop-blur-[1.5px] sm:px-8 md:px-12 md:py-14 lg:min-h-[43rem] lg:px-16 lg:py-16">
+              <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(6,9,25,0.04),rgba(6,9,25,0.32))]" />
+              <div className="relative mx-auto flex h-full max-w-[56rem] flex-col items-center justify-center text-center">
+                <p className="text-[0.78rem] tracking-[0.04em] text-white/60 md:text-[0.86rem]">
+                  사용자 맞춤 AI 면접 시뮬레이터
+                </p>
 
-              <div className="hidden h-full grid-cols-4 gap-3 lg:grid">
-              {logoColumnsDesktop.map((column, index) => (
-                  <div key={`desktop-logo-col-${index}`} className="h-full overflow-hidden rounded-[12px]">
-                  <div
-                    className={`logo-marquee-track flex flex-col gap-12 ${index % 2 === 1 ? "logo-marquee-track-down" : ""}`}
-                    style={{
-                      "--marquee-distance": "690px",
-                      "--marquee-start": index % 2 === 1 ? "-57.5px" : "0px",
-                      "--marquee-duration": "42s",
-                      "--marquee-delay": "0s",
-                    }}
-                  >
-                      <div className="flex flex-col gap-12">
-                        {column.map((icon) => (
-                          <div
-                            key={`desktop-${icon.alt}`}
-                            className="flex h-[67px] shrink-0 items-center justify-center rounded-[15px] bg-white text-[22px] font-semibold text-[#404040] shadow-[0_1px_4px_rgba(0,0,0,0.12)]"
-                          >
-                            <img src={icon.src} alt={icon.alt} className="max-h-[28px] w-auto object-contain px-4" />
-                          </div>
-                        ))}
-                      </div>
-                      <div className="flex flex-col gap-12" aria-hidden="true">
-                        {column.map((icon) => (
-                          <div
-                            key={`desktop-copy-${icon.alt}`}
-                            className="flex h-[67px] shrink-0 items-center justify-center rounded-[15px] bg-white text-[22px] font-semibold text-[#404040] shadow-[0_1px_4px_rgba(0,0,0,0.12)]"
-                          >
-                            <img src={icon.src} alt={icon.alt} className="max-h-[28px] w-auto object-contain px-4" />
-                          </div>
-                        ))}
-                      </div>
-                  </div>
-                </div>
-              ))}
-            </div>
+                <MotionH1
+                  className="mt-4 bg-[linear-gradient(90deg,#5d83de_2%,#9f63f0_40%,#ff1c91_88%)] bg-clip-text text-[clamp(4rem,12vw,9rem)] font-extralight leading-[0.94] tracking-[-0.08em] text-transparent"
+                  initial={{ opacity: 0, y: 18 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
+                >
+                  VLAINTER
+                </MotionH1>
+
+                <MotionDiv
+                  className="mt-5 flex flex-wrap items-center justify-center gap-2"
+                  initial={{ opacity: 0, y: 12 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.1, duration: 0.55 }}
+                >
+                  {heroPills.map((pill) => (
+                    <Link
+                      key={pill.label}
+                      to={pill.to}
+                      className="rounded-full border border-white/22 bg-black/18 px-3.5 py-1.5 text-[0.72rem] tracking-[0.02em] text-white/85 transition hover:border-white/44 hover:bg-white/8 hover:text-white"
+                    >
+                      {pill.label}
+                    </Link>
+                  ))}
+                </MotionDiv>
+
+                <MotionDiv
+                  className="mt-18 max-w-[34rem] text-[clamp(1rem,1.4vw,1.15rem)] leading-8 text-white/68"
+                  initial={{ opacity: 0, y: 18 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.2, duration: 0.55 }}
+                >
+                  이력서는 문을 열어주고, 이야기는 합격을 만들어냅니다.
+                </MotionDiv>
+
+                <MotionDiv
+                  className="mt-8"
+                  initial={{ opacity: 0, y: 18 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.28, duration: 0.55 }}
+                >
+                  <Link
+                    to="/join"
+                    className="inline-flex items-center justify-center rounded-full border border-white/16 bg-[linear-gradient(135deg,rgba(93,131,222,0.72),rgba(255,28,145,0.44))] px-7 py-3 text-[0.86rem] tracking-[0.1em] text-white shadow-[0_18px_48px_rgba(0,0,0,0.32)] transition hover:scale-[1.02] hover:border-white/28"
+                    >
+                      JOIN US
+                    </Link>
+                </MotionDiv>
+              </div>
             </div>
           </div>
         </div>
       </section>
 
-      <main className="mx-auto w-full max-w-[1256px] px-6 pb-24 pt-8 text-center md:px-10 md:pt-12">
-        <section className="mt-2">
-          <h2 className="text-[40px] font-semibold leading-[1.2] text-[#6e6e6e]">
-            역대 입사면접 합격자
-          </h2>
-          <p className="mt-2 bg-[linear-gradient(143deg,rgba(93,131,222,1)_0%,rgba(255,28,145,1)_100%)] bg-clip-text text-[64px] font-bold leading-none text-transparent md:text-[96px]">
-            1,684,535명
-          </p>
-          <p className="mx-auto mt-4 max-w-[760px] text-[24px] font-normal leading-[1.5] text-[#6e6e6e]">
-            Vlainter AI의 면접 도움으로 지금까지 1,684,535명이 면접에 성공했어요(어그로임)
-          </p>
-          <div className="mt-6 flex flex-wrap items-center justify-center gap-2">
-            {statTagsOne.map((tag) => (
-              <span key={tag} className={chipClass}>
-                {tag}
-              </span>
+      <main className="bg-[#101010]">
+        <section
+          id="service-introduce"
+          className="mx-auto w-full max-w-[95rem] px-4 py-20 sm:px-6 lg:px-8 lg:py-24"
+        >
+          <p className="text-[0.75rem] tracking-[0.16em] text-white/36">SERVICE INTRODUCE</p>
+          <div className="mt-4 flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+            <div>
+              <h2 className={sectionTitleClass}>준비 단계부터 면접 직전까지 한 화면으로 연결합니다.</h2>
+              <p className={`mt-4 ${sectionBodyClass}`}>
+                업로드한 문서, 직무 선택, 기술 카테고리, 질문 세트까지 이어지는 준비 흐름을 끊기지 않게 정리했습니다.
+              </p>
+            </div>
+            <Link
+              to="/about"
+              className="inline-flex h-11 items-center justify-center rounded-full border border-white/14 bg-white/4 px-5 text-[0.8rem] tracking-[0.08em] text-white/84 transition hover:border-white/28 hover:bg-white/8"
+            >
+              ABOUT SERVICE
+            </Link>
+          </div>
+
+          <div className="mt-10 grid gap-4 lg:grid-cols-3">
+            {productCards.map((card, index) => (
+              <MotionDiv
+                key={card.title}
+                className="rounded-[1.35rem] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.02))] p-6 shadow-[0_24px_50px_rgba(0,0,0,0.22)]"
+                initial={{ opacity: 0, y: 20 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true, amount: 0.2 }}
+                transition={{ duration: 0.5, delay: index * 0.08 }}
+              >
+                <p className="text-[0.72rem] tracking-[0.16em] text-white/36">0{index + 1}</p>
+                <h3 className="mt-4 text-[1.3rem] font-medium tracking-[-0.04em] text-white">{card.title}</h3>
+                <p className="mt-3 min-h-[5.5rem] text-[0.93rem] leading-7 text-white/60">{card.description}</p>
+                <Link
+                  to={card.to}
+                  className="mt-6 inline-flex items-center gap-2 text-[0.8rem] tracking-[0.08em] text-white/80 transition hover:text-white"
+                >
+                  바로 가기 <span aria-hidden="true">→</span>
+                </Link>
+              </MotionDiv>
             ))}
           </div>
         </section>
 
-        <section className="mt-24">
-          <h2 className="text-[40px] font-semibold leading-[1.2] text-[#6e6e6e]">
-            예상질문 적중률
-          </h2>
-          <p className="mt-2 bg-[linear-gradient(143deg,rgba(93,131,222,1)_0%,rgba(255,28,145,1)_100%)] bg-clip-text text-[64px] font-bold leading-none text-transparent md:text-[96px]">
-            75%
+        <section
+          id="credit"
+          className="mx-auto w-full max-w-[95rem] px-4 py-20 sm:px-6 lg:px-8 lg:py-24"
+        >
+          <p className="text-[0.75rem] tracking-[0.16em] text-white/36">CREDIT</p>
+          <h2 className={`mt-4 ${sectionTitleClass}`}>면접 준비에서 자주 마주치는 브랜드와 직무 맥락을 참고합니다.</h2>
+          <p className={`mt-4 ${sectionBodyClass}`}>
+            서비스 화면에서 사용되는 예시 브랜드 로고와 회사명은 면접 준비 문맥을 설명하기 위한 샘플입니다.
           </p>
-          <p className="mx-auto mt-4 max-w-[860px] text-[24px] font-normal leading-[1.5] text-[#6e6e6e]">
-            면접 경험자의 데이터에 따르면 Vlainter AI가 예상한 면접질문이 75%의
-            확률로 적중했어요(어그로임)
-          </p>
-          <div className="mt-6 flex flex-wrap items-center justify-center gap-2">
-            {statTagsTwo.map((tag) => (
-              <span key={tag} className={chipClass}>
-                {tag}
-              </span>
+
+          <div className="mt-10 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            {logoMarqueeColumns.map((column, columnIndex) => (
+              <div
+                key={`landing-credit-${columnIndex}`}
+                className="overflow-hidden rounded-[1.25rem] border border-white/8 bg-white/[0.03] p-4 shadow-[0_20px_50px_rgba(0,0,0,0.2)]"
+              >
+                <div className="flex flex-col gap-3">
+                  {column.map((icon) => (
+                    <MotionDiv
+                      key={icon.alt}
+                      className="flex h-[3.65rem] items-center justify-center rounded-[1rem] border border-white/8 bg-white/95 px-4"
+                      initial={{ opacity: 0, y: 16 }}
+                      whileInView={{ opacity: 1, y: 0 }}
+                      viewport={{ once: true, amount: 0.2 }}
+                      transition={{ duration: 0.45, delay: columnIndex * 0.05 }}
+                    >
+                      <img src={icon.src} alt={icon.alt} className="max-h-[1.55rem] w-auto object-contain" />
+                    </MotionDiv>
+                  ))}
+                </div>
+              </div>
             ))}
           </div>
         </section>
 
+        <section
+          id="patch-note"
+          className="mx-auto w-full max-w-[95rem] px-4 py-20 sm:px-6 lg:px-8 lg:py-24"
+        >
+          <p className="text-[0.75rem] tracking-[0.16em] text-white/36">PATCH NOTE</p>
+          <h2 className={`mt-4 ${sectionTitleClass}`}>최근 반영된 흐름과 운영 개선 사항</h2>
+          <p className={`mt-4 ${sectionBodyClass}`}>
+            화면 구조와 배포 안정성, 보안 체계를 최근 기준으로 다시 정리했습니다.
+          </p>
+
+          <div className="mt-10 grid gap-4 lg:grid-cols-3">
+            {patchNotes.map((note, index) => (
+              <MotionArticle
+                key={note.title}
+                className="rounded-[1.35rem] border border-white/8 bg-white/[0.03] p-6"
+                initial={{ opacity: 0, y: 20 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true, amount: 0.2 }}
+                transition={{ duration: 0.5, delay: index * 0.08 }}
+              >
+                <p className="text-[0.72rem] tracking-[0.16em] text-white/34">PATCH {index + 1}</p>
+                <h3 className="mt-4 text-[1.2rem] font-medium tracking-[-0.04em] text-white">{note.title}</h3>
+                <p className="mt-3 text-[0.93rem] leading-7 text-white/60">{note.body}</p>
+              </MotionArticle>
+            ))}
+          </div>
+        </section>
       </main>
-      <AuthFooter />
+
+      <footer className="border-t border-white/6 bg-[#0d0d0d]">
+        <div className="mx-auto flex w-full max-w-[95rem] flex-col gap-5 px-4 py-8 sm:px-6 lg:flex-row lg:items-center lg:justify-between lg:px-8">
+          <div>
+            <p className="text-[0.78rem] tracking-[0.12em] text-white/38">AI INTERVIEW SOLUTION</p>
+            <p className="mt-2 text-[0.86rem] text-white/52">문의: <a href="mailto:songchih@icloud.com" className="underline underline-offset-2">songchih@icloud.com</a></p>
+          </div>
+          <nav className="flex flex-wrap items-center gap-4 text-[0.82rem] text-white/64">
+            {footerLinks.map((link) => (
+              <Link key={link.label} to={link.to} className="transition hover:text-white">
+                {link.label}
+              </Link>
+            ))}
+          </nav>
+        </div>
+      </footer>
     </div>
   );
 };
