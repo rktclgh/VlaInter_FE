@@ -2,9 +2,11 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { kakaoLogin, logout } from "../../lib/authApi";
 import { clearAuthenticatedBrowserSession, consumeKakaoOAuthState } from "../../lib/authSessionMarker";
+import { usePublicLocale } from "../../lib/publicLocale";
 
 export const KakaoCallback = () => {
   const navigate = useNavigate();
+  const { locale } = usePublicLocale();
   const [asyncErrorMessage, setAsyncErrorMessage] = useState("");
   const requestedRef = useRef(false);
   const kakaoClientIdFromEnv = import.meta.env.VITE_KAKAO_CLIENT_ID || "";
@@ -35,17 +37,23 @@ export const KakaoCallback = () => {
 
   const initialMessage = useMemo(() => {
     if (kakaoError) {
-      return "카카오 로그인에 실패했습니다. 다시 시도해 주세요.";
+      return locale === "en"
+        ? "Kakao sign-in failed. Please try again."
+        : "카카오 로그인에 실패했습니다. 다시 시도해 주세요.";
     }
     const expectedState = consumeKakaoOAuthState();
     if (expectedState && returnedState !== expectedState) {
-      return "카카오 로그인 요청 검증에 실패했습니다. 다시 시도해 주세요.";
+      return locale === "en"
+        ? "Kakao sign-in request validation failed. Please try again."
+        : "카카오 로그인 요청 검증에 실패했습니다. 다시 시도해 주세요.";
     }
     if (!code) {
-      return "인가 코드가 없습니다. 다시 시도해 주세요.";
+      return locale === "en"
+        ? "Authorization code is missing. Please try again."
+        : "인가 코드가 없습니다. 다시 시도해 주세요.";
     }
     return "";
-  }, [code, kakaoError, returnedState]);
+  }, [code, kakaoError, locale, returnedState]);
 
   useEffect(() => {
     if (initialMessage) {
@@ -73,14 +81,22 @@ export const KakaoCallback = () => {
         sessionStorage.removeItem("kakao_redirect_uri");
         navigate("/content/interview", { replace: true });
       } catch (error) {
-        setAsyncErrorMessage(error.message || "카카오 로그인 처리에 실패했습니다.");
+        setAsyncErrorMessage(
+          error.message ||
+            (locale === "en"
+              ? "Failed to process Kakao sign-in."
+              : "카카오 로그인 처리에 실패했습니다."),
+        );
       }
     };
 
     run();
-  }, [code, initialMessage, kakaoClientId, kakaoRedirectUri, navigate]);
+  }, [code, initialMessage, kakaoClientId, kakaoRedirectUri, locale, navigate]);
 
-  const message = initialMessage || asyncErrorMessage || "카카오 로그인 처리 중입니다...";
+  const message =
+    initialMessage ||
+    asyncErrorMessage ||
+    (locale === "en" ? "Processing Kakao sign-in..." : "카카오 로그인 처리 중입니다...");
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-white px-6 text-center">

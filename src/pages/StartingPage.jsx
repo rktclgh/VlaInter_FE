@@ -30,36 +30,122 @@ import iconSktelecom from "../assets/icon/sktelecom.png";
 import iconToss from "../assets/icon/toss.png";
 import iconTvn from "../assets/icon/tvn.png";
 import iconYogiyo from "../assets/icon/yogiyo.png";
+import { usePublicLocale } from "../lib/publicLocale";
 
-const heroPills = [
-  { label: "실전 모의 면접", to: "/content/interview" },
-  { label: "기술질문 연습", to: "/content/tech-practice" },
-  { label: "질문 공유하기", to: "/content/question-browse" },
-];
-
-const landingSections = [
-  { id: "service-introduce", label: "SERVICE INTRODUCE" },
-  { id: "credit", label: "CREDIT" },
-  { id: "patch-note", label: "PATCH NOTE" },
-];
-
-const productCards = [
-  {
-    title: "실전 모의 면접",
-    description: "이력서와 직무 기반으로 맞춤 문항을 생성하고 실제 면접 흐름처럼 연습합니다.",
-    to: "/content/interview",
+const CONTENT_BY_LANGUAGE = {
+  ko: {
+    serviceButton: "SERVICE",
+    join: "JOIN",
+    login: "LOG IN",
+    languageLabel: "KOR",
+    close: "닫기",
+    sections: [
+      { id: "service-introduce", label: "SERVICE INTRODUCE" },
+      { id: "credit", label: "CREDIT" },
+      { id: "patch-note", label: "PATCH NOTE" },
+    ],
+    heroSubtitle: "사용자 맞춤 AI 면접 시뮬레이터",
+    heroPills: [
+      { label: "실전 모의 면접", to: "/content/interview" },
+      { label: "기술질문 연습", to: "/content/tech-practice" },
+      { label: "질문 공유하기", to: "/content/question-browse" },
+    ],
+    heroDescription: "이력서는 문을 열어주고, 이야기는 합격을 만들어냅니다.",
+    joinUs: "JOIN US",
+    serviceEyebrow: "SERVICE INTRODUCE",
+    serviceTitle: "준비 단계부터 면접 직전까지 한 화면으로 연결합니다.",
+    serviceBody: "업로드한 문서, 직무 선택, 기술 카테고리, 질문 세트까지 이어지는 준비 흐름을 끊기지 않게 정리했습니다.",
+    aboutService: "ABOUT SERVICE",
+    productCards: [
+      {
+        title: "실전 모의 면접",
+        description: "이력서와 직무 기반으로 맞춤 문항을 생성하고 실제 면접 흐름처럼 연습합니다.",
+        to: "/content/interview",
+      },
+      {
+        title: "기술질문 연습",
+        description: "기술 카테고리별 예상 질문을 빠르게 반복 연습하고 즉시 피드백을 받습니다.",
+        to: "/content/tech-practice",
+      },
+      {
+        title: "파일 관리",
+        description: "이력서, 자기소개서, 포트폴리오를 업로드해 문서 기반 면접 준비 흐름으로 이어집니다.",
+        to: "/content/files",
+      },
+    ],
+    moveNow: "바로 가기",
+    creditEyebrow: "CREDIT",
+    creditTitle: "면접 준비에서 자주 마주치는 브랜드와 직무 맥락을 참고합니다.",
+    creditBody: "서비스 화면에서 사용되는 예시 브랜드 로고와 회사명은 면접 준비 문맥을 설명하기 위한 샘플입니다.",
+    patchEyebrow: "PATCH NOTE",
+    patchTitle: "최근 반영된 흐름과 운영 개선 사항",
+    patchBody: "화면 구조와 배포 안정성, 보안 체계를 최근 기준으로 다시 정리했습니다.",
+    patchHelp: "스크롤 또는 화살표 이동",
+    footerTitle: "AI INTERVIEW SOLUTION",
+    contact: "문의",
+    footerLinks: [
+      { label: "서비스 소개", to: "/about" },
+      { label: "이용약관", to: "/terms" },
+      { label: "개인정보처리방침", to: "/privacy" },
+    ],
   },
-  {
-    title: "기술질문 연습",
-    description: "기술 카테고리별 예상 질문을 빠르게 반복 연습하고 즉시 피드백을 받습니다.",
-    to: "/content/tech-practice",
+  en: {
+    serviceButton: "SERVICE",
+    join: "JOIN",
+    login: "LOG IN",
+    languageLabel: "ENG",
+    close: "Close",
+    sections: [
+      { id: "service-introduce", label: "SERVICE INTRODUCE" },
+      { id: "credit", label: "CREDIT" },
+      { id: "patch-note", label: "PATCH NOTE" },
+    ],
+    heroSubtitle: "Personalized AI interview simulator",
+    heroPills: [
+      { label: "Mock Interview", to: "/content/interview" },
+      { label: "Tech Practice", to: "/content/tech-practice" },
+      { label: "Share Questions", to: "/content/question-browse" },
+    ],
+    heroDescription: "Your resume opens the door. Your story closes the offer.",
+    joinUs: "JOIN US",
+    serviceEyebrow: "SERVICE INTRODUCE",
+    serviceTitle: "Connect every step from preparation to the final interview.",
+    serviceBody: "Uploaded documents, role selection, tech categories, and shared question sets are arranged as one continuous preparation flow.",
+    aboutService: "ABOUT SERVICE",
+    productCards: [
+      {
+        title: "Mock Interview",
+        description: "Generate tailored questions from your resume and target role, then practice in a realistic interview flow.",
+        to: "/content/interview",
+      },
+      {
+        title: "Tech Practice",
+        description: "Repeat technical questions by category and get immediate feedback after each response.",
+        to: "/content/tech-practice",
+      },
+      {
+        title: "File Management",
+        description: "Upload your resume, cover letter, and portfolio to continue into document-based interview preparation.",
+        to: "/content/files",
+      },
+    ],
+    moveNow: "OPEN",
+    creditEyebrow: "CREDIT",
+    creditTitle: "We reference familiar brands and job contexts often seen in interview prep.",
+    creditBody: "Brand marks and company names shown on this page are sample references used to explain interview preparation scenarios.",
+    patchEyebrow: "PATCH NOTE",
+    patchTitle: "Recent product and operations updates",
+    patchBody: "The latest improvements to structure, deployment stability, and security are summarized here.",
+    patchHelp: "SCROLL OR USE ARROWS",
+    footerTitle: "AI INTERVIEW SOLUTION",
+    contact: "Contact",
+    footerLinks: [
+      { label: "About Service", to: "/about" },
+      { label: "Terms of Service", to: "/terms" },
+      { label: "Privacy Policy", to: "/privacy" },
+    ],
   },
-  {
-    title: "파일 관리",
-    description: "이력서, 자기소개서, 포트폴리오를 업로드해 문서 기반 면접 준비 흐름으로 이어집니다.",
-    to: "/content/files",
-  },
-];
+};
 
 const fallbackPatchNotes = [
   {
@@ -74,12 +160,6 @@ const fallbackPatchNotes = [
     title: "Security Hardening",
     body: "프록시 체인, rate limit, 재부팅 이후 blue/green 기동 정책을 다시 정리했습니다.",
   },
-];
-
-const footerLinks = [
-  { label: "서비스 소개", to: "/about" },
-  { label: "이용약관", to: "/terms" },
-  { label: "개인정보처리방침", to: "/privacy" },
 ];
 
 const logoColumns = [
@@ -130,9 +210,12 @@ const MotionArticle = motion.article;
 export const StartingPage = () => {
   const navigate = useNavigate();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isLanguageMenuOpen, setIsLanguageMenuOpen] = useState(false);
+  const { locale: language, setLocale: setLanguage } = usePublicLocale();
   const [patchNotes, setPatchNotes] = useState(fallbackPatchNotes);
   const [landingVersionLabel, setLandingVersionLabel] = useState("v0.4");
   const [activePatchNoteIndex, setActivePatchNoteIndex] = useState(0);
+  const copy = CONTENT_BY_LANGUAGE[language] || CONTENT_BY_LANGUAGE.ko;
 
   useEffect(() => {
     let unmounted = false;
@@ -239,12 +322,12 @@ export const StartingPage = () => {
                   className="text-[0.76rem] tracking-[0.02em] text-white/72 transition hover:text-white"
                   onClick={() => setIsSidebarOpen(false)}
                 >
-                  Close <span className="ml-1 text-[0.95rem]">×</span>
+                  {copy.close} <span className="ml-1 text-[0.95rem]">×</span>
                 </button>
               </div>
 
               <nav className="mt-5 flex flex-col gap-2">
-                {landingSections.map((section) => (
+                {copy.sections.map((section) => (
                   <button
                     key={section.id}
                     type="button"
@@ -273,7 +356,7 @@ export const StartingPage = () => {
               onClick={() => setIsSidebarOpen(true)}
             >
               <span className="text-[0.95rem]">☰</span>
-              <span>SERVICE</span>
+              <span>{copy.serviceButton}</span>
             </button>
 
             <Link to="/" className="absolute left-1/2 top-2 -translate-x-1/2">
@@ -282,14 +365,44 @@ export const StartingPage = () => {
 
             <div className="ml-auto flex items-center gap-4 text-[0.68rem] tracking-[0.12em] text-white/82 md:gap-8">
               <Link to="/join" className="transition hover:text-white">
-                JOIN
+                {copy.join}
               </Link>
               <Link to="/login" className="transition hover:text-white">
-                LOG IN
+                {copy.login}
               </Link>
-              <button type="button" className="hidden items-center gap-1 text-white/82 md:inline-flex">
-                KOR <span className="text-[0.62rem]">▼</span>
-              </button>
+              <div className="relative hidden md:block">
+                <button
+                  type="button"
+                  className="inline-flex items-center gap-1 text-white/82 transition hover:text-white"
+                  onClick={() => setIsLanguageMenuOpen((prev) => !prev)}
+                >
+                  {copy.languageLabel} <span className="text-[0.62rem]">▼</span>
+                </button>
+                {isLanguageMenuOpen ? (
+                  <div className="absolute right-0 top-[calc(100%+0.6rem)] min-w-[5.25rem] rounded-[0.9rem] border border-white/10 bg-[#13131a]/96 p-1.5 shadow-[0_18px_40px_rgba(0,0,0,0.32)] backdrop-blur-xl">
+                    <button
+                      type="button"
+                      className={`block w-full rounded-[0.75rem] px-3 py-2 text-left text-[0.72rem] tracking-[0.08em] transition ${language === "ko" ? "bg-white/10 text-white" : "text-white/72 hover:bg-white/6 hover:text-white"}`}
+                      onClick={() => {
+                        setLanguage("ko");
+                        setIsLanguageMenuOpen(false);
+                      }}
+                    >
+                      KOR
+                    </button>
+                    <button
+                      type="button"
+                      className={`mt-1 block w-full rounded-[0.75rem] px-3 py-2 text-left text-[0.72rem] tracking-[0.08em] transition ${language === "en" ? "bg-white/10 text-white" : "text-white/72 hover:bg-white/6 hover:text-white"}`}
+                      onClick={() => {
+                        setLanguage("en");
+                        setIsLanguageMenuOpen(false);
+                      }}
+                    >
+                      ENG
+                    </button>
+                  </div>
+                ) : null}
+              </div>
             </div>
           </header>
 
@@ -298,7 +411,7 @@ export const StartingPage = () => {
               <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(1,4,16,0.08),rgba(1,4,16,0.28)_50%,rgba(1,4,16,0.08))]" />
               <div className="relative mx-auto flex h-full max-w-[58rem] flex-col items-center justify-center text-center">
                 <p className="text-[0.72rem] tracking-[0.03em] text-white/58 md:text-[0.82rem]">
-                  사용자 맞춤 AI 면접 시뮬레이터
+                  {copy.heroSubtitle}
                 </p>
 
                 <MotionH1
@@ -316,7 +429,7 @@ export const StartingPage = () => {
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.1, duration: 0.55 }}
                 >
-                  {heroPills.map((pill) => (
+                  {copy.heroPills.map((pill) => (
                     <Link
                       key={pill.label}
                       to={pill.to}
@@ -333,7 +446,7 @@ export const StartingPage = () => {
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.2, duration: 0.55 }}
                 >
-                  이력서는 문을 열어주고, 이야기는 합격을 만들어냅니다.
+                  {copy.heroDescription}
                 </MotionDiv>
 
                 <MotionDiv
@@ -353,7 +466,7 @@ export const StartingPage = () => {
                     to="/join"
                     className="inline-flex items-center justify-center rounded-full border border-white/16 bg-[linear-gradient(135deg,rgba(93,131,222,0.42),rgba(255,28,145,0.28))] px-7 py-3 text-[0.82rem] tracking-[0.1em] text-white shadow-[0_18px_48px_rgba(0,0,0,0.32)] transition hover:scale-[1.02] hover:border-white/28"
                   >
-                      JOIN US
+                      {copy.joinUs}
                   </Link>
                 </MotionDiv>
               </div>
@@ -367,24 +480,24 @@ export const StartingPage = () => {
           id="service-introduce"
           className="mx-auto w-full max-w-[95rem] px-4 py-20 sm:px-6 lg:px-8 lg:py-24"
         >
-          <p className="text-[0.75rem] tracking-[0.16em] text-white/36">SERVICE INTRODUCE</p>
+          <p className="text-[0.75rem] tracking-[0.16em] text-white/36">{copy.serviceEyebrow}</p>
           <div className="mt-4 flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
             <div>
-              <h2 className={sectionTitleClass}>준비 단계부터 면접 직전까지 한 화면으로 연결합니다.</h2>
+              <h2 className={sectionTitleClass}>{copy.serviceTitle}</h2>
               <p className={`mt-4 ${sectionBodyClass}`}>
-                업로드한 문서, 직무 선택, 기술 카테고리, 질문 세트까지 이어지는 준비 흐름을 끊기지 않게 정리했습니다.
+                {copy.serviceBody}
               </p>
             </div>
             <Link
               to="/about"
               className="inline-flex h-11 items-center justify-center rounded-full border border-white/14 bg-white/4 px-5 text-[0.8rem] tracking-[0.08em] text-white/84 transition hover:border-white/28 hover:bg-white/8"
             >
-              ABOUT SERVICE
+              {copy.aboutService}
             </Link>
           </div>
 
           <div className="mt-10 grid gap-4 lg:grid-cols-3">
-            {productCards.map((card, index) => (
+            {copy.productCards.map((card, index) => (
               <MotionDiv
                 key={card.title}
                 className="rounded-[1.35rem] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.02))] p-6 shadow-[0_24px_50px_rgba(0,0,0,0.22)]"
@@ -400,7 +513,7 @@ export const StartingPage = () => {
                   to={card.to}
                   className="mt-6 inline-flex items-center gap-2 text-[0.8rem] tracking-[0.08em] text-white/80 transition hover:text-white"
                 >
-                  바로 가기 <span aria-hidden="true">→</span>
+                  {copy.moveNow} <span aria-hidden="true">→</span>
                 </Link>
               </MotionDiv>
             ))}
@@ -411,10 +524,10 @@ export const StartingPage = () => {
           id="credit"
           className="mx-auto w-full max-w-[95rem] px-4 py-20 sm:px-6 lg:px-8 lg:py-24"
         >
-          <p className="text-[0.75rem] tracking-[0.16em] text-white/36">CREDIT</p>
-          <h2 className={`mt-4 ${sectionTitleClass}`}>면접 준비에서 자주 마주치는 브랜드와 직무 맥락을 참고합니다.</h2>
+          <p className="text-[0.75rem] tracking-[0.16em] text-white/36">{copy.creditEyebrow}</p>
+          <h2 className={`mt-4 ${sectionTitleClass}`}>{copy.creditTitle}</h2>
           <p className={`mt-4 ${sectionBodyClass}`}>
-            서비스 화면에서 사용되는 예시 브랜드 로고와 회사명은 면접 준비 문맥을 설명하기 위한 샘플입니다.
+            {copy.creditBody}
           </p>
 
           <div className="mt-10 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -446,10 +559,10 @@ export const StartingPage = () => {
           id="patch-note"
           className="mx-auto w-full max-w-[95rem] px-4 py-20 sm:px-6 lg:px-8 lg:py-24"
         >
-          <p className="text-[0.75rem] tracking-[0.16em] text-white/36">PATCH NOTE</p>
-          <h2 className={`mt-4 ${sectionTitleClass}`}>최근 반영된 흐름과 운영 개선 사항</h2>
+          <p className="text-[0.75rem] tracking-[0.16em] text-white/36">{copy.patchEyebrow}</p>
+          <h2 className={`mt-4 ${sectionTitleClass}`}>{copy.patchTitle}</h2>
           <p className={`mt-4 ${sectionBodyClass}`}>
-            화면 구조와 배포 안정성, 보안 체계를 최근 기준으로 다시 정리했습니다.
+            {copy.patchBody}
           </p>
 
           <div
@@ -490,7 +603,7 @@ export const StartingPage = () => {
                 >
                   <span aria-hidden="true" className="text-[1rem]">›</span>
                 </button>
-                <p className="text-[0.78rem] tracking-[0.08em] text-white/40">SCROLL OR USE ARROWS</p>
+                <p className="text-[0.78rem] tracking-[0.08em] text-white/40">{copy.patchHelp}</p>
               </div>
             </div>
 
@@ -527,10 +640,10 @@ export const StartingPage = () => {
         <div className="mx-auto flex w-full max-w-[95rem] flex-col gap-5 px-4 py-8 sm:px-6 lg:flex-row lg:items-center lg:justify-between lg:px-8">
           <div>
             <p className="text-[0.78rem] tracking-[0.12em] text-white/38">AI INTERVIEW SOLUTION</p>
-            <p className="mt-2 text-[0.86rem] text-white/52">문의: <a href="mailto:songchih@icloud.com" className="underline underline-offset-2">songchih@icloud.com</a></p>
+            <p className="mt-2 text-[0.86rem] text-white/52">{copy.contact}: <a href="mailto:songchih@icloud.com" className="underline underline-offset-2">songchih@icloud.com</a></p>
           </div>
           <nav className="flex flex-wrap items-center gap-4 text-[0.82rem] text-white/64">
-            {footerLinks.map((link) => (
+            {copy.footerLinks.map((link) => (
               <Link key={link.label} to={link.to} className="transition hover:text-white">
                 {link.label}
               </Link>

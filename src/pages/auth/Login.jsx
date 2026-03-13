@@ -8,12 +8,14 @@ import brandFavicon from "../../assets/logo/favicon.png";
 import { login, logout } from "../../lib/authApi";
 import { clearAuthenticatedBrowserSession, createKakaoOAuthState, storeKakaoOAuthState } from "../../lib/authSessionMarker";
 import { AuthFooter } from "../../components/AuthFooter";
+import { usePublicLocale } from "../../lib/publicLocale";
 
 const inputClass =
   "h-8 w-full border-b border-[#d9d9d9] text-[11px] text-[#2f2f2f] placeholder:text-[#c0c0c0]";
 
 export const Login = () => {
   const navigate = useNavigate();
+  const { locale } = usePublicLocale();
   const [loginId, setLoginId] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -26,10 +28,39 @@ export const Login = () => {
       ? `${window.location.origin}/auth/kakao/callback`
       : kakaoRedirectUriFromEnv || `${window.location.origin}/auth/kakao/callback`;
   const kakaoAuthUri = import.meta.env.VITE_KAKAO_AUTH_URI || "https://kauth.kakao.com/oauth/authorize";
+  const copy = locale === "en"
+    ? {
+        subtitle: "Log In",
+        emailPlaceholder: "Email",
+        passwordPlaceholder: "Password",
+        hidePassword: "Hide password",
+        showPassword: "Show password",
+        forgotPassword: "Forgot password",
+        join: "Create account",
+        loginPending: "Signing in...",
+        loginButton: "Sign in with Vlainter ID",
+        missingFields: "Please enter both your email and password.",
+        kakaoClientMissing: "Kakao client ID configuration is required.",
+        kakaoAlt: "Continue with Kakao",
+      }
+    : {
+        subtitle: "로그인",
+        emailPlaceholder: "이메일",
+        passwordPlaceholder: "비밀번호",
+        hidePassword: "비밀번호 숨기기",
+        showPassword: "비밀번호 보기",
+        forgotPassword: "비밀번호 찾기",
+        join: "회원가입",
+        loginPending: "로그인 중...",
+        loginButton: "Vlainter ID 로그인",
+        missingFields: "이메일과 비밀번호를 모두 입력해 주세요.",
+        kakaoClientMissing: "카카오 클라이언트 ID 설정이 필요합니다.",
+        kakaoAlt: "카카오 로그인",
+      };
 
   const handleLogin = async () => {
     if (!loginId.trim() || !password.trim()) {
-      setErrorMessage("이메일과 비밀번호를 모두 입력해 주세요.");
+      setErrorMessage(copy.missingFields);
       return;
     }
 
@@ -50,7 +81,7 @@ export const Login = () => {
 
   const handleKakaoLogin = async () => {
     if (!kakaoClientId) {
-      setErrorMessage("카카오 클라이언트 ID 설정이 필요합니다.");
+      setErrorMessage(copy.kakaoClientMissing);
       return;
     }
     clearAuthenticatedBrowserSession();
@@ -89,7 +120,7 @@ export const Login = () => {
           <section className="w-full max-w-[410px]">
             <header className="text-center">
               <img src={brandFavicon} alt="Vlainter" className="mx-auto h-[72px] w-auto" />
-              <p className="mt-1 text-[12px] text-[#7e7e7e]">로그인</p>
+              <p className="mt-1 text-[12px] text-[#7e7e7e]">{copy.subtitle}</p>
             </header>
 
             <form className="mt-8" onSubmit={(e) => e.preventDefault()}>
@@ -97,7 +128,7 @@ export const Login = () => {
                   <input
                     type="text"
                     className={inputClass}
-                    placeholder="이메일"
+                    placeholder={copy.emailPlaceholder}
                     value={loginId}
                     onChange={(e) => setLoginId(e.target.value)}
                   />
@@ -108,7 +139,7 @@ export const Login = () => {
                   <input
                     type={showPassword ? "text" : "password"}
                     className={`${inputClass} pr-7`}
-                    placeholder="비밀번호"
+                    placeholder={copy.passwordPlaceholder}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                   />
@@ -116,7 +147,7 @@ export const Login = () => {
                     type="button"
                     className="absolute right-0 top-1/2 -translate-y-1/2"
                     onClick={() => setShowPassword((prev) => !prev)}
-                    aria-label={showPassword ? "비밀번호 숨기기" : "비밀번호 보기"}
+                    aria-label={showPassword ? copy.hidePassword : copy.showPassword}
                   >
                     <img src={showPassword ? eyeOffIcon : eyeOpenIcon} alt="" className="h-4 w-4" />
                   </button>
@@ -126,11 +157,11 @@ export const Login = () => {
               <div className="mt-4 flex items-center justify-end text-[11px] font-medium text-[#9d9d9d]">
                 <div className="flex items-center gap-2.5">
                   <Link to="/password/forgot" className="hover:text-[#7f7f7f]">
-                    비밀번호 찾기
+                    {copy.forgotPassword}
                   </Link>
                   <span>|</span>
                   <Link to="/join" className="hover:text-[#7f7f7f]">
-                    회원가입
+                    {copy.join}
                   </Link>
                 </div>
               </div>
@@ -141,7 +172,7 @@ export const Login = () => {
                 disabled={pending}
                 className="mx-auto mt-4 block h-[45px] w-full max-w-[300px] rounded-[8px] bg-[linear-gradient(138deg,#5D83DE_0%,#FF1C91_100%)] text-[12px] font-semibold text-white"
               >
-                {pending ? "로그인 중..." : "Vlainter ID 로그인"}
+                {pending ? copy.loginPending : copy.loginButton}
               </button>
 
               {errorMessage && <p className="mt-2 text-[11px] text-[#ff3a3a]">{errorMessage}</p>}
@@ -151,7 +182,7 @@ export const Login = () => {
                 onClick={handleKakaoLogin}
                 className="mx-auto mt-3 block h-[45px] w-full max-w-[300px]"
               >
-                <img src={kakaoLoginButtonImage} alt="카카오 로그인" className="h-full w-full" />
+                <img src={kakaoLoginButtonImage} alt={copy.kakaoAlt} className="h-full w-full" />
               </button>
             </form>
           </section>

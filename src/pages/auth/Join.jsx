@@ -7,6 +7,7 @@ import kakaoLoginButtonImage from "../../assets/icon/kakao_login_medium_wide.png
 import { logout, sendVerificationEmail, signup, verifyEmailCode } from "../../lib/authApi";
 import { clearAuthenticatedBrowserSession, createKakaoOAuthState, storeKakaoOAuthState } from "../../lib/authSessionMarker";
 import { AuthFooter } from "../../components/AuthFooter";
+import { usePublicLocale } from "../../lib/publicLocale";
 
 const labelClass = "mb-1 block text-[11px] font-semibold text-[#2f2f2f]";
 const inputClass =
@@ -15,9 +16,11 @@ const EMAIL_REGEX = /^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+$/;
 const EMAIL_SEND_COOLDOWN_SECONDS = 60;
 const PASSWORD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z\d]).{8,100}$/;
 const PASSWORD_GUIDE_TEXT = "8~100자, 영문 대/소문자, 숫자, 특수문자를 각각 1개 이상 포함해 주세요.";
+const PASSWORD_GUIDE_TEXT_EN = "Use 8-100 characters and include at least one uppercase letter, one lowercase letter, one number, and one special character.";
 
 export const Join = () => {
   const navigate = useNavigate();
+  const { locale } = usePublicLocale();
   const [formData, setFormData] = useState({
     name: "",
     email: "",
@@ -42,6 +45,85 @@ export const Join = () => {
       ? `${window.location.origin}/auth/kakao/callback`
       : kakaoRedirectUriFromEnv || `${window.location.origin}/auth/kakao/callback`;
   const kakaoAuthUri = import.meta.env.VITE_KAKAO_AUTH_URI || "https://kauth.kakao.com/oauth/authorize";
+  const copy = locale === "en"
+    ? {
+        title: "Create Account",
+        requiredName: "Name",
+        requiredEmail: "Email",
+        requiredPassword: "Password",
+        requiredPasswordConfirm: "Confirm Password",
+        namePlaceholder: "Enter your name",
+        emailPlaceholder: "ex) example1234@gmail.com",
+        verificationCodePlaceholder: "7-digit verification code",
+        sendCode: "Send code",
+        sendingCode: "Sending",
+        verifyCode: "Verify",
+        verifyingCode: "Checking",
+        secondsShort: "s",
+        passwordPlaceholder: "Enter your password",
+        passwordConfirmPlaceholder: "Enter your password again",
+        passwordGuide: PASSWORD_GUIDE_TEXT_EN,
+        passwordHide: "Hide password",
+        passwordShow: "Show password",
+        passwordMatch: "Passwords match.",
+        passwordMismatch: "Passwords do not match.",
+        emailVerified: "Email verification completed.",
+        codeSent: "Verification code sent.",
+        invalidEmailFormat: "Please enter a valid email address.",
+        missingEmailAndCode: "Please enter both your email and verification code.",
+        missingRequiredFields: "Please fill in all required fields.",
+        passwordMismatchError: "Your password and confirmation do not match.",
+        emailVerifyFirst: "Please complete email verification first.",
+        agreePoliciesFirst: "Please agree to the Terms of Service and Privacy Policy.",
+        pendingJoin: "Creating account...",
+        joinButton: "Create account with Vlainter ID",
+        policyLead: "[Required]",
+        terms: "Terms of Service",
+        privacy: "Privacy Policy",
+        policyJoiner: "and",
+        policyConsent: "I agree to the Terms of Service and Privacy Policy.",
+        kakaoAlt: "Continue with Kakao",
+        kakaoClientMissing: "Kakao client ID configuration is required.",
+      }
+    : {
+        title: "회원가입",
+        requiredName: "이름",
+        requiredEmail: "이메일",
+        requiredPassword: "비밀번호",
+        requiredPasswordConfirm: "비밀번호 확인",
+        namePlaceholder: "이름 입력",
+        emailPlaceholder: "ex) example1234@gmail.com",
+        verificationCodePlaceholder: "인증코드 7자리",
+        sendCode: "인증코드 발송",
+        sendingCode: "발송 중",
+        verifyCode: "확인",
+        verifyingCode: "확인 중",
+        secondsShort: "초",
+        passwordPlaceholder: "비밀번호를 입력해주세요",
+        passwordConfirmPlaceholder: "비밀번호를 한번 더 입력하세요",
+        passwordGuide: PASSWORD_GUIDE_TEXT,
+        passwordHide: "비밀번호 숨기기",
+        passwordShow: "비밀번호 보기",
+        passwordMatch: "비밀번호가 일치합니다.",
+        passwordMismatch: "비밀번호가 일치하지 않습니다.",
+        emailVerified: "이메일 인증이 완료되었습니다.",
+        codeSent: "인증 코드를 발송했습니다.",
+        invalidEmailFormat: "유효한 이메일 형식을 입력해 주세요.",
+        missingEmailAndCode: "이메일과 인증 코드를 입력해 주세요.",
+        missingRequiredFields: "필수 항목을 모두 입력해 주세요.",
+        passwordMismatchError: "비밀번호와 비밀번호 확인이 일치하지 않습니다.",
+        emailVerifyFirst: "이메일 인증을 먼저 완료해 주세요.",
+        agreePoliciesFirst: "이용약관 및 개인정보처리방침에 동의해 주세요.",
+        pendingJoin: "가입 중...",
+        joinButton: "Vlainter ID로 가입하기",
+        policyLead: "[필수]",
+        terms: "이용약관",
+        privacy: "개인정보처리방침",
+        policyJoiner: "및",
+        policyConsent: "에 동의합니다.",
+        kakaoAlt: "카카오 로그인",
+        kakaoClientMissing: "카카오 클라이언트 ID 설정이 필요합니다.",
+      };
 
   useEffect(() => {
     if (cooldownSeconds <= 0) return;
@@ -79,7 +161,7 @@ export const Join = () => {
 
   const handleSendVerificationCode = async () => {
     if (!isEmailFormatValid) {
-      setErrorMessage("유효한 이메일 형식을 입력해 주세요.");
+      setErrorMessage(copy.invalidEmailFormat);
       return;
     }
     if (cooldownSeconds > 0) return;
@@ -91,7 +173,7 @@ export const Join = () => {
       await sendVerificationEmail(formData.email.trim());
       setIsEmailVerified(false);
       setCooldownSeconds(EMAIL_SEND_COOLDOWN_SECONDS);
-      setSuccessMessage("인증 코드를 발송했습니다.");
+      setSuccessMessage(copy.codeSent);
     } catch (error) {
       if (error.status === 429) {
         setCooldownSeconds((prev) => (prev > 0 ? prev : EMAIL_SEND_COOLDOWN_SECONDS));
@@ -104,7 +186,7 @@ export const Join = () => {
 
   const handleVerifyCode = async () => {
     if (!formData.email.trim() || !formData.verificationCode.trim()) {
-      setErrorMessage("이메일과 인증 코드를 입력해 주세요.");
+      setErrorMessage(copy.missingEmailAndCode);
       return;
     }
     setVerifyingCode(true);
@@ -123,23 +205,23 @@ export const Join = () => {
 
   const handleJoin = async () => {
     if (!formData.name.trim() || !formData.email.trim() || !formData.password || !formData.passwordConfirm) {
-      setErrorMessage("필수 항목을 모두 입력해 주세요.");
+      setErrorMessage(copy.missingRequiredFields);
       return;
     }
     if (formData.password !== formData.passwordConfirm) {
-      setErrorMessage("비밀번호와 비밀번호 확인이 일치하지 않습니다.");
+      setErrorMessage(copy.passwordMismatchError);
       return;
     }
     if (!isPasswordFormatValid) {
-      setErrorMessage(PASSWORD_GUIDE_TEXT);
+      setErrorMessage(copy.passwordGuide);
       return;
     }
     if (!isEmailVerified) {
-      setErrorMessage("이메일 인증을 먼저 완료해 주세요.");
+      setErrorMessage(copy.emailVerifyFirst);
       return;
     }
     if (!agreedToPolicies) {
-      setErrorMessage("이용약관 및 개인정보처리방침에 동의해 주세요.");
+      setErrorMessage(copy.agreePoliciesFirst);
       return;
     }
 
@@ -162,7 +244,7 @@ export const Join = () => {
 
   const handleKakaoJoin = async () => {
     if (!kakaoClientId) {
-      setErrorMessage("카카오 클라이언트 ID 설정이 필요합니다.");
+      setErrorMessage(copy.kakaoClientMissing);
       return;
     }
     clearAuthenticatedBrowserSession();
@@ -197,19 +279,19 @@ export const Join = () => {
               <h1 className="bg-[linear-gradient(145deg,#5D83DE_0%,#FF1C91_100%)] bg-clip-text text-[54px] font-medium leading-none text-transparent">
                 Vlainter
               </h1>
-              <p className="mt-1 text-[12px] text-[#7e7e7e]">회원가입</p>
+              <p className="mt-1 text-[12px] text-[#7e7e7e]">{copy.title}</p>
             </header>
 
             <form className="mt-8" onSubmit={(e) => e.preventDefault()}>
               <div className="mb-3">
                 <label className={labelClass} htmlFor="join-name">
-                  <span className="text-[#ff3a3a]">*</span> 이름
+                  <span className="text-[#ff3a3a]">*</span> {copy.requiredName}
                 </label>
                 <input
                   id="join-name"
                   type="text"
                   className={inputClass}
-                  placeholder="이름 입력"
+                  placeholder={copy.namePlaceholder}
                   value={formData.name}
                   onChange={(e) => handleInputChange("name", e.target.value)}
                 />
@@ -217,14 +299,14 @@ export const Join = () => {
 
               <div className="mb-3">
                 <label className={labelClass} htmlFor="join-email">
-                  <span className="text-[#ff3a3a]">*</span> 이메일
+                  <span className="text-[#ff3a3a]">*</span> {copy.requiredEmail}
                 </label>
                 <div className="flex items-end gap-2">
                   <input
                     id="join-email"
                     type="email"
                     className={`${inputClass} ${isEmailVerified ? "text-[#8a8a8a]" : ""}`}
-                    placeholder="ex) example1234@gmail.com"
+                    placeholder={copy.emailPlaceholder}
                     value={formData.email}
                     onChange={(e) => handleInputChange("email", e.target.value)}
                     disabled={isEmailVerified}
@@ -237,15 +319,15 @@ export const Join = () => {
                       className={`h-6 shrink-0 rounded px-3 text-[10px] ${canSendVerificationCode ? "bg-black text-white" : "bg-[#f4f4f4] text-[#b1b1b1]"}`}
                     >
                       {sendingCode
-                        ? "발송 중"
+                        ? copy.sendingCode
                         : cooldownSeconds > 0
-                          ? `${cooldownSeconds}초`
-                          : "인증코드 발송"}
+                          ? `${cooldownSeconds}${copy.secondsShort}`
+                          : copy.sendCode}
                     </button>
                   )}
                 </div>
                 {isEmailVerified && (
-                  <p className="mt-1 text-[11px] font-medium text-[#2f8f4e]">이메일 인증이 완료되었습니다.</p>
+                  <p className="mt-1 text-[11px] font-medium text-[#2f8f4e]">{copy.emailVerified}</p>
                 )}
               </div>
 
@@ -255,7 +337,7 @@ export const Join = () => {
                     <input
                       type="text"
                       className={inputClass}
-                      placeholder="인증코드 7자리"
+                      placeholder={copy.verificationCodePlaceholder}
                       value={formData.verificationCode}
                       onChange={(e) => handleInputChange("verificationCode", e.target.value)}
                     />
@@ -265,7 +347,7 @@ export const Join = () => {
                       disabled={!canVerifyCode}
                       className={`h-6 shrink-0 rounded px-4 text-[10px] ${canVerifyCode ? "bg-black text-white" : "bg-[#f4f4f4] text-[#b1b1b1]"}`}
                     >
-                      {verifyingCode ? "확인 중" : "확인"}
+                      {verifyingCode ? copy.verifyingCode : copy.verifyCode}
                     </button>
                   </div>
                 </div>
@@ -273,14 +355,14 @@ export const Join = () => {
 
               <div className="mb-3">
                 <label className={labelClass} htmlFor="join-password">
-                  <span className="text-[#ff3a3a]">*</span> 비밀번호
+                  <span className="text-[#ff3a3a]">*</span> {copy.requiredPassword}
                 </label>
                 <div className="relative">
                   <input
                     id="join-password"
                     type={showPassword ? "text" : "password"}
                     className={`${inputClass} pr-7`}
-                    placeholder="비밀번호를 입력해주세요"
+                    placeholder={copy.passwordPlaceholder}
                     value={formData.password}
                     onChange={(e) => handleInputChange("password", e.target.value)}
                   />
@@ -288,26 +370,26 @@ export const Join = () => {
                     type="button"
                     className="absolute right-0 top-1/2 -translate-y-1/2"
                     onClick={() => setShowPassword((prev) => !prev)}
-                    aria-label={showPassword ? "비밀번호 숨기기" : "비밀번호 보기"}
+                    aria-label={showPassword ? copy.passwordHide : copy.passwordShow}
                   >
                     <img src={showPassword ? eyeOffIcon : eyeOpenIcon} alt="" className="h-4 w-4" />
                   </button>
                 </div>
                 <p className={`mt-1 text-[10px] ${formData.password && !isPasswordFormatValid ? "text-[#ff3a3a]" : "text-[#7e7e7e]"}`}>
-                  {PASSWORD_GUIDE_TEXT}
+                  {copy.passwordGuide}
                 </p>
               </div>
 
               <div className="mb-6">
                 <label className={labelClass} htmlFor="join-password-confirm">
-                  <span className="text-[#ff3a3a]">*</span> 비밀번호 확인
+                  <span className="text-[#ff3a3a]">*</span> {copy.requiredPasswordConfirm}
                 </label>
                 <div className="relative">
                   <input
                     id="join-password-confirm"
                     type={showPasswordConfirm ? "text" : "password"}
                     className={`${inputClass} pr-7`}
-                    placeholder="비밀번호를 한번 더 입력하세요"
+                    placeholder={copy.passwordConfirmPlaceholder}
                     value={formData.passwordConfirm}
                     onChange={(e) => handleInputChange("passwordConfirm", e.target.value)}
                   />
@@ -315,14 +397,14 @@ export const Join = () => {
                     type="button"
                     className="absolute right-0 top-1/2 -translate-y-1/2"
                     onClick={() => setShowPasswordConfirm((prev) => !prev)}
-                    aria-label={showPasswordConfirm ? "비밀번호 숨기기" : "비밀번호 보기"}
+                    aria-label={showPasswordConfirm ? copy.passwordHide : copy.passwordShow}
                   >
                     <img src={showPasswordConfirm ? eyeOffIcon : eyeOpenIcon} alt="" className="h-4 w-4" />
                   </button>
                 </div>
                 {shouldShowPasswordMatchSuccess || shouldShowPasswordMismatch ? (
                   <p className={`mt-1 text-[10px] ${shouldShowPasswordMatchSuccess ? "text-[#2f8f4e]" : "text-[#ff3a3a]"}`}>
-                    {shouldShowPasswordMatchSuccess ? "비밀번호가 일치합니다." : "비밀번호가 일치하지 않습니다."}
+                    {shouldShowPasswordMatchSuccess ? copy.passwordMatch : copy.passwordMismatch}
                   </p>
                 ) : null}
               </div>
@@ -338,15 +420,33 @@ export const Join = () => {
                   {agreedToPolicies ? "✓" : ""}
                 </span>
                 <span className="text-[11px] leading-[1.7] text-[#4a4a4a]">
-                  <span className="font-semibold text-[#222]">[필수]</span>{" "}
+                  <span className="font-semibold text-[#222]">{copy.policyLead}</span>{" "}
+                  {locale === "en" ? (
+                    <>
+                      I agree to the{" "}
+                      <Link to="/terms" target="_blank" rel="noreferrer" className="font-semibold text-[#171b24] underline underline-offset-2">
+                        {copy.terms}
+                      </Link>
+                      {" "}
+                      {copy.policyJoiner}
+                      {" "}
+                      <Link to="/privacy" target="_blank" rel="noreferrer" className="font-semibold text-[#171b24] underline underline-offset-2">
+                        {copy.privacy}
+                      </Link>
+                      .
+                    </>
+                  ) : (
+                    <>
                   <Link to="/terms" target="_blank" rel="noreferrer" className="font-semibold text-[#171b24] underline underline-offset-2">
-                    이용약관
+                    {copy.terms}
                   </Link>
-                  {" "}및{" "}
+                  {" "}{copy.policyJoiner}{" "}
                   <Link to="/privacy" target="_blank" rel="noreferrer" className="font-semibold text-[#171b24] underline underline-offset-2">
-                    개인정보처리방침
+                    {copy.privacy}
                   </Link>
-                  에 동의합니다.
+                  {copy.policyConsent}
+                    </>
+                  )}
                 </span>
               </label>
 
@@ -360,7 +460,7 @@ export const Join = () => {
                     : "bg-[#ececec] text-[#d1d1d1]"
                 }`}
               >
-                {pendingSignup ? "가입 중..." : "Vlainter ID로 가입하기"}
+                {pendingSignup ? copy.pendingJoin : copy.joinButton}
               </button>
 
               {errorMessage && <p className="mt-2 text-[11px] text-[#ff3a3a]">{errorMessage}</p>}
@@ -371,7 +471,7 @@ export const Join = () => {
                 onClick={handleKakaoJoin}
                 className="mx-auto mt-3 block h-[45px] w-full max-w-[300px]"
               >
-                <img src={kakaoLoginButtonImage} alt="카카오 로그인" className="h-full w-full" />
+                <img src={kakaoLoginButtonImage} alt={copy.kakaoAlt} className="h-full w-full" />
               </button>
             </form>
           </section>

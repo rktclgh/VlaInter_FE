@@ -3,22 +3,47 @@ import { Link } from "react-router-dom";
 import { TopNav } from "../../components/TopNav";
 import { sendTemporaryPassword } from "../../lib/authApi";
 import { AuthFooter } from "../../components/AuthFooter";
+import { usePublicLocale } from "../../lib/publicLocale";
 
 const inputClass =
   "h-8 w-full border-b border-[#d9d9d9] text-[11px] text-[#2f2f2f] placeholder:text-[#c0c0c0]";
 
 export const ForgotPassword = () => {
+  const { locale } = usePublicLocale();
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
   const [pending, setPending] = useState(false);
   const [cooldownSeconds, setCooldownSeconds] = useState(0);
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
+  const copy = locale === "en"
+    ? {
+        title: "Forgot Password",
+        email: "Email",
+        name: "Name",
+        backToLogin: "Back to log in",
+        sending: "Sending...",
+        retryLabel: "Retry in",
+        sendButton: "Send temporary password",
+        missingFields: "Please enter both your email and name.",
+        success: "A temporary password has been sent to your email.",
+      }
+    : {
+        title: "비밀번호 찾기",
+        email: "이메일",
+        name: "이름",
+        backToLogin: "로그인으로 돌아가기",
+        sending: "발송 중...",
+        retryLabel: "초 후 재시도",
+        sendButton: "임시 비밀번호 발송",
+        missingFields: "이메일과 이름을 모두 입력해 주세요.",
+        success: "임시 비밀번호를 이메일로 발송했습니다.",
+      };
 
   const handleSendTemporaryPassword = async () => {
     if (!email.trim() || !name.trim()) {
       setSuccessMessage("");
-      setErrorMessage("이메일과 이름을 모두 입력해 주세요.");
+      setErrorMessage(copy.missingFields);
       return;
     }
 
@@ -27,7 +52,7 @@ export const ForgotPassword = () => {
     setSuccessMessage("");
     try {
       const response = await sendTemporaryPassword(email.trim(), name.trim());
-      setSuccessMessage(response?.message || "임시 비밀번호를 이메일로 발송했습니다.");
+      setSuccessMessage(response?.message || copy.success);
       setCooldownSeconds(60);
     } catch (error) {
       setErrorMessage(error.message);
@@ -57,7 +82,7 @@ export const ForgotPassword = () => {
               <h1 className="bg-[linear-gradient(145deg,#5D83DE_0%,#FF1C91_100%)] bg-clip-text text-[54px] font-medium leading-none text-transparent">
                 Vlainter
               </h1>
-              <p className="mt-1 text-[12px] text-[#7e7e7e]">비밀번호 찾기</p>
+              <p className="mt-1 text-[12px] text-[#7e7e7e]">{copy.title}</p>
             </header>
 
             <form
@@ -70,9 +95,9 @@ export const ForgotPassword = () => {
               <div className="mb-3">
                 <input
                   type="email"
-                  aria-label="이메일"
+                  aria-label={copy.email}
                   className={inputClass}
-                  placeholder="이메일"
+                  placeholder={copy.email}
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                 />
@@ -81,9 +106,9 @@ export const ForgotPassword = () => {
               <div className="mb-4">
                 <input
                   type="text"
-                  aria-label="이름"
+                  aria-label={copy.name}
                   className={inputClass}
-                  placeholder="이름"
+                  placeholder={copy.name}
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                 />
@@ -91,7 +116,7 @@ export const ForgotPassword = () => {
 
               <div className="mt-4 flex items-center justify-end text-[11px] font-medium text-[#9d9d9d]">
                 <Link to="/login" className="hover:text-[#7f7f7f]">
-                  로그인으로 돌아가기
+                  {copy.backToLogin}
                 </Link>
               </div>
 
@@ -100,7 +125,13 @@ export const ForgotPassword = () => {
                 disabled={isSendDisabled}
                 className="mx-auto mt-4 block h-[45px] w-full max-w-[300px] rounded-[8px] bg-[linear-gradient(138deg,#5D83DE_0%,#FF1C91_100%)] text-[12px] font-semibold text-white disabled:cursor-not-allowed disabled:bg-[#c8c8c8] disabled:bg-none disabled:text-[#6f6f6f]"
               >
-                {pending ? "발송 중..." : cooldownSeconds > 0 ? `${cooldownSeconds}초 후 재시도` : "임시 비밀번호 발송"}
+                {pending
+                  ? copy.sending
+                  : cooldownSeconds > 0
+                    ? locale === "en"
+                      ? `${copy.retryLabel} ${cooldownSeconds}s`
+                      : `${cooldownSeconds}${copy.retryLabel}`
+                    : copy.sendButton}
               </button>
 
               {errorMessage ? <p className="mt-2 text-[11px] text-[#ff3a3a]">{errorMessage}</p> : null}
