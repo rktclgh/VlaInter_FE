@@ -891,7 +891,7 @@ export const AdminConsolePage = () => {
 
   if (loadingPage) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-white pt-[54px]">
+      <div className="flex min-h-screen items-center justify-center bg-white pt-[3.75rem]">
         <InlineSpinner label="관리자 콘솔을 준비하고 있습니다." />
       </div>
     );
@@ -909,14 +909,16 @@ export const AdminConsolePage = () => {
         onNavigate={handleSidebarNavigate}
         userName={userName}
         profileImageUrl={profileImageUrl}
+        point={formatPoint(userPoint)}
+        onClickCharge={() => setShowPointChargeModal(true)}
         onLogout={() => {
           setIsMobileMenuOpen(false);
           setShowLogoutModal(true);
         }}
       />
 
-      <div className="mx-auto flex w-full max-w-[1600px] pt-[54px]">
-        <div className="hidden w-[272px] shrink-0 md:block">
+      <div className="mx-auto flex w-full max-w-[1600px] pt-[3.75rem]">
+        <div className="hidden w-[17rem] shrink-0 md:block">
           <Sidebar
             activeKey="admin_console"
             isAdmin

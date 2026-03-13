@@ -698,7 +698,7 @@ export const FileUploadPage = () => {
   const hasAnyPending = useMemo(() => Object.values(pendingFiles).some(Boolean), [pendingFiles]);
 
   return (
-    <div className="min-h-screen overflow-x-hidden bg-white pt-[54px]">
+    <div className="min-h-screen overflow-x-hidden bg-white pt-[3.75rem]">
       <ContentTopNav
         point={formatPoint(userPoint)}
         onClickCharge={() => setShowPointChargeModal(true)}
@@ -712,14 +712,16 @@ export const FileUploadPage = () => {
         onNavigate={onSelectSidebar}
         userName={userName}
         profileImageUrl={profileImageUrl}
+        point={formatPoint(userPoint)}
+        onClickCharge={() => setShowPointChargeModal(true)}
         onLogout={() => {
           setIsMobileMenuOpen(false);
           requestLogout();
         }}
       />
 
-      <div className="flex min-h-[calc(100vh-54px)]">
-        <div className="hidden w-[272px] shrink-0 md:block">
+      <div className="flex min-h-[calc(100vh-3.75rem)]">
+        <div className="hidden w-[17rem] shrink-0 md:block">
           <Sidebar
             activeKey="file_upload"
             onNavigate={onSelectSidebar}
