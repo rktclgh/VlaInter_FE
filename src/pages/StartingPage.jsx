@@ -3,7 +3,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { Link, useNavigate } from "react-router-dom";
 import { getMyProfile } from "../lib/userApi";
 import { hasAuthenticatedBrowserSession } from "../lib/authSessionMarker";
-import { getLandingPatchNotes } from "../lib/landingApi";
+import { getLandingPatchNotes, getLandingSiteSettings } from "../lib/landingApi";
 import { WaveBackground } from "../components/WaveBackground";
 import logoMark from "../assets/logo/favicon.png";
 import icon11st from "../assets/icon/11st.png";
@@ -131,6 +131,8 @@ export const StartingPage = () => {
   const navigate = useNavigate();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [patchNotes, setPatchNotes] = useState(fallbackPatchNotes);
+  const [landingVersionLabel, setLandingVersionLabel] = useState("v0.4");
+  const [activePatchNoteIndex, setActivePatchNoteIndex] = useState(0);
 
   useEffect(() => {
     let unmounted = false;
@@ -159,12 +161,15 @@ export const StartingPage = () => {
   useEffect(() => {
     let cancelled = false;
 
-    const loadPatchNotes = async () => {
+    const loadLandingData = async () => {
       try {
-        const payload = await getLandingPatchNotes();
+        const [patchNotePayload, settingsPayload] = await Promise.all([
+          getLandingPatchNotes(),
+          getLandingSiteSettings(),
+        ]);
         if (cancelled) return;
-        const nextPatchNotes = Array.isArray(payload)
-          ? payload
+        const nextPatchNotes = Array.isArray(patchNotePayload)
+          ? patchNotePayload
               .map((item) => ({
                 patchNoteId: item?.patchNoteId ?? null,
                 title: String(item?.title || "").trim(),
@@ -174,13 +179,16 @@ export const StartingPage = () => {
           : [];
         if (nextPatchNotes.length > 0) {
           setPatchNotes(nextPatchNotes);
+          setActivePatchNoteIndex(0);
         }
+        const nextVersionLabel = String(settingsPayload?.landingVersionLabel || "").trim();
+        if (nextVersionLabel) setLandingVersionLabel(nextVersionLabel);
       } catch {
         // ignore and keep fallback notes for landing stability
       }
     };
 
-    void loadPatchNotes();
+    void loadLandingData();
     return () => {
       cancelled = true;
     };
@@ -194,6 +202,15 @@ export const StartingPage = () => {
   }, []);
 
   const logoMarqueeColumns = useMemo(() => logoColumns, []);
+  const visiblePatchNotes = useMemo(() => patchNotes.slice(activePatchNoteIndex, activePatchNoteIndex + 3), [activePatchNoteIndex, patchNotes]);
+
+  const showPreviousPatchNote = useCallback(() => {
+    setActivePatchNoteIndex((prev) => Math.max(prev - 1, 0));
+  }, []);
+
+  const showNextPatchNote = useCallback(() => {
+    setActivePatchNoteIndex((prev) => Math.min(prev + 1, Math.max(patchNotes.length - 1, 0)));
+  }, [patchNotes.length]);
 
   return (
     <div className="min-h-screen overflow-x-hidden bg-[#111111] text-white">
@@ -239,7 +256,7 @@ export const StartingPage = () => {
                 ))}
               </nav>
 
-              <p className="mt-auto text-[0.7rem] tracking-[0.14em] text-white/28">v0.4</p>
+              <p className="mt-auto text-[0.7rem] tracking-[0.14em] text-white/28">{landingVersionLabel}</p>
             </MotionAside>
           </>
         ) : null}
@@ -435,21 +452,73 @@ export const StartingPage = () => {
             화면 구조와 배포 안정성, 보안 체계를 최근 기준으로 다시 정리했습니다.
           </p>
 
-          <div className="mt-10 grid gap-4 lg:grid-cols-3">
-            {patchNotes.map((note, index) => (
-              <MotionArticle
-                key={note.title}
-                className="rounded-[1.35rem] border border-white/8 bg-white/[0.03] p-6"
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true, amount: 0.2 }}
-                transition={{ duration: 0.5, delay: index * 0.08 }}
-              >
-                <p className="text-[0.72rem] tracking-[0.16em] text-white/34">PATCH {index + 1}</p>
-                <h3 className="mt-4 text-[1.2rem] font-medium tracking-[-0.04em] text-white">{note.title}</h3>
-                <p className="mt-3 text-[0.93rem] leading-7 text-white/60">{note.body}</p>
-              </MotionArticle>
-            ))}
+          <div
+            className="mt-10 grid gap-8 lg:grid-cols-[minmax(0,0.9fr)_minmax(320px,0.78fr)] lg:items-center"
+            onWheel={(event) => {
+              if (Math.abs(event.deltaY) < 18) return;
+              if (event.deltaY > 0) {
+                showNextPatchNote();
+              } else {
+                showPreviousPatchNote();
+              }
+            }}
+          >
+            <div>
+              <p className="text-[0.74rem] tracking-[0.16em] text-white/34">
+                {String(activePatchNoteIndex + 1).padStart(2, "0")} / {String(patchNotes.length).padStart(2, "0")}
+              </p>
+              <h3 className="mt-4 text-[clamp(1.6rem,3vw,2.4rem)] font-medium tracking-[-0.05em] text-white">
+                {patchNotes[activePatchNoteIndex]?.title || fallbackPatchNotes[0].title}
+              </h3>
+              <p className="mt-4 max-w-[34rem] text-[0.98rem] leading-8 text-white/62">
+                {patchNotes[activePatchNoteIndex]?.body || fallbackPatchNotes[0].body}
+              </p>
+              <div className="mt-7 flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={showPreviousPatchNote}
+                  disabled={activePatchNoteIndex === 0}
+                  className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-white/14 bg-white/[0.03] text-white/82 disabled:opacity-35"
+                >
+                  <span aria-hidden="true" className="text-[1rem]">‹</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={showNextPatchNote}
+                  disabled={activePatchNoteIndex >= patchNotes.length - 1}
+                  className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-white/14 bg-white/[0.03] text-white/82 disabled:opacity-35"
+                >
+                  <span aria-hidden="true" className="text-[1rem]">›</span>
+                </button>
+                <p className="text-[0.78rem] tracking-[0.08em] text-white/40">SCROLL OR USE ARROWS</p>
+              </div>
+            </div>
+
+            <div className="relative mx-auto h-[22rem] w-full max-w-[28rem]">
+              {visiblePatchNotes.map((note, index) => {
+                const isFront = index === 0;
+                return (
+                  <MotionArticle
+                    key={`${note.patchNoteId || note.title}-${activePatchNoteIndex}-${index}`}
+                    className="absolute inset-x-0 top-0 rounded-[1.45rem] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.06),rgba(255,255,255,0.03))] p-6 shadow-[0_24px_60px_rgba(0,0,0,0.28)] backdrop-blur-md"
+                    initial={false}
+                    animate={{
+                      y: index * 18,
+                      scale: 1 - index * 0.04,
+                      opacity: isFront ? 1 : 0.5 - index * 0.06,
+                    }}
+                    transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+                    style={{ zIndex: 30 - index }}
+                  >
+                    <p className="text-[0.72rem] tracking-[0.16em] text-white/34">
+                      PATCH {String(activePatchNoteIndex + index + 1).padStart(2, "0")}
+                    </p>
+                    <h3 className="mt-4 text-[1.2rem] font-medium tracking-[-0.04em] text-white">{note.title}</h3>
+                    <p className="mt-3 text-[0.93rem] leading-7 text-white/60">{note.body}</p>
+                  </MotionArticle>
+                );
+              })}
+            </div>
           </div>
         </section>
       </main>

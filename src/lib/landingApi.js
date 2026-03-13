@@ -5,3 +5,9 @@ export async function getLandingPatchNotes() {
     method: "GET",
   });
 }
+
+export async function getLandingSiteSettings() {
+  return apiRequest("/api/site/settings", {
+    method: "GET",
+  });
+}

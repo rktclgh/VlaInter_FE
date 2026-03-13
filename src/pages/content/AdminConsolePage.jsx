@@ -16,6 +16,7 @@ import {
   deactivateAdminMember,
   getAdminPatchNotes,
   getAdminInterviewSettings,
+  getAdminSiteSettings,
   getAdminGlobalAccessSummary,
   getAdminInterviewCategories,
   getAdminInterviewSets,
@@ -23,6 +24,7 @@ import {
   getAdminMembers,
   refreshAdminGlobalAccessSummary,
   refreshAdminMemberDetail,
+  reorderAdminPatchNotes,
   deleteAdminInterviewSet,
   hardDeleteAdminMember,
   mergeAdminInterviewCategory,
@@ -34,6 +36,7 @@ import {
   updateAdminInterviewSet,
   updateAdminInterviewCategory,
   updateAdminInterviewSettings,
+  updateAdminSiteSettings,
 } from "../../lib/adminApi";
 import { getInterviewSetQuestions } from "../../lib/interviewApi";
 import { extractProfile, formatPoint, parsePoint } from "../../lib/profileUtils";
@@ -155,11 +158,25 @@ const normalizePatchNotes = (items) => (Array.isArray(items) ? items : []).map((
   patchNoteId: Number(item?.patchNoteId),
   title: String(item?.title || ""),
   body: String(item?.body || ""),
-  sortOrder: String(item?.sortOrder ?? 0),
+  sortOrder: toInt(item?.sortOrder, 0),
   isPublished: item?.isPublished !== false,
   createdAt: item?.createdAt || null,
   updatedAt: item?.updatedAt || null,
 }));
+
+const movePatchNote = (items, fromId, toId) => {
+  const fromIndex = items.findIndex((item) => item.patchNoteId === fromId);
+  const toIndex = items.findIndex((item) => item.patchNoteId === toId);
+  if (fromIndex < 0 || toIndex < 0 || fromIndex === toIndex) return items;
+
+  const next = [...items];
+  const [moved] = next.splice(fromIndex, 1);
+  next.splice(toIndex, 0, moved);
+  return next.map((item, index) => ({
+    ...item,
+    sortOrder: index * 10,
+  }));
+};
 
 const isBranchCommonCategory = (category) =>
   Number(category?.depth) === 1 && String(category?.name || "").trim() === "공통";
@@ -236,15 +253,23 @@ export const AdminConsolePage = () => {
     techQuestionReusePolicy: "ALWAYS_GENERATE",
     updatedAt: null,
   });
+  const [loadingSiteSettings, setLoadingSiteSettings] = useState(false);
+  const [savingSiteSettings, setSavingSiteSettings] = useState(false);
+  const [siteSettings, setSiteSettings] = useState({
+    landingVersionLabel: "v0.4",
+    updatedAt: null,
+  });
   const [patchNotes, setPatchNotes] = useState([]);
   const [loadingPatchNotes, setLoadingPatchNotes] = useState(false);
   const [savingPatchNote, setSavingPatchNote] = useState(false);
+  const [savingPatchNoteOrder, setSavingPatchNoteOrder] = useState(false);
   const [deletingPatchNoteId, setDeletingPatchNoteId] = useState(null);
+  const [draggingPatchNoteId, setDraggingPatchNoteId] = useState(null);
+  const [isPatchNoteOrderDirty, setIsPatchNoteOrderDirty] = useState(false);
   const [selectedPatchNoteId, setSelectedPatchNoteId] = useState(null);
   const [patchNoteForm, setPatchNoteForm] = useState({
     title: "",
     body: "",
-    sortOrder: "0",
     isPublished: true,
   });
   const [creatingCategory, setCreatingCategory] = useState(false);
@@ -374,6 +399,8 @@ export const AdminConsolePage = () => {
       const payload = await getAdminPatchNotes();
       const nextPatchNotes = normalizePatchNotes(payload);
       setPatchNotes(nextPatchNotes);
+      setIsPatchNoteOrderDirty(false);
+      setDraggingPatchNoteId(null);
       setSelectedPatchNoteId((prev) => {
         if (prev && nextPatchNotes.some((item) => item.patchNoteId === prev)) {
           return prev;
@@ -384,6 +411,21 @@ export const AdminConsolePage = () => {
       setPageErrorMessage(error?.message || "패치노트를 불러오지 못했습니다.");
     } finally {
       setLoadingPatchNotes(false);
+    }
+  }, []);
+
+  const loadSiteSettings = useCallback(async () => {
+    setLoadingSiteSettings(true);
+    try {
+      const payload = await getAdminSiteSettings();
+      setSiteSettings({
+        landingVersionLabel: String(payload?.landingVersionLabel || "v0.4"),
+        updatedAt: payload?.updatedAt || null,
+      });
+    } catch (error) {
+      setPageErrorMessage(error?.message || "랜딩 설정을 불러오지 못했습니다.");
+    } finally {
+      setLoadingSiteSettings(false);
     }
   }, []);
 
@@ -414,7 +456,7 @@ export const AdminConsolePage = () => {
         return;
       }
 
-      await Promise.all([loadMembers(0), loadSets(), loadCategories(), loadInterviewSettings(), loadPatchNotes()]);
+      await Promise.all([loadMembers(0), loadSets(), loadCategories(), loadInterviewSettings(), loadSiteSettings(), loadPatchNotes()]);
       if (!cancelled) {
         setLoadingPage(false);
       }
@@ -424,7 +466,7 @@ export const AdminConsolePage = () => {
     return () => {
       cancelled = true;
     };
-  }, [loadCategories, loadInterviewSettings, loadMembers, loadPatchNotes, loadSets, navigate]);
+  }, [loadCategories, loadInterviewSettings, loadMembers, loadPatchNotes, loadSets, loadSiteSettings, navigate]);
 
   useEffect(() => {
     if (!selectedMemberId) {
@@ -574,7 +616,6 @@ export const AdminConsolePage = () => {
       setPatchNoteForm({
         title: "",
         body: "",
-        sortOrder: "0",
         isPublished: true,
       });
       return;
@@ -582,7 +623,6 @@ export const AdminConsolePage = () => {
     setPatchNoteForm({
       title: selectedPatchNote.title || "",
       body: selectedPatchNote.body || "",
-      sortOrder: String(selectedPatchNote.sortOrder ?? 0),
       isPublished: Boolean(selectedPatchNote.isPublished),
     });
   }, [selectedPatchNote]);
@@ -998,6 +1038,27 @@ export const AdminConsolePage = () => {
     }
   }, [interviewSettings.techQuestionReusePolicy]);
 
+  const handleSaveSiteSettings = useCallback(async () => {
+    const landingVersionLabel = siteSettings.landingVersionLabel.trim();
+    if (!landingVersionLabel) {
+      setPageErrorMessage("사이드바 하단 버전 라벨을 입력해 주세요.");
+      return;
+    }
+    setSavingSiteSettings(true);
+    setPageErrorMessage("");
+    try {
+      const payload = await updateAdminSiteSettings({ landingVersionLabel });
+      setSiteSettings({
+        landingVersionLabel: String(payload?.landingVersionLabel || landingVersionLabel),
+        updatedAt: payload?.updatedAt || null,
+      });
+    } catch (error) {
+      setPageErrorMessage(error?.message || "랜딩 설정 저장에 실패했습니다.");
+    } finally {
+      setSavingSiteSettings(false);
+    }
+  }, [siteSettings.landingVersionLabel]);
+
   const handleCreatePatchNote = useCallback(async () => {
     const normalizedTitle = patchNoteForm.title.trim();
     const normalizedBody = patchNoteForm.body.trim();
@@ -1015,7 +1076,6 @@ export const AdminConsolePage = () => {
       const created = await createAdminPatchNote({
         title: normalizedTitle,
         body: normalizedBody,
-        sortOrder: toInt(patchNoteForm.sortOrder, 0),
         isPublished: Boolean(patchNoteForm.isPublished),
       });
       const createdId = Number(created?.patchNoteId);
@@ -1046,7 +1106,6 @@ export const AdminConsolePage = () => {
       await updateAdminPatchNote(selectedPatchNoteId, {
         title: normalizedTitle,
         body: normalizedBody,
-        sortOrder: toInt(patchNoteForm.sortOrder, 0),
         isPublished: Boolean(patchNoteForm.isPublished),
       });
       await loadPatchNotes();
@@ -1072,6 +1131,38 @@ export const AdminConsolePage = () => {
       setDeletingPatchNoteId(null);
     }
   }, [loadPatchNotes, patchNotes]);
+
+  const handlePatchNoteDragStart = useCallback((patchNoteId) => {
+    setDraggingPatchNoteId(patchNoteId);
+  }, []);
+
+  const handlePatchNoteDrop = useCallback((targetPatchNoteId) => {
+    if (!draggingPatchNoteId || draggingPatchNoteId === targetPatchNoteId) {
+      setDraggingPatchNoteId(null);
+      return;
+    }
+    setPatchNotes((prev) => movePatchNote(prev, draggingPatchNoteId, targetPatchNoteId));
+    setIsPatchNoteOrderDirty(true);
+    setDraggingPatchNoteId(null);
+  }, [draggingPatchNoteId]);
+
+  const handleSavePatchNoteOrder = useCallback(async () => {
+    if (patchNotes.length === 0 || !isPatchNoteOrderDirty) return;
+    setSavingPatchNoteOrder(true);
+    setPageErrorMessage("");
+    try {
+      const payload = await reorderAdminPatchNotes(
+        patchNotes.map((item) => item.patchNoteId).filter((value) => Number.isFinite(value))
+      );
+      setPatchNotes(normalizePatchNotes(payload));
+      setIsPatchNoteOrderDirty(false);
+      setDraggingPatchNoteId(null);
+    } catch (error) {
+      setPageErrorMessage(error?.message || "패치노트 순서 저장에 실패했습니다.");
+    } finally {
+      setSavingPatchNoteOrder(false);
+    }
+  }, [isPatchNoteOrderDirty, patchNotes]);
 
   if (loadingPage) {
     return (
@@ -2000,39 +2091,90 @@ export const AdminConsolePage = () => {
             </section>
           ) : null}
 
-          {activeTab === "patchNotes" ? (
+                  {activeTab === "patchNotes" ? (
             <section className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,0.95fr)_minmax(320px,0.75fr)]">
               <article className="rounded-[20px] border border-[#dfe4ef] bg-white p-5 shadow-[0_12px_28px_rgba(15,23,42,0.04)]">
                 <div className="flex items-center justify-between gap-3">
                   <div>
                     <h2 className="text-[16px] font-semibold text-[#1f2937]">랜딩 패치노트 목록</h2>
                     <p className="mt-2 text-[13px] leading-[1.7] text-[#5e6472]">
-                      랜딩 페이지의 PATCH NOTE 섹션에 노출되는 항목을 관리합니다. 공개 여부를 끄면 랜딩에는 보이지 않습니다.
+                      최신 항목이 랜딩 상단에 오도록 노출됩니다. 드래그로 순서를 바꾸고 저장하면 즉시 반영됩니다.
                     </p>
                   </div>
                   {loadingPatchNotes ? <InlineSpinner label="불러오는 중" /> : null}
                 </div>
-                <div className="mt-5 space-y-3">
+
+                <div className="mt-5 rounded-[16px] border border-[#e5e7eb] bg-[#f8fafc] p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <h3 className="text-[14px] font-semibold text-[#111827]">사이드바 하단 버전 라벨</h3>
+                      <p className="mt-1 text-[12px] text-[#64748b]">랜딩 좌측 하단에 표시되는 버전 문구입니다.</p>
+                    </div>
+                    {loadingSiteSettings ? <InlineSpinner label="불러오는 중" /> : null}
+                  </div>
+                  <div className="mt-3 flex flex-col gap-3 md:flex-row md:items-center">
+                    <input
+                      value={siteSettings.landingVersionLabel}
+                      onChange={(event) => setSiteSettings((prev) => ({ ...prev, landingVersionLabel: event.target.value }))}
+                      placeholder="예: v0.4"
+                      className="w-full rounded-[12px] border border-[#d9dde5] bg-white px-3 py-2 outline-none focus:border-[#9aa9cd]"
+                    />
+                    <button
+                      type="button"
+                      disabled={savingSiteSettings}
+                      onClick={() => void handleSaveSiteSettings()}
+                      className="shrink-0 rounded-[10px] border border-[#171b24] bg-[#171b24] px-4 py-2 text-[12px] font-semibold text-white disabled:opacity-60"
+                    >
+                      {savingSiteSettings ? "저장 중..." : "버전 저장"}
+                    </button>
+                  </div>
+                  <p className="mt-2 text-[12px] text-[#64748b]">
+                    마지막 반영: <strong className="text-[#111827]">{formatDateTime(siteSettings.updatedAt)}</strong>
+                  </p>
+                </div>
+
+                <div className="mt-5 flex items-center justify-between gap-3">
+                  <p className="text-[12px] text-[#64748b]">패치노트 카드를 드래그해서 위아래 순서를 조정하세요.</p>
+                  <button
+                    type="button"
+                    disabled={!isPatchNoteOrderDirty || savingPatchNoteOrder}
+                    onClick={() => void handleSavePatchNoteOrder()}
+                    className="rounded-[10px] border border-[#171b24] bg-[#171b24] px-4 py-2 text-[12px] font-semibold text-white disabled:cursor-not-allowed disabled:border-[#cbd5e1] disabled:bg-[#e5e7eb] disabled:text-[#6b7280]"
+                  >
+                    {savingPatchNoteOrder ? "순서 저장 중..." : "순서 저장"}
+                  </button>
+                </div>
+
+                <div className="mt-4 space-y-3">
                   {patchNotes.length > 0 ? patchNotes.map((note) => {
                     const selected = note.patchNoteId === selectedPatchNoteId;
+                    const dragging = note.patchNoteId === draggingPatchNoteId;
                     return (
                       <button
                         key={note.patchNoteId}
                         type="button"
+                        draggable
                         onClick={() => setSelectedPatchNoteId(note.patchNoteId)}
+                        onDragStart={() => handlePatchNoteDragStart(note.patchNoteId)}
+                        onDragOver={(event) => event.preventDefault()}
+                        onDrop={() => handlePatchNoteDrop(note.patchNoteId)}
+                        onDragEnd={() => setDraggingPatchNoteId(null)}
                         className={`block w-full rounded-[16px] border px-4 py-4 text-left transition ${
                           selected
                             ? "border-[#171b24] bg-[#f8fafc]"
                             : "border-[#e5e7eb] bg-white hover:border-[#cbd5e1] hover:bg-[#fbfcff]"
-                        }`}
+                        } ${dragging ? "opacity-65" : ""}`}
                       >
                         <div className="flex items-start justify-between gap-3">
                           <div className="min-w-0">
-                            <p className="truncate text-[14px] font-semibold text-[#111827]">{note.title}</p>
+                            <div className="flex items-center gap-2">
+                              <span className="text-[13px] text-[#94a3b8]">⋮⋮</span>
+                              <p className="truncate text-[14px] font-semibold text-[#111827]">{note.title}</p>
+                            </div>
                             <p className="mt-2 line-clamp-3 text-[12px] leading-[1.6] text-[#64748b]">{note.body}</p>
                           </div>
                           <div className="shrink-0 text-right">
-                            <p className="text-[11px] text-[#64748b]">정렬 {note.sortOrder}</p>
+                            <p className="text-[11px] text-[#64748b]">순서 {patchNotes.findIndex((item) => item.patchNoteId === note.patchNoteId) + 1}</p>
                             <p className={`mt-2 text-[11px] font-semibold ${note.isPublished ? "text-[#138a5a]" : "text-[#b45309]"}`}>
                               {note.isPublished ? "공개 중" : "비공개"}
                             </p>
@@ -2066,7 +2208,6 @@ export const AdminConsolePage = () => {
                         setPatchNoteForm({
                           title: "",
                           body: "",
-                          sortOrder: "0",
                           isPublished: true,
                         });
                       }}
@@ -2090,12 +2231,6 @@ export const AdminConsolePage = () => {
                     placeholder="패치노트 본문"
                     rows={7}
                     className="w-full resize-none rounded-[12px] border border-[#d9dde5] px-3 py-2 outline-none focus:border-[#9aa9cd]"
-                  />
-                  <input
-                    value={patchNoteForm.sortOrder}
-                    onChange={(event) => setPatchNoteForm((prev) => ({ ...prev, sortOrder: event.target.value }))}
-                    placeholder="정렬 순서"
-                    className="w-full rounded-[12px] border border-[#d9dde5] px-3 py-2 outline-none focus:border-[#9aa9cd]"
                   />
                   <label className="flex items-center gap-2 rounded-[10px] border border-[#e5e7eb] px-3 py-2 text-[12px] text-[#4b5563]">
                     <input

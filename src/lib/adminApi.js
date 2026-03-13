@@ -19,6 +19,19 @@ export async function getAdminPatchNotes() {
   });
 }
 
+export async function getAdminSiteSettings() {
+  return apiRequest("/api/admin/site/settings", {
+    method: "GET",
+  });
+}
+
+export async function updateAdminSiteSettings(payload) {
+  return apiRequest("/api/admin/site/settings", {
+    method: "PATCH",
+    body: payload,
+  });
+}
+
 export async function createAdminPatchNote(payload) {
   return apiRequest("/api/admin/site/patch-notes", {
     method: "POST",
@@ -36,6 +49,13 @@ export async function updateAdminPatchNote(patchNoteId, payload) {
 export async function deleteAdminPatchNote(patchNoteId) {
   return apiRequest(`/api/admin/site/patch-notes/${encodeURIComponent(patchNoteId)}`, {
     method: "DELETE",
+  });
+}
+
+export async function reorderAdminPatchNotes(patchNoteIds) {
+  return apiRequest("/api/admin/site/patch-notes/reorder", {
+    method: "PATCH",
+    body: { patchNoteIds },
   });
 }
 
