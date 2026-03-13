@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { Link, useNavigate } from "react-router-dom";
 import { getMyProfile } from "../lib/userApi";
 import { hasAuthenticatedBrowserSession } from "../lib/authSessionMarker";
+import { getLandingPatchNotes } from "../lib/landingApi";
 import { WaveBackground } from "../components/WaveBackground";
 import logoMark from "../assets/logo/favicon.png";
 import icon11st from "../assets/icon/11st.png";
@@ -60,7 +61,7 @@ const productCards = [
   },
 ];
 
-const patchNotes = [
+const fallbackPatchNotes = [
   {
     title: "Landing Refresh",
     body: "웨이브 배경과 집중형 타이포 중심의 첫 화면으로 정리했습니다.",
@@ -129,6 +130,7 @@ const MotionArticle = motion.article;
 export const StartingPage = () => {
   const navigate = useNavigate();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [patchNotes, setPatchNotes] = useState(fallbackPatchNotes);
 
   useEffect(() => {
     let unmounted = false;
@@ -153,6 +155,36 @@ export const StartingPage = () => {
       unmounted = true;
     };
   }, [navigate]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadPatchNotes = async () => {
+      try {
+        const payload = await getLandingPatchNotes();
+        if (cancelled) return;
+        const nextPatchNotes = Array.isArray(payload)
+          ? payload
+              .map((item) => ({
+                patchNoteId: item?.patchNoteId ?? null,
+                title: String(item?.title || "").trim(),
+                body: String(item?.body || "").trim(),
+              }))
+              .filter((item) => item.title && item.body)
+          : [];
+        if (nextPatchNotes.length > 0) {
+          setPatchNotes(nextPatchNotes);
+        }
+      } catch {
+        // ignore and keep fallback notes for landing stability
+      }
+    };
+
+    void loadPatchNotes();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const scrollToSection = useCallback((sectionId) => {
     const element = document.getElementById(sectionId);

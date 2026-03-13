@@ -9,9 +9,12 @@ import { isAuthenticationError } from "../../lib/apiClient";
 import { logout } from "../../lib/authApi";
 import {
   activateAdminMember,
+  createAdminPatchNote,
   createAdminInterviewCategory,
+  deleteAdminPatchNote,
   deleteAdminInterviewCategory,
   deactivateAdminMember,
+  getAdminPatchNotes,
   getAdminInterviewSettings,
   getAdminGlobalAccessSummary,
   getAdminInterviewCategories,
@@ -27,6 +30,7 @@ import {
   promoteAdminInterviewSet,
   restoreAdminMember,
   softDeleteAdminMember,
+  updateAdminPatchNote,
   updateAdminInterviewSet,
   updateAdminInterviewCategory,
   updateAdminInterviewSettings,
@@ -40,6 +44,7 @@ const TABS = [
   { key: "sets", label: "질문 세트 운영" },
   { key: "categories", label: "카테고리 운영" },
   { key: "settings", label: "생성 정책" },
+  { key: "patchNotes", label: "패치노트" },
   { key: "billing", label: "결제/포인트" },
   { key: "kpi", label: "매출 KPI" },
 ];
@@ -146,6 +151,16 @@ const normalizeMemberGlobalSummary = (payload) => ({
   dailyMetrics: Array.isArray(payload?.dailyMetrics) ? payload.dailyMetrics : [],
 });
 
+const normalizePatchNotes = (items) => (Array.isArray(items) ? items : []).map((item) => ({
+  patchNoteId: Number(item?.patchNoteId),
+  title: String(item?.title || ""),
+  body: String(item?.body || ""),
+  sortOrder: String(item?.sortOrder ?? 0),
+  isPublished: item?.isPublished !== false,
+  createdAt: item?.createdAt || null,
+  updatedAt: item?.updatedAt || null,
+}));
+
 const isBranchCommonCategory = (category) =>
   Number(category?.depth) === 1 && String(category?.name || "").trim() === "공통";
 
@@ -220,6 +235,17 @@ export const AdminConsolePage = () => {
   const [interviewSettings, setInterviewSettings] = useState({
     techQuestionReusePolicy: "ALWAYS_GENERATE",
     updatedAt: null,
+  });
+  const [patchNotes, setPatchNotes] = useState([]);
+  const [loadingPatchNotes, setLoadingPatchNotes] = useState(false);
+  const [savingPatchNote, setSavingPatchNote] = useState(false);
+  const [deletingPatchNoteId, setDeletingPatchNoteId] = useState(null);
+  const [selectedPatchNoteId, setSelectedPatchNoteId] = useState(null);
+  const [patchNoteForm, setPatchNoteForm] = useState({
+    title: "",
+    body: "",
+    sortOrder: "0",
+    isPublished: true,
   });
   const [creatingCategory, setCreatingCategory] = useState(false);
   const [savingCategory, setSavingCategory] = useState(false);
@@ -342,6 +368,25 @@ export const AdminConsolePage = () => {
     }
   }, []);
 
+  const loadPatchNotes = useCallback(async () => {
+    setLoadingPatchNotes(true);
+    try {
+      const payload = await getAdminPatchNotes();
+      const nextPatchNotes = normalizePatchNotes(payload);
+      setPatchNotes(nextPatchNotes);
+      setSelectedPatchNoteId((prev) => {
+        if (prev && nextPatchNotes.some((item) => item.patchNoteId === prev)) {
+          return prev;
+        }
+        return nextPatchNotes[0]?.patchNoteId ?? null;
+      });
+    } catch (error) {
+      setPageErrorMessage(error?.message || "패치노트를 불러오지 못했습니다.");
+    } finally {
+      setLoadingPatchNotes(false);
+    }
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
     const initialize = async () => {
@@ -369,7 +414,7 @@ export const AdminConsolePage = () => {
         return;
       }
 
-      await Promise.all([loadMembers(0), loadSets(), loadCategories(), loadInterviewSettings()]);
+      await Promise.all([loadMembers(0), loadSets(), loadCategories(), loadInterviewSettings(), loadPatchNotes()]);
       if (!cancelled) {
         setLoadingPage(false);
       }
@@ -379,7 +424,7 @@ export const AdminConsolePage = () => {
     return () => {
       cancelled = true;
     };
-  }, [loadCategories, loadInterviewSettings, loadMembers, loadSets, navigate]);
+  }, [loadCategories, loadInterviewSettings, loadMembers, loadPatchNotes, loadSets, navigate]);
 
   useEffect(() => {
     if (!selectedMemberId) {
@@ -518,6 +563,29 @@ export const AdminConsolePage = () => {
       status: selectedSet.status || "ACTIVE",
     });
   }, [selectedSet]);
+
+  const selectedPatchNote = useMemo(
+    () => patchNotes.find((item) => item.patchNoteId === selectedPatchNoteId) || null,
+    [patchNotes, selectedPatchNoteId]
+  );
+
+  useEffect(() => {
+    if (!selectedPatchNote) {
+      setPatchNoteForm({
+        title: "",
+        body: "",
+        sortOrder: "0",
+        isPublished: true,
+      });
+      return;
+    }
+    setPatchNoteForm({
+      title: selectedPatchNote.title || "",
+      body: selectedPatchNote.body || "",
+      sortOrder: String(selectedPatchNote.sortOrder ?? 0),
+      isPublished: Boolean(selectedPatchNote.isPublished),
+    });
+  }, [selectedPatchNote]);
 
   const sortedCategories = useMemo(() => {
     return [...categories].sort((left, right) => {
@@ -929,6 +997,81 @@ export const AdminConsolePage = () => {
       setSavingInterviewSettings(false);
     }
   }, [interviewSettings.techQuestionReusePolicy]);
+
+  const handleCreatePatchNote = useCallback(async () => {
+    const normalizedTitle = patchNoteForm.title.trim();
+    const normalizedBody = patchNoteForm.body.trim();
+    if (!normalizedTitle) {
+      setPageErrorMessage("패치노트 제목을 입력해 주세요.");
+      return;
+    }
+    if (!normalizedBody) {
+      setPageErrorMessage("패치노트 본문을 입력해 주세요.");
+      return;
+    }
+    setSavingPatchNote(true);
+    setPageErrorMessage("");
+    try {
+      const created = await createAdminPatchNote({
+        title: normalizedTitle,
+        body: normalizedBody,
+        sortOrder: toInt(patchNoteForm.sortOrder, 0),
+        isPublished: Boolean(patchNoteForm.isPublished),
+      });
+      const createdId = Number(created?.patchNoteId);
+      await loadPatchNotes();
+      setSelectedPatchNoteId(Number.isFinite(createdId) ? createdId : null);
+    } catch (error) {
+      setPageErrorMessage(error?.message || "패치노트 생성에 실패했습니다.");
+    } finally {
+      setSavingPatchNote(false);
+    }
+  }, [loadPatchNotes, patchNoteForm]);
+
+  const handleSavePatchNote = useCallback(async () => {
+    if (!selectedPatchNoteId) return;
+    const normalizedTitle = patchNoteForm.title.trim();
+    const normalizedBody = patchNoteForm.body.trim();
+    if (!normalizedTitle) {
+      setPageErrorMessage("패치노트 제목을 입력해 주세요.");
+      return;
+    }
+    if (!normalizedBody) {
+      setPageErrorMessage("패치노트 본문을 입력해 주세요.");
+      return;
+    }
+    setSavingPatchNote(true);
+    setPageErrorMessage("");
+    try {
+      await updateAdminPatchNote(selectedPatchNoteId, {
+        title: normalizedTitle,
+        body: normalizedBody,
+        sortOrder: toInt(patchNoteForm.sortOrder, 0),
+        isPublished: Boolean(patchNoteForm.isPublished),
+      });
+      await loadPatchNotes();
+    } catch (error) {
+      setPageErrorMessage(error?.message || "패치노트 저장에 실패했습니다.");
+    } finally {
+      setSavingPatchNote(false);
+    }
+  }, [loadPatchNotes, patchNoteForm, selectedPatchNoteId]);
+
+  const handleDeletePatchNote = useCallback(async (patchNoteId) => {
+    const target = patchNotes.find((item) => item.patchNoteId === patchNoteId);
+    const confirmed = window.confirm(`'${target?.title || "선택한 패치노트"}'를 삭제하시겠습니까?`);
+    if (!confirmed) return;
+    setDeletingPatchNoteId(patchNoteId);
+    setPageErrorMessage("");
+    try {
+      await deleteAdminPatchNote(patchNoteId);
+      await loadPatchNotes();
+    } catch (error) {
+      setPageErrorMessage(error?.message || "패치노트 삭제에 실패했습니다.");
+    } finally {
+      setDeletingPatchNoteId(null);
+    }
+  }, [loadPatchNotes, patchNotes]);
 
   if (loadingPage) {
     return (
@@ -1854,6 +1997,143 @@ export const AdminConsolePage = () => {
                   {savingInterviewSettings ? "저장 중..." : "정책 저장"}
                 </button>
               </div>
+            </section>
+          ) : null}
+
+          {activeTab === "patchNotes" ? (
+            <section className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,0.95fr)_minmax(320px,0.75fr)]">
+              <article className="rounded-[20px] border border-[#dfe4ef] bg-white p-5 shadow-[0_12px_28px_rgba(15,23,42,0.04)]">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <h2 className="text-[16px] font-semibold text-[#1f2937]">랜딩 패치노트 목록</h2>
+                    <p className="mt-2 text-[13px] leading-[1.7] text-[#5e6472]">
+                      랜딩 페이지의 PATCH NOTE 섹션에 노출되는 항목을 관리합니다. 공개 여부를 끄면 랜딩에는 보이지 않습니다.
+                    </p>
+                  </div>
+                  {loadingPatchNotes ? <InlineSpinner label="불러오는 중" /> : null}
+                </div>
+                <div className="mt-5 space-y-3">
+                  {patchNotes.length > 0 ? patchNotes.map((note) => {
+                    const selected = note.patchNoteId === selectedPatchNoteId;
+                    return (
+                      <button
+                        key={note.patchNoteId}
+                        type="button"
+                        onClick={() => setSelectedPatchNoteId(note.patchNoteId)}
+                        className={`block w-full rounded-[16px] border px-4 py-4 text-left transition ${
+                          selected
+                            ? "border-[#171b24] bg-[#f8fafc]"
+                            : "border-[#e5e7eb] bg-white hover:border-[#cbd5e1] hover:bg-[#fbfcff]"
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="truncate text-[14px] font-semibold text-[#111827]">{note.title}</p>
+                            <p className="mt-2 line-clamp-3 text-[12px] leading-[1.6] text-[#64748b]">{note.body}</p>
+                          </div>
+                          <div className="shrink-0 text-right">
+                            <p className="text-[11px] text-[#64748b]">정렬 {note.sortOrder}</p>
+                            <p className={`mt-2 text-[11px] font-semibold ${note.isPublished ? "text-[#138a5a]" : "text-[#b45309]"}`}>
+                              {note.isPublished ? "공개 중" : "비공개"}
+                            </p>
+                          </div>
+                        </div>
+                      </button>
+                    );
+                  }) : (
+                    <div className="rounded-[14px] border border-dashed border-[#cbd5e1] bg-[#f8fafc] px-4 py-6 text-[12px] text-[#64748b]">
+                      등록된 패치노트가 없습니다. 우측에서 새 항목을 추가해 주세요.
+                    </div>
+                  )}
+                </div>
+              </article>
+
+              <article className="rounded-[20px] border border-[#dfe4ef] bg-white p-5 shadow-[0_12px_28px_rgba(15,23,42,0.04)]">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <h2 className="text-[16px] font-semibold text-[#1f2937]">
+                      {selectedPatchNote ? "패치노트 수정" : "새 패치노트 작성"}
+                    </h2>
+                    <p className="mt-2 text-[13px] leading-[1.7] text-[#5e6472]">
+                      제목과 본문을 입력하면 랜딩 페이지 카드에 바로 반영됩니다.
+                    </p>
+                  </div>
+                  {selectedPatchNote ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedPatchNoteId(null);
+                        setPatchNoteForm({
+                          title: "",
+                          body: "",
+                          sortOrder: "0",
+                          isPublished: true,
+                        });
+                      }}
+                      className="rounded-[10px] border border-[#d9dde5] px-3 py-1.5 text-[12px] text-[#4b5563]"
+                    >
+                      새로 작성
+                    </button>
+                  ) : null}
+                </div>
+
+                <div className="mt-5 space-y-3">
+                  <input
+                    value={patchNoteForm.title}
+                    onChange={(event) => setPatchNoteForm((prev) => ({ ...prev, title: event.target.value }))}
+                    placeholder="패치노트 제목"
+                    className="w-full rounded-[12px] border border-[#d9dde5] px-3 py-2 outline-none focus:border-[#9aa9cd]"
+                  />
+                  <textarea
+                    value={patchNoteForm.body}
+                    onChange={(event) => setPatchNoteForm((prev) => ({ ...prev, body: event.target.value }))}
+                    placeholder="패치노트 본문"
+                    rows={7}
+                    className="w-full resize-none rounded-[12px] border border-[#d9dde5] px-3 py-2 outline-none focus:border-[#9aa9cd]"
+                  />
+                  <input
+                    value={patchNoteForm.sortOrder}
+                    onChange={(event) => setPatchNoteForm((prev) => ({ ...prev, sortOrder: event.target.value }))}
+                    placeholder="정렬 순서"
+                    className="w-full rounded-[12px] border border-[#d9dde5] px-3 py-2 outline-none focus:border-[#9aa9cd]"
+                  />
+                  <label className="flex items-center gap-2 rounded-[10px] border border-[#e5e7eb] px-3 py-2 text-[12px] text-[#4b5563]">
+                    <input
+                      type="checkbox"
+                      checked={Boolean(patchNoteForm.isPublished)}
+                      onChange={(event) => setPatchNoteForm((prev) => ({ ...prev, isPublished: event.target.checked }))}
+                    />
+                    랜딩 페이지에 공개
+                  </label>
+                  {selectedPatchNote ? (
+                    <p className="text-[12px] text-[#64748b]">
+                      생성: <strong className="text-[#111827]">{formatDateTime(selectedPatchNote.createdAt)}</strong>
+                      {" · "}
+                      수정: <strong className="text-[#111827]">{formatDateTime(selectedPatchNote.updatedAt)}</strong>
+                    </p>
+                  ) : null}
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      disabled={savingPatchNote}
+                      onClick={() => void (selectedPatchNote ? handleSavePatchNote() : handleCreatePatchNote())}
+                      className="rounded-[10px] border border-[#171b24] bg-[#171b24] px-4 py-2 text-[12px] font-semibold text-white disabled:opacity-60"
+                    >
+                      {savingPatchNote ? "저장 중..." : selectedPatchNote ? "패치노트 저장" : "패치노트 추가"}
+                    </button>
+                    {selectedPatchNote ? (
+                      <button
+                        type="button"
+                        disabled={deletingPatchNoteId === selectedPatchNote.patchNoteId}
+                        onClick={() => void handleDeletePatchNote(selectedPatchNote.patchNoteId)}
+                        className="rounded-[10px] border border-[#ef9a9a] px-4 py-2 text-[12px] font-semibold text-[#c62828] disabled:opacity-60"
+                      >
+                        {deletingPatchNoteId === selectedPatchNote.patchNoteId ? "삭제 중..." : "패치노트 삭제"}
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
+              </article>
             </section>
           ) : null}
 
