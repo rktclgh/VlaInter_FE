@@ -63,6 +63,11 @@ export const Join = () => {
     formData.password.length > 0 &&
     formData.passwordConfirm.length > 0 &&
     formData.password === formData.passwordConfirm;
+  const shouldShowPasswordMatchSuccess = isPasswordMatched && isPasswordFormatValid;
+  const shouldShowPasswordMismatch =
+    formData.password.length > 0 &&
+    formData.passwordConfirm.length > 0 &&
+    formData.password !== formData.passwordConfirm;
   const canSubmitSignup = isPasswordMatched && isPasswordFormatValid && isEmailVerified && agreedToPolicies;
 
   const handleInputChange = (field, value) => {
@@ -108,7 +113,6 @@ export const Join = () => {
     try {
       await verifyEmailCode(formData.email.trim(), formData.verificationCode.trim());
       setIsEmailVerified(true);
-      setSuccessMessage("이메일 인증이 완료되었습니다.");
     } catch (error) {
       setIsEmailVerified(false);
       setErrorMessage(error.message);
@@ -316,9 +320,9 @@ export const Join = () => {
                     <img src={showPasswordConfirm ? eyeOffIcon : eyeOpenIcon} alt="" className="h-4 w-4" />
                   </button>
                 </div>
-                {formData.passwordConfirm ? (
-                  <p className={`mt-1 text-[10px] ${isPasswordMatched ? "text-[#2f8f4e]" : "text-[#ff3a3a]"}`}>
-                    {isPasswordMatched ? "비밀번호가 일치합니다." : "비밀번호가 일치하지 않습니다."}
+                {shouldShowPasswordMatchSuccess || shouldShowPasswordMismatch ? (
+                  <p className={`mt-1 text-[10px] ${shouldShowPasswordMatchSuccess ? "text-[#2f8f4e]" : "text-[#ff3a3a]"}`}>
+                    {shouldShowPasswordMatchSuccess ? "비밀번호가 일치합니다." : "비밀번호가 일치하지 않습니다."}
                   </p>
                 ) : null}
               </div>

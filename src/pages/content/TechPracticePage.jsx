@@ -86,6 +86,8 @@ const HelpIconButton = ({ onClick }) => (
   </button>
 );
 
+const normalizeCategoryName = (value) => String(value || "").trim().toLowerCase();
+
 export const TechPracticePage = () => {
   const navigate = useNavigate();
   const [userName, setUserName] = useState("사용자");
@@ -257,20 +259,37 @@ export const TechPracticePage = () => {
     return visibleSkills.filter((category) => String(category.categoryId) === String(selectedSkillId));
   }, [selectedSkillId, visibleSkills]);
 
-  const canCreateBranch = Boolean(branchQuery.trim() && !branchItems.some((branch) => (branch.name || "").trim().toLowerCase() === branchQuery.trim().toLowerCase()));
-  const canCreateJob = Boolean(branchFilter && jobQuery.trim() && !visibleJobs.some((job) => (job.displayName || job.name).toLowerCase() === jobQuery.trim().toLowerCase()));
-  const canCreateCategory = Boolean(
-    categoryQuery.trim() &&
-      jobFilter &&
-      !skillCategories
-        .filter((item) => String(item.parentId || "") === String(jobFilter))
-        .some((item) => (item.displayName || item.name || "").trim().toLowerCase() === categoryQuery.trim().toLowerCase()),
-  );
-  const branchAlreadyExists = Boolean(branchQuery.trim() && !canCreateBranch);
-  const jobAlreadyExists = Boolean(jobQuery.trim() && !canCreateJob);
-  const categoryAlreadyExists = Boolean(categoryQuery.trim() && !canCreateCategory);
   const selectedBranch = useMemo(() => branchItems.find((item) => String(item.categoryId) === String(branchFilter)) || null, [branchFilter, branchItems]);
   const selectedJob = useMemo(() => jobs.find((item) => String(item.categoryId) === String(jobFilter)) || null, [jobFilter, jobs]);
+  const selectedSkill = useMemo(
+    () => skillCategories.find((item) => String(item.categoryId) === String(selectedSkillId)) || null,
+    [selectedSkillId, skillCategories]
+  );
+  const normalizedBranchQuery = normalizeCategoryName(branchQuery);
+  const normalizedJobQuery = normalizeCategoryName(jobQuery);
+  const normalizedCategoryQuery = normalizeCategoryName(categoryQuery);
+  const branchAlreadyExists = Boolean(
+    normalizedBranchQuery &&
+      branchItems.some((branch) => normalizeCategoryName(branch.name) === normalizedBranchQuery) &&
+      normalizeCategoryName(selectedBranch?.name) !== normalizedBranchQuery
+  );
+  const jobAlreadyExists = Boolean(
+    branchFilter &&
+      normalizedJobQuery &&
+      visibleJobs.some((job) => normalizeCategoryName(job.displayName || job.name) === normalizedJobQuery) &&
+      normalizeCategoryName(selectedJob?.displayName || selectedJob?.name) !== normalizedJobQuery
+  );
+  const categoryAlreadyExists = Boolean(
+    jobFilter &&
+      normalizedCategoryQuery &&
+      skillCategories
+        .filter((item) => String(item.parentId || "") === String(jobFilter))
+        .some((item) => normalizeCategoryName(item.displayName || item.name) === normalizedCategoryQuery) &&
+      normalizeCategoryName(selectedSkill?.displayName || selectedSkill?.name) !== normalizedCategoryQuery
+  );
+  const canCreateBranch = Boolean(normalizedBranchQuery && !branchAlreadyExists);
+  const canCreateJob = Boolean(branchFilter && normalizedJobQuery && !jobAlreadyExists);
+  const canCreateCategory = Boolean(jobFilter && normalizedCategoryQuery && !categoryAlreadyExists);
   const availableJobsForBranch = useMemo(() => jobs.filter((job) => !branchFilter || String(job.parentId || "") === String(branchFilter)), [branchFilter, jobs]);
   const availableSkillsForJob = useMemo(() => filterSkillCategoriesByBranchAndJob({
     categories,
