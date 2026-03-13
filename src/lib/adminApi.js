@@ -1,5 +1,18 @@
 import { apiRequest } from "./apiClient";
 
+export async function getAdminInterviewSettings() {
+  return apiRequest("/api/admin/interview/settings", {
+    method: "GET",
+  });
+}
+
+export async function updateAdminInterviewSettings(payload) {
+  return apiRequest("/api/admin/interview/settings", {
+    method: "PATCH",
+    body: payload,
+  });
+}
+
 export async function getAdminMembers({ page = 0, size = 20, keyword = "" } = {}) {
   const search = new URLSearchParams();
   search.set("page", String(page));

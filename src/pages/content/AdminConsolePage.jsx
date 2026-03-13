@@ -12,6 +12,7 @@ import {
   createAdminInterviewCategory,
   deleteAdminInterviewCategory,
   deactivateAdminMember,
+  getAdminInterviewSettings,
   getAdminGlobalAccessSummary,
   getAdminInterviewCategories,
   getAdminInterviewSets,
@@ -28,6 +29,7 @@ import {
   softDeleteAdminMember,
   updateAdminInterviewSet,
   updateAdminInterviewCategory,
+  updateAdminInterviewSettings,
 } from "../../lib/adminApi";
 import { getInterviewSetQuestions } from "../../lib/interviewApi";
 import { extractProfile, formatPoint, parsePoint } from "../../lib/profileUtils";
@@ -37,6 +39,7 @@ const TABS = [
   { key: "members", label: "회원 관리" },
   { key: "sets", label: "질문 세트 운영" },
   { key: "categories", label: "카테고리 운영" },
+  { key: "settings", label: "생성 정책" },
   { key: "billing", label: "결제/포인트" },
   { key: "kpi", label: "매출 KPI" },
 ];
@@ -212,6 +215,12 @@ export const AdminConsolePage = () => {
 
   const [categories, setCategories] = useState([]);
   const [loadingCategories, setLoadingCategories] = useState(false);
+  const [loadingInterviewSettings, setLoadingInterviewSettings] = useState(false);
+  const [savingInterviewSettings, setSavingInterviewSettings] = useState(false);
+  const [interviewSettings, setInterviewSettings] = useState({
+    techQuestionReusePolicy: "ALWAYS_GENERATE",
+    updatedAt: null,
+  });
   const [creatingCategory, setCreatingCategory] = useState(false);
   const [savingCategory, setSavingCategory] = useState(false);
   const [deletingCategory, setDeletingCategory] = useState(false);
@@ -318,6 +327,21 @@ export const AdminConsolePage = () => {
     }
   }, []);
 
+  const loadInterviewSettings = useCallback(async () => {
+    setLoadingInterviewSettings(true);
+    try {
+      const payload = await getAdminInterviewSettings();
+      setInterviewSettings({
+        techQuestionReusePolicy: String(payload?.techQuestionReusePolicy || "ALWAYS_GENERATE"),
+        updatedAt: payload?.updatedAt || null,
+      });
+    } catch (error) {
+      setPageErrorMessage(error?.message || "면접 생성 정책을 불러오지 못했습니다.");
+    } finally {
+      setLoadingInterviewSettings(false);
+    }
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
     const initialize = async () => {
@@ -345,7 +369,7 @@ export const AdminConsolePage = () => {
         return;
       }
 
-      await Promise.all([loadMembers(0), loadSets(), loadCategories()]);
+      await Promise.all([loadMembers(0), loadSets(), loadCategories(), loadInterviewSettings()]);
       if (!cancelled) {
         setLoadingPage(false);
       }
@@ -355,7 +379,7 @@ export const AdminConsolePage = () => {
     return () => {
       cancelled = true;
     };
-  }, [loadCategories, loadMembers, loadSets, navigate]);
+  }, [loadCategories, loadInterviewSettings, loadMembers, loadSets, navigate]);
 
   useEffect(() => {
     if (!selectedMemberId) {
@@ -888,6 +912,23 @@ export const AdminConsolePage = () => {
       setBlockingCategoryCreator(false);
     }
   };
+
+  const handleSaveInterviewSettings = useCallback(async () => {
+    setSavingInterviewSettings(true);
+    try {
+      const payload = await updateAdminInterviewSettings({
+        techQuestionReusePolicy: interviewSettings.techQuestionReusePolicy,
+      });
+      setInterviewSettings({
+        techQuestionReusePolicy: String(payload?.techQuestionReusePolicy || interviewSettings.techQuestionReusePolicy),
+        updatedAt: payload?.updatedAt || null,
+      });
+    } catch (error) {
+      setPageErrorMessage(error?.message || "면접 생성 정책을 저장하지 못했습니다.");
+    } finally {
+      setSavingInterviewSettings(false);
+    }
+  }, [interviewSettings.techQuestionReusePolicy]);
 
   if (loadingPage) {
     return (
@@ -1747,6 +1788,72 @@ export const AdminConsolePage = () => {
                   )}
                 </div>
               </article>
+            </section>
+          ) : null}
+
+          {activeTab === "settings" ? (
+            <section className="mt-4 rounded-[20px] border border-[#dfe4ef] bg-white p-5 shadow-[0_12px_28px_rgba(15,23,42,0.04)]">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <h2 className="text-[16px] font-semibold text-[#1f2937]">기술 질문 생성 정책</h2>
+                  <p className="mt-2 text-[13px] leading-[1.7] text-[#5e6472]">
+                    같은 계열/직무/기술/난이도 조건에서 기존 질문을 재사용할지, 항상 새로 생성할지 선택합니다.
+                    새로 생성해도 질문 저장은 fingerprint 기준으로 중복 저장되지 않습니다.
+                  </p>
+                </div>
+                {loadingInterviewSettings ? <InlineSpinner label="불러오는 중" /> : null}
+              </div>
+              <div className="mt-5 grid gap-3 md:grid-cols-2">
+                <label className={`rounded-[16px] border px-4 py-4 ${interviewSettings.techQuestionReusePolicy === "REUSE_MATCHING" ? "border-[#171b24] bg-[#f8fafc]" : "border-[#d9dde5] bg-white"}`}>
+                  <div className="flex items-start gap-3">
+                    <input
+                      type="radio"
+                      name="techQuestionReusePolicy"
+                      value="REUSE_MATCHING"
+                      checked={interviewSettings.techQuestionReusePolicy === "REUSE_MATCHING"}
+                      onChange={(event) => setInterviewSettings((prev) => ({ ...prev, techQuestionReusePolicy: event.target.value }))}
+                      className="mt-1"
+                    />
+                    <div>
+                      <p className="text-[14px] font-semibold text-[#111827]">같은 조건 질문 재사용</p>
+                      <p className="mt-1 text-[12px] leading-[1.6] text-[#64748b]">
+                        이미 저장된 같은 조건의 질문 후보가 있으면 우선 재사용하고, 없을 때만 AI로 새로 생성합니다.
+                      </p>
+                    </div>
+                  </div>
+                </label>
+                <label className={`rounded-[16px] border px-4 py-4 ${interviewSettings.techQuestionReusePolicy === "ALWAYS_GENERATE" ? "border-[#171b24] bg-[#f8fafc]" : "border-[#d9dde5] bg-white"}`}>
+                  <div className="flex items-start gap-3">
+                    <input
+                      type="radio"
+                      name="techQuestionReusePolicy"
+                      value="ALWAYS_GENERATE"
+                      checked={interviewSettings.techQuestionReusePolicy === "ALWAYS_GENERATE"}
+                      onChange={(event) => setInterviewSettings((prev) => ({ ...prev, techQuestionReusePolicy: event.target.value }))}
+                      className="mt-1"
+                    />
+                    <div>
+                      <p className="text-[14px] font-semibold text-[#111827]">무조건 새로 생성</p>
+                      <p className="mt-1 text-[12px] leading-[1.6] text-[#64748b]">
+                        같은 조건이라도 매번 AI로 새 질문 생성을 시도합니다. 단, 완전히 같은 질문 텍스트는 새로 저장하지 않고 기존 질문을 재사용합니다.
+                      </p>
+                    </div>
+                  </div>
+                </label>
+              </div>
+              <div className="mt-4 flex items-center justify-between gap-3">
+                <p className="text-[12px] text-[#64748b]">
+                  마지막 저장 시각: <strong className="text-[#111827]">{formatDateTime(interviewSettings.updatedAt)}</strong>
+                </p>
+                <button
+                  type="button"
+                  disabled={savingInterviewSettings}
+                  onClick={() => void handleSaveInterviewSettings()}
+                  className="rounded-[10px] border border-[#171b24] bg-[#171b24] px-4 py-2 text-[12px] font-semibold text-white disabled:opacity-60"
+                >
+                  {savingInterviewSettings ? "저장 중..." : "정책 저장"}
+                </button>
+              </div>
             </section>
           ) : null}
 
