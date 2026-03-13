@@ -210,13 +210,13 @@ export const StartingPage = () => {
               onClick={() => setIsSidebarOpen(false)}
             />
             <MotionAside
-              className="fixed left-0 top-0 z-50 flex h-screen w-[min(18rem,88vw)] flex-col border-r border-white/8 bg-[#171717]/96 px-6 py-5 shadow-[1.5rem_0_3.5rem_rgba(0,0,0,0.35)] backdrop-blur-xl"
+              className="fixed left-0 top-0 z-50 flex h-screen w-[min(11.25rem,88vw)] flex-col border-r border-white/10 bg-[#181818]/96 px-4 py-4 shadow-[1.5rem_0_3.5rem_rgba(0,0,0,0.35)] backdrop-blur-xl"
               initial={{ x: "-100%", opacity: 0.6 }}
               animate={{ x: 0, opacity: 1 }}
               exit={{ x: "-100%", opacity: 0.6 }}
               transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
             >
-              <div className="flex items-center justify-end border-b border-white/8 pb-4">
+              <div className="flex items-center justify-end border-b border-white/8 pb-3">
                 <button
                   type="button"
                   className="text-[0.76rem] tracking-[0.02em] text-white/72 transition hover:text-white"
@@ -226,12 +226,12 @@ export const StartingPage = () => {
                 </button>
               </div>
 
-              <nav className="mt-7 flex flex-col gap-2.5">
+              <nav className="mt-5 flex flex-col gap-2">
                 {landingSections.map((section) => (
                   <button
                     key={section.id}
                     type="button"
-                    className="rounded-[0.55rem] px-3 py-3 text-left text-[0.9rem] tracking-[0.01em] text-white/82 transition hover:bg-white/8 hover:text-white"
+                    className="rounded-[0.7rem] px-3 py-3 text-left text-[0.83rem] tracking-[0.01em] text-white/82 transition hover:bg-white/8 hover:text-white"
                     onClick={() => scrollToSection(section.id)}
                   >
                     {section.label}
@@ -245,27 +245,25 @@ export const StartingPage = () => {
         ) : null}
       </AnimatePresence>
 
-      <section className="relative isolate min-h-screen overflow-hidden bg-[#050816]">
+      <section className="relative isolate overflow-hidden bg-[#050816]">
         <WaveBackground />
 
-        <div className="relative z-10 mx-auto flex min-h-screen w-full max-w-[112rem] flex-col px-4 pb-12 pt-4 sm:px-6 lg:px-8">
-          <header className="mx-auto flex w-full max-w-[95rem] items-center justify-between gap-4 rounded-[1.1rem] border border-white/8 bg-black/18 px-4 py-3 backdrop-blur-md md:px-6">
+        <div className="relative z-10 mx-auto flex min-h-[min(100vh,58rem)] w-full max-w-[112rem] flex-col px-4 pb-8 pt-4 sm:px-6 lg:px-8">
+          <header className="mx-auto flex w-full max-w-[95rem] items-center justify-between gap-4 px-1 py-2 md:px-2">
             <button
               type="button"
-              className="inline-flex items-center gap-2 text-[0.72rem] tracking-[0.12em] text-white/78 transition hover:text-white"
+              className="inline-flex items-center gap-2 text-[0.68rem] tracking-[0.12em] text-white/78 transition hover:text-white"
               onClick={() => setIsSidebarOpen(true)}
             >
-              <span className="flex h-8 w-8 items-center justify-center rounded-full border border-white/12 bg-white/6 text-[0.95rem]">
-                ☰
-              </span>
-              <span className="hidden sm:inline">SERVICE</span>
+              <span className="text-[0.95rem]">☰</span>
+              <span>SERVICE</span>
             </button>
 
-            <Link to="/" className="absolute left-1/2 -translate-x-1/2">
-              <img src={logoMark} alt="Vlainter" className="h-8 w-auto md:h-9" />
+            <Link to="/" className="absolute left-1/2 top-2 -translate-x-1/2">
+              <img src={logoMark} alt="Vlainter" className="h-9 w-auto md:h-10" />
             </Link>
 
-            <div className="ml-auto flex items-center gap-4 text-[0.72rem] tracking-[0.12em] text-white/82 md:gap-8">
+            <div className="ml-auto flex items-center gap-4 text-[0.68rem] tracking-[0.12em] text-white/82 md:gap-8">
               <Link to="/join" className="transition hover:text-white">
                 JOIN
               </Link>
@@ -279,15 +277,15 @@ export const StartingPage = () => {
           </header>
 
           <div className="mx-auto flex w-full max-w-[95rem] flex-1 flex-col justify-center">
-            <div className="relative mt-8 overflow-hidden rounded-[1.5rem] border border-white/8 bg-black/10 px-6 py-12 backdrop-blur-[1.5px] sm:px-8 md:px-12 md:py-14 lg:min-h-[43rem] lg:px-16 lg:py-16">
-              <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(6,9,25,0.04),rgba(6,9,25,0.32))]" />
-              <div className="relative mx-auto flex h-full max-w-[56rem] flex-col items-center justify-center text-center">
-                <p className="text-[0.78rem] tracking-[0.04em] text-white/60 md:text-[0.86rem]">
+            <div className="relative mt-10 flex min-h-[min(78vh,44rem)] items-center justify-center overflow-hidden border border-white/8 bg-[linear-gradient(180deg,rgba(0,0,0,0.1),rgba(0,0,0,0.2))] px-6 py-14 sm:px-8 md:px-12 lg:px-16 lg:py-16">
+              <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(1,4,16,0.08),rgba(1,4,16,0.28)_50%,rgba(1,4,16,0.08))]" />
+              <div className="relative mx-auto flex h-full max-w-[58rem] flex-col items-center justify-center text-center">
+                <p className="text-[0.72rem] tracking-[0.03em] text-white/58 md:text-[0.82rem]">
                   사용자 맞춤 AI 면접 시뮬레이터
                 </p>
 
                 <MotionH1
-                  className="mt-4 bg-[linear-gradient(90deg,#5d83de_2%,#9f63f0_40%,#ff1c91_88%)] bg-clip-text text-[clamp(4rem,12vw,9rem)] font-extralight leading-[0.94] tracking-[-0.08em] text-transparent"
+                  className="mt-4 bg-[linear-gradient(90deg,#5d83de_1%,#8c63f3_45%,#ff1c91_92%)] bg-clip-text text-[clamp(4.2rem,12vw,8.6rem)] font-extralight leading-[0.94] tracking-[-0.08em] text-transparent"
                   initial={{ opacity: 0, y: 18 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
@@ -305,7 +303,7 @@ export const StartingPage = () => {
                     <Link
                       key={pill.label}
                       to={pill.to}
-                      className="rounded-full border border-white/22 bg-black/18 px-3.5 py-1.5 text-[0.72rem] tracking-[0.02em] text-white/85 transition hover:border-white/44 hover:bg-white/8 hover:text-white"
+                      className="rounded-full border border-white/22 bg-black/18 px-3 py-1.5 text-[0.64rem] tracking-[0.02em] text-white/82 transition hover:border-white/44 hover:bg-white/8 hover:text-white"
                     >
                       {pill.label}
                     </Link>
@@ -313,7 +311,7 @@ export const StartingPage = () => {
                 </MotionDiv>
 
                 <MotionDiv
-                  className="mt-18 max-w-[34rem] text-[clamp(1rem,1.4vw,1.15rem)] leading-8 text-white/68"
+                  className="mt-16 max-w-[34rem] text-[clamp(0.98rem,1.35vw,1.08rem)] leading-8 text-white/66"
                   initial={{ opacity: 0, y: 18 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.2, duration: 0.55 }}
@@ -322,17 +320,24 @@ export const StartingPage = () => {
                 </MotionDiv>
 
                 <MotionDiv
-                  className="mt-8"
+                  className="mt-5 h-px w-8 bg-white/34"
+                  initial={{ opacity: 0, scaleX: 0.6 }}
+                  animate={{ opacity: 1, scaleX: 1 }}
+                  transition={{ delay: 0.26, duration: 0.4 }}
+                />
+
+                <MotionDiv
+                  className="mt-7"
                   initial={{ opacity: 0, y: 18 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.28, duration: 0.55 }}
                 >
                   <Link
                     to="/join"
-                    className="inline-flex items-center justify-center rounded-full border border-white/16 bg-[linear-gradient(135deg,rgba(93,131,222,0.72),rgba(255,28,145,0.44))] px-7 py-3 text-[0.86rem] tracking-[0.1em] text-white shadow-[0_18px_48px_rgba(0,0,0,0.32)] transition hover:scale-[1.02] hover:border-white/28"
-                    >
+                    className="inline-flex items-center justify-center rounded-full border border-white/16 bg-[linear-gradient(135deg,rgba(93,131,222,0.42),rgba(255,28,145,0.28))] px-7 py-3 text-[0.82rem] tracking-[0.1em] text-white shadow-[0_18px_48px_rgba(0,0,0,0.32)] transition hover:scale-[1.02] hover:border-white/28"
+                  >
                       JOIN US
-                    </Link>
+                  </Link>
                 </MotionDiv>
               </div>
             </div>
