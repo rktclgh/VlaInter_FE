@@ -339,4 +339,19 @@
     animation: wave-ambient-glow-slow 8s ease-in-out infinite;
     will-change: transform, opacity;
   }
+
+  @media (prefers-reduced-motion: reduce) {
+    .wave-image-float,
+    .wave-image-glow,
+    .wave-ambient-glow,
+    .wave-ambient-glow-delayed,
+    .wave-ambient-glow-slow,
+    .wave-mesh-primary,
+    .wave-mesh-secondary,
+    .wave-mesh-tertiary {
+      animation: none !important;
+      transform: none !important;
+      transition: none !important;
+    }
+  }
 }

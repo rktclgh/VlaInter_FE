@@ -160,7 +160,6 @@ export const MobileSidebarDrawer = ({
       <SupportReportModal
         open={showReportModal}
         onClose={() => {
-          if (interactionDisabled) return;
           setShowReportModal(false);
         }}
       />

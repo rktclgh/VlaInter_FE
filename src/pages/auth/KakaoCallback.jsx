@@ -8,7 +8,9 @@ export const KakaoCallback = () => {
   const navigate = useNavigate();
   const { locale } = usePublicLocale();
   const [asyncErrorMessage, setAsyncErrorMessage] = useState("");
+  const [expectedState] = useState(() => consumeKakaoOAuthState() || "");
   const requestedRef = useRef(false);
+  const localeRef = useRef(locale);
   const kakaoClientIdFromEnv = import.meta.env.VITE_KAKAO_CLIENT_ID || "";
   const kakaoRedirectUriFromEnv = import.meta.env.VITE_KAKAO_REDIRECT_URI || "";
   const kakaoClientIdFromSession = sessionStorage.getItem("kakao_client_id") || "";
@@ -35,13 +37,16 @@ export const KakaoCallback = () => {
     return params.get("error");
   }, []);
 
+  useEffect(() => {
+    localeRef.current = locale;
+  }, [locale]);
+
   const initialMessage = useMemo(() => {
     if (kakaoError) {
       return locale === "en"
         ? "Kakao sign-in failed. Please try again."
         : "카카오 로그인에 실패했습니다. 다시 시도해 주세요.";
     }
-    const expectedState = consumeKakaoOAuthState();
     if (expectedState && returnedState !== expectedState) {
       return locale === "en"
         ? "Kakao sign-in request validation failed. Please try again."
@@ -53,7 +58,7 @@ export const KakaoCallback = () => {
         : "인가 코드가 없습니다. 다시 시도해 주세요.";
     }
     return "";
-  }, [code, kakaoError, locale, returnedState]);
+  }, [code, expectedState, kakaoError, locale, returnedState]);
 
   useEffect(() => {
     if (initialMessage) {
@@ -83,7 +88,7 @@ export const KakaoCallback = () => {
       } catch (error) {
         setAsyncErrorMessage(
           error.message ||
-            (locale === "en"
+            (localeRef.current === "en"
               ? "Failed to process Kakao sign-in."
               : "카카오 로그인 처리에 실패했습니다."),
         );
@@ -91,7 +96,7 @@ export const KakaoCallback = () => {
     };
 
     run();
-  }, [code, initialMessage, kakaoClientId, kakaoRedirectUri, locale, navigate]);
+  }, [code, initialMessage, kakaoClientId, kakaoRedirectUri, navigate]);
 
   const message =
     initialMessage ||

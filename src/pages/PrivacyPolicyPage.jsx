@@ -125,7 +125,7 @@ const legalRetentionRows = {
     },
     {
       basis: "Act on Consumer Protection in Electronic Commerce",
-      items: "Records on 표시·광고 (advertising and representations)",
+      items: "Records on advertising and representations",
       retention: "6 months",
     },
     {

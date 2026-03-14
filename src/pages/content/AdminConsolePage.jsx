@@ -266,11 +266,14 @@ export const AdminConsolePage = () => {
   const [loadingInterviewSettings, setLoadingInterviewSettings] = useState(false);
   const [savingInterviewSettings, setSavingInterviewSettings] = useState(false);
   const [interviewSettings, setInterviewSettings] = useState(null);
+  const [interviewSettingsLoadFailed, setInterviewSettingsLoadFailed] = useState(false);
   const [loadingSiteSettings, setLoadingSiteSettings] = useState(false);
   const [savingSiteSettings, setSavingSiteSettings] = useState(false);
   const [siteSettings, setSiteSettings] = useState(null);
+  const [siteSettingsLoadFailed, setSiteSettingsLoadFailed] = useState(false);
   const [patchNotes, setPatchNotes] = useState([]);
   const [loadingPatchNotes, setLoadingPatchNotes] = useState(false);
+  const [patchNotesLoadFailed, setPatchNotesLoadFailed] = useState(false);
   const [savingPatchNote, setSavingPatchNote] = useState(false);
   const [savingPatchNoteOrder, setSavingPatchNoteOrder] = useState(false);
   const [deletingPatchNoteId, setDeletingPatchNoteId] = useState(null);
@@ -396,7 +399,9 @@ export const AdminConsolePage = () => {
         techQuestionReusePolicy: String(payload?.techQuestionReusePolicy || "ALWAYS_GENERATE"),
         updatedAt: payload?.updatedAt || null,
       });
+      setInterviewSettingsLoadFailed(false);
     } catch (error) {
+      setInterviewSettingsLoadFailed(true);
       setPageErrorMessage(error?.message || "면접 생성 정책을 불러오지 못했습니다.");
     } finally {
       setLoadingInterviewSettings(false);
@@ -426,6 +431,7 @@ export const AdminConsolePage = () => {
         setIsPatchNoteOrderDirty(false);
         setDraggingPatchNoteId(null);
       }
+      setPatchNotesLoadFailed(false);
       setSelectedPatchNoteId((prev) => {
         if (prev && nextPatchNotes.some((item) => item.patchNoteId === prev)) {
           return prev;
@@ -433,6 +439,7 @@ export const AdminConsolePage = () => {
         return nextPatchNotes[0]?.patchNoteId ?? null;
       });
     } catch (error) {
+      setPatchNotesLoadFailed(true);
       setPageErrorMessage(error?.message || "패치노트를 불러오지 못했습니다.");
     } finally {
       setLoadingPatchNotes(false);
@@ -447,7 +454,9 @@ export const AdminConsolePage = () => {
         landingVersionLabel: String(payload?.landingVersionLabel || "v0.5"),
         updatedAt: payload?.updatedAt || null,
       });
+      setSiteSettingsLoadFailed(false);
     } catch (error) {
+      setSiteSettingsLoadFailed(true);
       setPageErrorMessage(error?.message || "랜딩 설정을 불러오지 못했습니다.");
     } finally {
       setLoadingSiteSettings(false);
@@ -495,20 +504,20 @@ export const AdminConsolePage = () => {
 
   useEffect(() => {
     if (activeTab !== "settings") return;
-    if (!interviewSettings && !loadingInterviewSettings) {
+    if (!interviewSettings && !loadingInterviewSettings && !interviewSettingsLoadFailed) {
       void loadInterviewSettings();
     }
-    if (!siteSettings && !loadingSiteSettings) {
+    if (!siteSettings && !loadingSiteSettings && !siteSettingsLoadFailed) {
       void loadSiteSettings();
     }
-  }, [activeTab, interviewSettings, loadInterviewSettings, loadSiteSettings, loadingInterviewSettings, loadingSiteSettings, siteSettings]);
+  }, [activeTab, interviewSettings, interviewSettingsLoadFailed, loadInterviewSettings, loadSiteSettings, loadingInterviewSettings, loadingSiteSettings, siteSettings, siteSettingsLoadFailed]);
 
   useEffect(() => {
     if (activeTab !== "patchNotes") return;
-    if (patchNotes.length === 0 && !loadingPatchNotes) {
+    if (patchNotes.length === 0 && !loadingPatchNotes && !patchNotesLoadFailed) {
       void loadPatchNotes();
     }
-  }, [activeTab, loadPatchNotes, loadingPatchNotes, patchNotes.length]);
+  }, [activeTab, loadPatchNotes, loadingPatchNotes, patchNotes.length, patchNotesLoadFailed]);
 
   useEffect(() => {
     if (!selectedMemberId) {
@@ -652,6 +661,10 @@ export const AdminConsolePage = () => {
     () => patchNotes.find((item) => item.patchNoteId === selectedPatchNoteId) || null,
     [patchNotes, selectedPatchNoteId]
   );
+  const patchNoteOrderLookup = useMemo(
+    () => new Map(patchNotes.map((item, index) => [item.patchNoteId, index + 1])),
+    [patchNotes]
+  );
 
   useEffect(() => {
     if (!selectedPatchNote) {
@@ -748,6 +761,24 @@ export const AdminConsolePage = () => {
       navigate(item.path);
     }
   };
+
+  const handleTabChange = useCallback((nextTab) => {
+    setActiveTab(nextTab);
+    if (nextTab === "settings") {
+      if (interviewSettingsLoadFailed) {
+        setInterviewSettingsLoadFailed(false);
+        void loadInterviewSettings();
+      }
+      if (siteSettingsLoadFailed) {
+        setSiteSettingsLoadFailed(false);
+        void loadSiteSettings();
+      }
+    }
+    if (nextTab === "patchNotes" && patchNotesLoadFailed) {
+      setPatchNotesLoadFailed(false);
+      void loadPatchNotes();
+    }
+  }, [interviewSettingsLoadFailed, loadInterviewSettings, loadPatchNotes, loadSiteSettings, patchNotesLoadFailed, siteSettingsLoadFailed]);
 
   const handleLogoutConfirm = async () => {
     try {
@@ -1065,6 +1096,7 @@ export const AdminConsolePage = () => {
 
   const handleSaveInterviewSettings = useCallback(async () => {
     if (!interviewSettings) return;
+    setPageErrorMessage("");
     setSavingInterviewSettings(true);
     try {
       const payload = await updateAdminInterviewSettings({
@@ -1121,6 +1153,7 @@ export const AdminConsolePage = () => {
     setSavingPatchNote(true);
     setPageErrorMessage("");
     try {
+      setPatchNotesLoadFailed(false);
       const created = await createAdminPatchNote({
         title: normalizedTitle,
         body: normalizedBody,
@@ -1155,6 +1188,7 @@ export const AdminConsolePage = () => {
     setSavingPatchNote(true);
     setPageErrorMessage("");
     try {
+      setPatchNotesLoadFailed(false);
       await updateAdminPatchNote(selectedPatchNoteId, {
         title: normalizedTitle,
         body: normalizedBody,
@@ -1179,6 +1213,7 @@ export const AdminConsolePage = () => {
     setDeletingPatchNoteId(patchNoteId);
     setPageErrorMessage("");
     try {
+      setPatchNotesLoadFailed(false);
       await deleteAdminPatchNote(patchNoteId);
       await loadPatchNotes();
     } catch (error) {
@@ -1193,7 +1228,7 @@ export const AdminConsolePage = () => {
   }, []);
 
   const handlePatchNoteDrop = useCallback((targetPatchNoteId) => {
-    if (!draggingPatchNoteId || draggingPatchNoteId === targetPatchNoteId) {
+    if (draggingPatchNoteId == null || draggingPatchNoteId === targetPatchNoteId) {
       setDraggingPatchNoteId(null);
       return;
     }
@@ -1207,9 +1242,12 @@ export const AdminConsolePage = () => {
     setSavingPatchNoteOrder(true);
     setPageErrorMessage("");
     try {
-      const payload = await reorderAdminPatchNotes(
-        patchNotes.map((item) => item.patchNoteId).filter((value) => Number.isFinite(value))
-      );
+      const patchNoteIds = patchNotes.map((item) => item.patchNoteId);
+      if (patchNoteIds.some((value) => !Number.isFinite(value))) {
+        throw new Error("유효하지 않은 패치노트 ID가 포함되어 있어 순서를 저장할 수 없습니다.");
+      }
+      setPatchNotesLoadFailed(false);
+      const payload = await reorderAdminPatchNotes(patchNoteIds);
       setPatchNotes(normalizePatchNotes(payload));
       setIsPatchNoteOrderDirty(false);
       setDraggingPatchNoteId(null);
@@ -1272,7 +1310,7 @@ export const AdminConsolePage = () => {
                 <button
                   key={tab.key}
                   type="button"
-                  onClick={() => setActiveTab(tab.key)}
+                  onClick={() => handleTabChange(tab.key)}
                   className={`rounded-full border px-4 py-1.5 text-[12px] transition ${
                     activeTab === tab.key
                       ? "border-[#171b24] bg-[#171b24] text-white"
@@ -2233,7 +2271,7 @@ export const AdminConsolePage = () => {
                             <p className="mt-2 line-clamp-3 text-[12px] leading-[1.6] text-[#64748b]">{note.body}</p>
                           </div>
                           <div className="shrink-0 text-right">
-                            <p className="text-[11px] text-[#64748b]">순서 {patchNotes.findIndex((item) => item.patchNoteId === note.patchNoteId) + 1}</p>
+                            <p className="text-[11px] text-[#64748b]">순서 {patchNoteOrderLookup.get(note.patchNoteId) || 0}</p>
                             <p className={`mt-2 text-[11px] font-semibold ${note.isPublished ? "text-[#138a5a]" : "text-[#b45309]"}`}>
                               {note.isPublished ? "공개 중" : "비공개"}
                             </p>

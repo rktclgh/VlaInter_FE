@@ -694,6 +694,7 @@ export const InterviewStartPage = () => {
   };
 
   const handleStartInterview = async () => {
+    const clampedQuestionCount = Math.min(20, Math.max(5, Number(selectedQuestionCount) || 5));
     const hasRequiredDocuments = Boolean(selectedFileObjects.RESUME);
     const selectedDocumentIds = DOCUMENT_TYPES
       .map((item) => selectedFiles[item.key])
@@ -727,7 +728,7 @@ export const InterviewStartPage = () => {
         difficulty: ratingToDifficulty(selectedRating),
         language: selectedLanguage,
         includeSelfIntroduction,
-        questionCount: Math.max(5, Number(selectedQuestionCount) || 5),
+        questionCount: clampedQuestionCount,
       });
 
       if (!response?.sessionId || !response?.currentQuestion) {
@@ -756,7 +757,7 @@ export const InterviewStartPage = () => {
             : resolvedSkillNames.join(", "),
           jobName: resolvedJobName,
           questionCount: totalInterviewQuestionCount,
-          requestedQuestionCount: Math.max(5, Number(selectedQuestionCount) || 5),
+          requestedQuestionCount: clampedQuestionCount,
           includeSelfIntroduction,
           questionSetId: selectedQuestionSet ? Number(selectedQuestionSet.setId) : null,
           providerUsed: response.providerUsed || null,
@@ -1142,13 +1143,18 @@ export const InterviewStartPage = () => {
                       </div>
                       <div className="w-full max-w-[8rem] rounded-[0.875rem] bg-white px-4 py-3 shadow-[0_0_0.1875rem_rgba(0,0,0,0.25)]">
                         <div className="flex items-center justify-between gap-2">
-                          <span className="text-[0.75rem] font-normal tracking-[0.02em] text-[#4B4B4B]">문항 수</span>
+                          <label htmlFor="interview-question-count" className="text-[0.75rem] font-normal tracking-[0.02em] text-[#4B4B4B]">문항 수</label>
                           <input
+                            id="interview-question-count"
                             type="number"
+                            aria-label="문항 수"
                             min={5}
                             max={20}
                             value={selectedQuestionCount}
-                            onChange={(event) => setSelectedQuestionCount(Math.max(5, Number(event.target.value) || 5))}
+                            onChange={(event) => {
+                              const clamped = Math.min(20, Math.max(5, Number(event.target.value) || 5));
+                              setSelectedQuestionCount(clamped);
+                            }}
                             className="w-12 bg-transparent text-right text-[0.875rem] font-normal tracking-[0.02em] text-[#4B4B4B]"
                           />
                         </div>

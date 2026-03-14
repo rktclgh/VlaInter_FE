@@ -41,6 +41,9 @@ export const ForgotPassword = () => {
       };
 
   const handleSendTemporaryPassword = async () => {
+    if (pending || cooldownSeconds > 0) {
+      return;
+    }
     if (!email.trim() || !name.trim()) {
       setSuccessMessage("");
       setErrorMessage(copy.missingFields);

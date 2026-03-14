@@ -147,20 +147,36 @@ const CONTENT_BY_LANGUAGE = {
   },
 };
 
-const fallbackPatchNotes = [
-  {
-    title: "Landing Refresh",
-    body: "웨이브 배경과 집중형 타이포 중심의 첫 화면으로 정리했습니다.",
-  },
-  {
-    title: "Interview Flow",
-    body: "실전 모의면접과 기술질문 연습으로 바로 진입할 수 있도록 CTA를 재배치했습니다.",
-  },
-  {
-    title: "Security Hardening",
-    body: "프록시 체인, rate limit, 재부팅 이후 blue/green 기동 정책을 다시 정리했습니다.",
-  },
-];
+const fallbackPatchNotesByLocale = {
+  ko: [
+    {
+      title: "Landing Refresh",
+      body: "웨이브 배경과 집중형 타이포 중심의 첫 화면으로 정리했습니다.",
+    },
+    {
+      title: "Interview Flow",
+      body: "실전 모의면접과 기술질문 연습으로 바로 진입할 수 있도록 CTA를 재배치했습니다.",
+    },
+    {
+      title: "Security Hardening",
+      body: "프록시 체인, rate limit, 재부팅 이후 blue/green 기동 정책을 다시 정리했습니다.",
+    },
+  ],
+  en: [
+    {
+      title: "Landing Refresh",
+      body: "The first screen was reorganized around the wave backdrop and focused typography.",
+    },
+    {
+      title: "Interview Flow",
+      body: "The CTAs were rearranged so users can move straight into mock interviews and tech practice.",
+    },
+    {
+      title: "Security Hardening",
+      body: "Proxy handling, rate limits, and blue/green restart policies were tightened again.",
+    },
+  ],
+};
 
 const logoColumns = [
   [
@@ -212,7 +228,8 @@ export const StartingPage = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isLanguageMenuOpen, setIsLanguageMenuOpen] = useState(false);
   const { locale: language, setLocale: setLanguage } = usePublicLocale();
-  const [patchNotes, setPatchNotes] = useState(fallbackPatchNotes);
+  const fallbackPatchNotes = fallbackPatchNotesByLocale[language] || fallbackPatchNotesByLocale.ko;
+  const [patchNotes, setPatchNotes] = useState([]);
   const [landingVersionLabel, setLandingVersionLabel] = useState("v0.5");
   const [activePatchNoteIndex, setActivePatchNoteIndex] = useState(0);
   const copy = CONTENT_BY_LANGUAGE[language] || CONTENT_BY_LANGUAGE.ko;
@@ -287,20 +304,28 @@ export const StartingPage = () => {
   const scrollToSection = useCallback((sectionId) => {
     const element = document.getElementById(sectionId);
     if (!element) return;
-    element.scrollIntoView({ behavior: "smooth", block: "start" });
+    element.scrollIntoView({ behavior: prefersReducedMotion ? "auto" : "smooth", block: "start" });
     setIsSidebarOpen(false);
-  }, []);
+  }, [prefersReducedMotion]);
 
   const logoMarqueeColumns = useMemo(() => logoColumns, []);
-  const visiblePatchNotes = useMemo(() => patchNotes.slice(activePatchNoteIndex, activePatchNoteIndex + 3), [activePatchNoteIndex, patchNotes]);
+  const displayedPatchNotes = useMemo(
+    () => (patchNotes.some((item) => item?.patchNoteId != null) ? patchNotes : fallbackPatchNotes),
+    [fallbackPatchNotes, patchNotes]
+  );
+  const currentPatchNoteIndex = Math.min(activePatchNoteIndex, Math.max(displayedPatchNotes.length - 1, 0));
+  const visiblePatchNotes = useMemo(
+    () => displayedPatchNotes.slice(currentPatchNoteIndex, currentPatchNoteIndex + 3),
+    [currentPatchNoteIndex, displayedPatchNotes]
+  );
 
   const showPreviousPatchNote = useCallback(() => {
     setActivePatchNoteIndex((prev) => Math.max(prev - 1, 0));
   }, []);
 
   const showNextPatchNote = useCallback(() => {
-    setActivePatchNoteIndex((prev) => Math.min(prev + 1, Math.max(patchNotes.length - 1, 0)));
-  }, [patchNotes.length]);
+    setActivePatchNoteIndex((prev) => Math.min(prev + 1, Math.max(displayedPatchNotes.length - 1, 0)));
+  }, [displayedPatchNotes.length]);
 
   return (
     <div className="min-h-screen overflow-x-hidden bg-[#111111] text-white">
@@ -345,6 +370,26 @@ export const StartingPage = () => {
                   </button>
                 ))}
               </nav>
+
+              <div className="mt-6 rounded-[0.9rem] border border-white/8 bg-white/[0.03] p-2">
+                <p className="px-2 text-[0.68rem] tracking-[0.12em] text-white/36">{copy.languageLabel}</p>
+                <div className="mt-2 flex flex-col gap-1">
+                  <button
+                    type="button"
+                    className={`rounded-[0.75rem] px-3 py-2 text-left text-[0.72rem] tracking-[0.08em] transition ${language === "ko" ? "bg-white/10 text-white" : "text-white/72 hover:bg-white/6 hover:text-white"}`}
+                    onClick={() => setLanguage("ko")}
+                  >
+                    KOR
+                  </button>
+                  <button
+                    type="button"
+                    className={`rounded-[0.75rem] px-3 py-2 text-left text-[0.72rem] tracking-[0.08em] transition ${language === "en" ? "bg-white/10 text-white" : "text-white/72 hover:bg-white/6 hover:text-white"}`}
+                    onClick={() => setLanguage("en")}
+                  >
+                    ENG
+                  </button>
+                </div>
+              </div>
 
               <p className="mt-auto text-[0.7rem] tracking-[0.14em] text-white/28">{landingVersionLabel}</p>
             </MotionAside>
@@ -585,19 +630,19 @@ export const StartingPage = () => {
           >
             <div>
               <p className="text-[0.74rem] tracking-[0.16em] text-white/34">
-                {String(activePatchNoteIndex + 1).padStart(2, "0")} / {String(patchNotes.length).padStart(2, "0")}
+                {String(currentPatchNoteIndex + 1).padStart(2, "0")} / {String(displayedPatchNotes.length).padStart(2, "0")}
               </p>
               <h3 className="mt-4 text-[clamp(1.6rem,3vw,2.4rem)] font-medium tracking-[-0.05em] text-white">
-                {patchNotes[activePatchNoteIndex]?.title || fallbackPatchNotes[0].title}
+                {displayedPatchNotes[currentPatchNoteIndex]?.title || fallbackPatchNotes[0].title}
               </h3>
               <p className="mt-4 max-w-[34rem] text-[0.98rem] leading-8 text-white/62">
-                {patchNotes[activePatchNoteIndex]?.body || fallbackPatchNotes[0].body}
+                {displayedPatchNotes[currentPatchNoteIndex]?.body || fallbackPatchNotes[0].body}
               </p>
               <div className="mt-7 flex items-center gap-3">
                 <button
                   type="button"
                   onClick={showPreviousPatchNote}
-                  disabled={activePatchNoteIndex === 0}
+                  disabled={currentPatchNoteIndex === 0}
                   aria-label={language === "en" ? "Previous patch note" : "이전 패치노트"}
                   className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-white/14 bg-white/[0.03] text-white/82 disabled:opacity-35"
                 >
@@ -606,7 +651,7 @@ export const StartingPage = () => {
                 <button
                   type="button"
                   onClick={showNextPatchNote}
-                  disabled={activePatchNoteIndex >= patchNotes.length - 1}
+                  disabled={currentPatchNoteIndex >= displayedPatchNotes.length - 1}
                   aria-label={language === "en" ? "Next patch note" : "다음 패치노트"}
                   className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-white/14 bg-white/[0.03] text-white/82 disabled:opacity-35"
                 >
@@ -621,7 +666,7 @@ export const StartingPage = () => {
                 const isFront = index === 0;
                 return (
                   <MotionArticle
-                    key={`${note.patchNoteId || note.title}-${activePatchNoteIndex}-${index}`}
+                    key={`${note.patchNoteId || note.title}-${currentPatchNoteIndex}-${index}`}
                     className="absolute inset-x-0 top-0 rounded-[1.45rem] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.06),rgba(255,255,255,0.03))] p-6 shadow-[0_24px_60px_rgba(0,0,0,0.28)] backdrop-blur-md"
                     initial={false}
                     animate={prefersReducedMotion ? {
@@ -637,7 +682,7 @@ export const StartingPage = () => {
                     style={{ zIndex: 30 - index }}
                   >
                     <p className="text-[0.72rem] tracking-[0.16em] text-white/34">
-                      PATCH {String(activePatchNoteIndex + index + 1).padStart(2, "0")}
+                      PATCH {String(currentPatchNoteIndex + index + 1).padStart(2, "0")}
                     </p>
                     <h3 className="mt-4 text-[1.2rem] font-medium tracking-[-0.04em] text-white">{note.title}</h3>
                     <p className="mt-3 text-[0.93rem] leading-7 text-white/60">{note.body}</p>
