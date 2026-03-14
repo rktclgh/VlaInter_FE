@@ -199,7 +199,7 @@ export const GeminiApiKeyGuard = ({ children }) => {
 
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-white pt-[54px]">
+      <div className="flex min-h-screen items-center justify-center bg-white pt-[3.75rem]">
         <div className="inline-flex items-center gap-2 rounded-[12px] border border-[#e5e7eb] bg-white px-4 py-3 text-[13px] text-[#4b5563]">
           <span className="h-4 w-4 animate-spin rounded-full border-2 border-[#cbd5e1] border-t-[#111827]" />
           계정 상태를 확인하고 있습니다.

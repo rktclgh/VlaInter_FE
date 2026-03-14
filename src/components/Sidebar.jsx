@@ -6,12 +6,15 @@ export const Sidebar = ({
   activeKey = "interview_start",
   onNavigate,
   userName = "송치호",
+  userRole = "",
   profileImageUrl = "",
   isAdmin = null,
   onLogout,
+  variant = "default",
 }) => {
   const resolvedIsAdmin = useAdminStatus(isAdmin);
   const hasProfileImage = typeof profileImageUrl === "string" && profileImageUrl.trim().length > 0;
+  const isMockStart = variant !== "legacy";
 
   const mainMenuSections = useMemo(() => getMainMenuSections({ isAdmin: resolvedIsAdmin }), [resolvedIsAdmin]);
 
@@ -22,8 +25,10 @@ export const Sidebar = ({
         key={item.key}
         type="button"
         onClick={() => onNavigate?.(item)}
-        className={`flex w-full items-center rounded-[10px] px-3 py-2 text-left text-[13px] ${
-          active ? "bg-[#ededed] text-black" : "text-[#2a2a2a] hover:bg-[#efefef]"
+        className={`flex w-full items-center text-left transition ${
+          isMockStart
+            ? `rounded-[12px] px-4 py-2.5 text-[15px] font-normal tracking-[0.01em] ${active ? "bg-[#EEEEEE] text-[#000000]" : "text-[#000000] hover:bg-[#f1f1f1]"}`
+            : `rounded-[10px] px-3 py-2 text-[13px] ${active ? "bg-[#ededed] text-black" : "text-[#2a2a2a] hover:bg-[#efefef]"}`
         }`}
       >
         {item.label}
@@ -32,43 +37,56 @@ export const Sidebar = ({
   };
 
   return (
-    <aside className="fixed left-0 top-[54px] z-20 flex h-[calc(100vh-54px)] w-[272px] flex-col border-r border-[#e8e8e8] bg-[#f8f8f8]">
-      <div className="flex-1 overflow-y-auto px-4 pb-4 pt-6">
+    <aside
+      className={`fixed left-0 z-20 flex flex-col border-r ${
+        isMockStart
+          ? "top-[3.75rem] h-[calc(100vh-3.75rem)] w-[17rem] border-transparent bg-[#F8F8F8] shadow-[1px_0_4px_rgba(0,0,0,0.25)]"
+          : "top-[54px] h-[calc(100vh-54px)] w-[272px] border-[#e8e8e8] bg-[#f8f8f8]"
+      }`}
+    >
+      <div className={`flex-1 overflow-y-auto ${isMockStart ? "px-4 pb-4 pt-6" : "px-4 pb-4 pt-6"}`}>
         {mainMenuSections.map((section) => (
           <div key={section.title} className="pt-0 first:pt-0">
-            <p className="mb-2 text-[12px] font-medium text-[#b1b1b1]">{section.title}</p>
-            <div className="space-y-1.5">{section.items.map(renderMenuButton)}</div>
-            <div className="h-4" />
+            <p className={`font-medium ${isMockStart ? "mb-2 px-2 text-[13px] tracking-[0.02em] text-[#B2B2B2]" : "mb-2 text-[12px] text-[#b1b1b1]"}`}>{section.title}</p>
+            <div className={isMockStart ? "space-y-1.5" : "space-y-1.5"}>{section.items.map(renderMenuButton)}</div>
+            <div className={isMockStart ? "h-5" : "h-4"} />
           </div>
         ))}
 
-        <div className="pt-2">
-          <p className="mb-2 text-[12px] font-medium text-[#b1b1b1]">My</p>
+        <div className={isMockStart ? "pt-0" : "pt-2"}>
+          <p className={`font-medium ${isMockStart ? "mb-2 px-2 text-[13px] tracking-[0.02em] text-[#B2B2B2]" : "mb-2 text-[12px] text-[#b1b1b1]"}`}>마이페이지</p>
           <div className="space-y-1">{MY_MENU_ITEMS.map(renderMenuButton)}</div>
         </div>
       </div>
 
-      <div className="border-t border-[#e8e8e8] bg-[#f8f8f8] px-4 py-4">
-        <div className="flex items-center gap-2">
+      <div className={`border-t ${isMockStart ? "border-[#E6E6E6] bg-[#F8F8F8] px-4 py-4" : "border-[#e8e8e8] bg-[#f8f8f8] px-4 py-4"}`}>
+        <div className={`flex items-center ${isMockStart ? "gap-3" : "gap-2"}`}>
           {hasProfileImage ? (
             <img
               key={profileImageUrl || "sidebar-profile-image"}
               src={profileImageUrl}
               alt="프로필"
-              className="h-8 w-8 rounded-full border border-[#d7d7d7] object-cover"
+              className={isMockStart ? "h-10 w-10 rounded-full border border-[#d7d7d7] object-cover" : "h-8 w-8 rounded-full border border-[#d7d7d7] object-cover"}
             />
           ) : (
             <div
               key="sidebar-profile-image"
               aria-hidden="true"
-              className="h-8 w-8 rounded-full border border-[#d7d7d7] bg-[#eceff4]"
+              className={isMockStart ? "h-10 w-10 rounded-full border border-[#d7d7d7] bg-[#eceff4]" : "h-8 w-8 rounded-full border border-[#d7d7d7] bg-[#eceff4]"}
             />
           )}
-          <span className="min-w-0 flex-1 truncate text-[13px] text-[#1f1f1f]">{userName}</span>
+          <div className="min-w-0 flex-1">
+            <p className={`truncate text-[#1f1f1f] ${isMockStart ? "text-[15px] font-medium" : "text-[13px]"}`}>{userName}</p>
+            {userRole ? <p className="mt-0.5 truncate text-[11px] tracking-[0.02em] text-[#A1A1A1]">{userRole}</p> : null}
+          </div>
           <button
             type="button"
             onClick={onLogout}
-            className="shrink-0 rounded-[10px] border border-[#d7d7d7] px-2 py-0.5 text-[10px] text-[#6a6a6a] hover:bg-[#f5f5f5]"
+            className={`shrink-0 border text-[#6a6a6a] hover:bg-[#f5f5f5] ${
+              isMockStart
+                ? "rounded-full border-[#D9D9D9] bg-white px-3 py-1.5 text-[11px]"
+                : "rounded-[10px] border-[#d7d7d7] px-2 py-0.5 text-[10px]"
+            }`}
           >
             Logout
           </button>

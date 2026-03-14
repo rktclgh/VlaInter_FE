@@ -1,12 +1,17 @@
 import { FaRegStar, FaStar } from "react-icons/fa6";
 import { difficultyToRating } from "../lib/difficultyRating";
 
-export const StarIcons = ({ rating, sizeClass = "text-[13px]" }) => (
+export const StarIcons = ({
+  rating,
+  sizeClass = "text-[13px]",
+  activeColorClass = "text-[#f59e0b]",
+  inactiveColorClass = "text-[#d4d8df]",
+}) => (
   <span className={`inline-flex items-center gap-0.5 ${sizeClass}`}>
     {Array.from({ length: 5 }).map((_, index) => (
       index < rating
-        ? <FaStar key={index} className="text-[#f59e0b]" />
-        : <FaRegStar key={index} className="text-[#d4d8df]" />
+        ? <FaStar key={index} className={activeColorClass} />
+        : <FaRegStar key={index} className={inactiveColorClass} />
     ))}
   </span>
 );
@@ -23,8 +28,18 @@ export const DifficultyStars = ({ difficulty, compact = false, showLabel = false
   );
 };
 
-export const StarRatingInput = ({ value, onChange, size = "md" }) => {
-  const safeValue = Number(value) || 0;
+export const StarRatingInput = ({
+  value,
+  onChange,
+  size = "md",
+  activeColorClass = "text-[#f59e0b]",
+  inactiveColorClass = "text-[#c7ccd5]",
+  hoverColorClass = "hover:text-[#f59e0b]",
+}) => {
+  const parsedValue = Number(value);
+  const safeValue = Number.isFinite(parsedValue)
+    ? Math.max(1, Math.min(5, Math.round(parsedValue)))
+    : 1;
   const sizeClass = size === "sm" ? "text-[15px]" : "text-[18px]";
 
   return (
@@ -40,7 +55,7 @@ export const StarRatingInput = ({ value, onChange, size = "md" }) => {
             className={`transition ${sizeClass}`}
             aria-label={`${nextValue}점 선택`}
           >
-            {active ? <FaStar className="text-[#f59e0b]" /> : <FaRegStar className="text-[#c7ccd5] hover:text-[#f59e0b]" />}
+            {active ? <FaStar className={activeColorClass} /> : <FaRegStar className={`${inactiveColorClass} ${hoverColorClass}`} />}
           </button>
         );
       })}

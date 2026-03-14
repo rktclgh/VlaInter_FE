@@ -1,5 +1,64 @@
 import { apiRequest } from "./apiClient";
 
+export async function getAdminInterviewSettings() {
+  return apiRequest("/api/admin/interview/settings", {
+    method: "GET",
+  });
+}
+
+export async function updateAdminInterviewSettings(payload) {
+  return apiRequest("/api/admin/interview/settings", {
+    method: "PATCH",
+    body: payload,
+  });
+}
+
+export async function getAdminPatchNotes() {
+  return apiRequest("/api/admin/site/patch-notes", {
+    method: "GET",
+  });
+}
+
+export async function getAdminSiteSettings() {
+  return apiRequest("/api/admin/site/settings", {
+    method: "GET",
+  });
+}
+
+export async function updateAdminSiteSettings(payload) {
+  return apiRequest("/api/admin/site/settings", {
+    method: "PATCH",
+    body: payload,
+  });
+}
+
+export async function createAdminPatchNote(payload) {
+  return apiRequest("/api/admin/site/patch-notes", {
+    method: "POST",
+    body: payload,
+  });
+}
+
+export async function updateAdminPatchNote(patchNoteId, payload) {
+  return apiRequest(`/api/admin/site/patch-notes/${encodeURIComponent(patchNoteId)}`, {
+    method: "PATCH",
+    body: payload,
+  });
+}
+
+export async function deleteAdminPatchNote(patchNoteId) {
+  return apiRequest(`/api/admin/site/patch-notes/${encodeURIComponent(patchNoteId)}`, {
+    method: "DELETE",
+  });
+}
+
+export async function reorderAdminPatchNotes(patchNoteIds) {
+  return apiRequest("/api/admin/site/patch-notes/reorder", {
+    method: "PATCH",
+    body: { patchNoteIds },
+  });
+}
+
 export async function getAdminMembers({ page = 0, size = 20, keyword = "" } = {}) {
   const search = new URLSearchParams();
   search.set("page", String(page));
