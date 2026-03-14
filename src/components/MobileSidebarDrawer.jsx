@@ -85,7 +85,13 @@ export const MobileSidebarDrawer = ({
                   if (interactionDisabled) return;
                   setShowReportModal(true);
                 }}
-                className="inline-flex h-8 items-center justify-center rounded-xl border border-[#D4D4D4] bg-white px-2.5 text-[10px] font-medium text-black"
+                disabled={interactionDisabled}
+                aria-disabled={interactionDisabled}
+                className={`inline-flex h-8 items-center justify-center rounded-xl border px-2.5 text-[10px] font-medium ${
+                  interactionDisabled
+                    ? "cursor-not-allowed border-[#E5E7EB] bg-[#F3F4F6] text-[#A3A3A3]"
+                    : "border-[#D4D4D4] bg-white text-black"
+                }`}
               >
                 REPORT
               </button>
@@ -93,7 +99,11 @@ export const MobileSidebarDrawer = ({
                 type="button"
                 onClick={onClickCharge}
                 disabled={interactionDisabled}
-                className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-[#D4D4D4] bg-white text-sm font-medium text-black"
+                className={`inline-flex h-8 w-8 items-center justify-center rounded-xl border text-sm font-medium ${
+                  interactionDisabled
+                    ? "border-[#E5E7EB] bg-[#F3F4F6] text-[#A3A3A3]"
+                    : "border-[#D4D4D4] bg-white text-black"
+                }`}
               >
                 +
               </button>

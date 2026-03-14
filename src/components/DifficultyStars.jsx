@@ -36,7 +36,10 @@ export const StarRatingInput = ({
   inactiveColorClass = "text-[#c7ccd5]",
   hoverColorClass = "hover:text-[#f59e0b]",
 }) => {
-  const safeValue = Number(value) || 0;
+  const parsedValue = Number(value);
+  const safeValue = Number.isFinite(parsedValue)
+    ? Math.max(1, Math.min(5, Math.round(parsedValue)))
+    : 1;
   const sizeClass = size === "sm" ? "text-[15px]" : "text-[18px]";
 
   return (

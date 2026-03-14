@@ -465,20 +465,17 @@ export const InterviewStartPage = () => {
   const normalizedSkillQuery = normalizeCategoryName(skillQuery);
   const branchAlreadyExists = Boolean(
     normalizedBranchQuery &&
-      branchItems.some((branch) => normalizeCategoryName(branch.name) === normalizedBranchQuery) &&
-      normalizeCategoryName(selectedBranch?.name) !== normalizedBranchQuery
+      branchItems.some((branch) => normalizeCategoryName(branch.name) === normalizedBranchQuery)
   );
   const jobAlreadyExists = Boolean(
     branchFilter &&
       normalizedJobQuery &&
-      visibleJobs.some((job) => normalizeCategoryName(job.displayName || job.name) === normalizedJobQuery) &&
-      normalizeCategoryName(selectedJob?.displayName || selectedJob?.name) !== normalizedJobQuery
+      visibleJobs.some((job) => normalizeCategoryName(job.displayName || job.name) === normalizedJobQuery)
   );
   const skillAlreadyExists = Boolean(
     jobFilter &&
       normalizedSkillQuery &&
-      skillItems.some((item) => normalizeCategoryName(item.displayName || item.name) === normalizedSkillQuery) &&
-      !selectedSkills.some((item) => normalizeCategoryName(item.displayName || item.name) === normalizedSkillQuery)
+      skillItems.some((item) => normalizeCategoryName(item.displayName || item.name) === normalizedSkillQuery)
   );
   const canCreateJob = Boolean(branchFilter && normalizedJobQuery && !jobAlreadyExists);
   const canCreateBranch = Boolean(normalizedBranchQuery && !branchAlreadyExists);

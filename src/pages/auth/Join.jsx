@@ -147,9 +147,7 @@ export const Join = () => {
     formData.password === formData.passwordConfirm;
   const shouldShowPasswordMatchSuccess = isPasswordMatched && isPasswordFormatValid;
   const shouldShowPasswordMismatch =
-    formData.password.length > 0 &&
-    formData.passwordConfirm.length > 0 &&
-    formData.password !== formData.passwordConfirm;
+    formData.passwordConfirm.length > 0 && !isPasswordMatched;
   const canSubmitSignup = isPasswordMatched && isPasswordFormatValid && isEmailVerified && agreedToPolicies;
 
   const handleInputChange = (field, value) => {

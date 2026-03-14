@@ -154,15 +154,31 @@ const normalizeMemberGlobalSummary = (payload) => ({
   dailyMetrics: Array.isArray(payload?.dailyMetrics) ? payload.dailyMetrics : [],
 });
 
-const normalizePatchNotes = (items) => (Array.isArray(items) ? items : []).map((item) => ({
-  patchNoteId: Number(item?.patchNoteId),
-  title: String(item?.title || ""),
-  body: String(item?.body || ""),
-  sortOrder: toInt(item?.sortOrder, 0),
-  isPublished: item?.isPublished !== false,
-  createdAt: item?.createdAt || null,
-  updatedAt: item?.updatedAt || null,
-}));
+const normalizePatchNotes = (items) => (Array.isArray(items) ? items : [])
+  .map((item, index) => ({
+    patchNoteId: Number(item?.patchNoteId),
+    title: String(item?.title || ""),
+    body: String(item?.body || ""),
+    sortOrder: toInt(item?.sortOrder, 0),
+    isPublished: item?.isPublished !== false,
+    createdAt: item?.createdAt || null,
+    updatedAt: item?.updatedAt || null,
+    originalIndex: index,
+  }))
+  .sort((left, right) => {
+    const orderDiff = left.sortOrder - right.sortOrder;
+    if (orderDiff !== 0) return orderDiff;
+    return left.originalIndex - right.originalIndex;
+  })
+  .map((item) => ({
+    patchNoteId: item.patchNoteId,
+    title: item.title,
+    body: item.body,
+    sortOrder: item.sortOrder,
+    isPublished: item.isPublished,
+    createdAt: item.createdAt,
+    updatedAt: item.updatedAt,
+  }));
 
 const movePatchNote = (items, fromId, toId) => {
   const fromIndex = items.findIndex((item) => item.patchNoteId === fromId);
@@ -249,16 +265,10 @@ export const AdminConsolePage = () => {
   const [loadingCategories, setLoadingCategories] = useState(false);
   const [loadingInterviewSettings, setLoadingInterviewSettings] = useState(false);
   const [savingInterviewSettings, setSavingInterviewSettings] = useState(false);
-  const [interviewSettings, setInterviewSettings] = useState({
-    techQuestionReusePolicy: "ALWAYS_GENERATE",
-    updatedAt: null,
-  });
+  const [interviewSettings, setInterviewSettings] = useState(null);
   const [loadingSiteSettings, setLoadingSiteSettings] = useState(false);
   const [savingSiteSettings, setSavingSiteSettings] = useState(false);
-  const [siteSettings, setSiteSettings] = useState({
-    landingVersionLabel: "v0.4",
-    updatedAt: null,
-  });
+  const [siteSettings, setSiteSettings] = useState(null);
   const [patchNotes, setPatchNotes] = useState([]);
   const [loadingPatchNotes, setLoadingPatchNotes] = useState(false);
   const [savingPatchNote, setSavingPatchNote] = useState(false);
@@ -393,14 +403,29 @@ export const AdminConsolePage = () => {
     }
   }, []);
 
-  const loadPatchNotes = useCallback(async () => {
+  const loadPatchNotes = useCallback(async ({ preserveDirtyOrder = false } = {}) => {
     setLoadingPatchNotes(true);
     try {
       const payload = await getAdminPatchNotes();
       const nextPatchNotes = normalizePatchNotes(payload);
-      setPatchNotes(nextPatchNotes);
-      setIsPatchNoteOrderDirty(false);
-      setDraggingPatchNoteId(null);
+      setPatchNotes((prev) => {
+        if (preserveDirtyOrder && isPatchNoteOrderDirty && prev.length > 0) {
+          const previousOrder = new Map(prev.map((item, index) => [item.patchNoteId, index]));
+          return [...nextPatchNotes].sort((left, right) => {
+            const leftIndex = previousOrder.get(left.patchNoteId);
+            const rightIndex = previousOrder.get(right.patchNoteId);
+            if (leftIndex != null && rightIndex != null) return leftIndex - rightIndex;
+            if (leftIndex != null) return -1;
+            if (rightIndex != null) return 1;
+            return left.sortOrder - right.sortOrder;
+          });
+        }
+        return nextPatchNotes;
+      });
+      if (!preserveDirtyOrder || !isPatchNoteOrderDirty) {
+        setIsPatchNoteOrderDirty(false);
+        setDraggingPatchNoteId(null);
+      }
       setSelectedPatchNoteId((prev) => {
         if (prev && nextPatchNotes.some((item) => item.patchNoteId === prev)) {
           return prev;
@@ -412,14 +437,14 @@ export const AdminConsolePage = () => {
     } finally {
       setLoadingPatchNotes(false);
     }
-  }, []);
+  }, [isPatchNoteOrderDirty]);
 
   const loadSiteSettings = useCallback(async () => {
     setLoadingSiteSettings(true);
     try {
       const payload = await getAdminSiteSettings();
       setSiteSettings({
-        landingVersionLabel: String(payload?.landingVersionLabel || "v0.4"),
+        landingVersionLabel: String(payload?.landingVersionLabel || "v0.5"),
         updatedAt: payload?.updatedAt || null,
       });
     } catch (error) {
@@ -456,7 +481,7 @@ export const AdminConsolePage = () => {
         return;
       }
 
-      await Promise.all([loadMembers(0), loadSets(), loadCategories(), loadInterviewSettings(), loadSiteSettings(), loadPatchNotes()]);
+      await Promise.all([loadMembers(0), loadSets(), loadCategories()]);
       if (!cancelled) {
         setLoadingPage(false);
       }
@@ -466,7 +491,24 @@ export const AdminConsolePage = () => {
     return () => {
       cancelled = true;
     };
-  }, [loadCategories, loadInterviewSettings, loadMembers, loadPatchNotes, loadSets, loadSiteSettings, navigate]);
+  }, [loadCategories, loadMembers, loadSets, navigate]);
+
+  useEffect(() => {
+    if (activeTab !== "settings") return;
+    if (!interviewSettings && !loadingInterviewSettings) {
+      void loadInterviewSettings();
+    }
+    if (!siteSettings && !loadingSiteSettings) {
+      void loadSiteSettings();
+    }
+  }, [activeTab, interviewSettings, loadInterviewSettings, loadSiteSettings, loadingInterviewSettings, loadingSiteSettings, siteSettings]);
+
+  useEffect(() => {
+    if (activeTab !== "patchNotes") return;
+    if (patchNotes.length === 0 && !loadingPatchNotes) {
+      void loadPatchNotes();
+    }
+  }, [activeTab, loadPatchNotes, loadingPatchNotes, patchNotes.length]);
 
   useEffect(() => {
     if (!selectedMemberId) {
@@ -1022,6 +1064,7 @@ export const AdminConsolePage = () => {
   };
 
   const handleSaveInterviewSettings = useCallback(async () => {
+    if (!interviewSettings) return;
     setSavingInterviewSettings(true);
     try {
       const payload = await updateAdminInterviewSettings({
@@ -1036,9 +1079,10 @@ export const AdminConsolePage = () => {
     } finally {
       setSavingInterviewSettings(false);
     }
-  }, [interviewSettings.techQuestionReusePolicy]);
+  }, [interviewSettings]);
 
   const handleSaveSiteSettings = useCallback(async () => {
+    if (!siteSettings) return;
     const landingVersionLabel = siteSettings.landingVersionLabel.trim();
     if (!landingVersionLabel) {
       setPageErrorMessage("사이드바 하단 버전 라벨을 입력해 주세요.");
@@ -1057,9 +1101,13 @@ export const AdminConsolePage = () => {
     } finally {
       setSavingSiteSettings(false);
     }
-  }, [siteSettings.landingVersionLabel]);
+  }, [siteSettings]);
 
   const handleCreatePatchNote = useCallback(async () => {
+    if (isPatchNoteOrderDirty) {
+      setPageErrorMessage("패치노트 순서를 먼저 저장한 뒤 생성해 주세요.");
+      return;
+    }
     const normalizedTitle = patchNoteForm.title.trim();
     const normalizedBody = patchNoteForm.body.trim();
     if (!normalizedTitle) {
@@ -1086,10 +1134,14 @@ export const AdminConsolePage = () => {
     } finally {
       setSavingPatchNote(false);
     }
-  }, [loadPatchNotes, patchNoteForm]);
+  }, [isPatchNoteOrderDirty, loadPatchNotes, patchNoteForm]);
 
   const handleSavePatchNote = useCallback(async () => {
     if (!selectedPatchNoteId) return;
+    if (isPatchNoteOrderDirty) {
+      setPageErrorMessage("패치노트 순서를 먼저 저장한 뒤 수정해 주세요.");
+      return;
+    }
     const normalizedTitle = patchNoteForm.title.trim();
     const normalizedBody = patchNoteForm.body.trim();
     if (!normalizedTitle) {
@@ -1114,9 +1166,13 @@ export const AdminConsolePage = () => {
     } finally {
       setSavingPatchNote(false);
     }
-  }, [loadPatchNotes, patchNoteForm, selectedPatchNoteId]);
+  }, [isPatchNoteOrderDirty, loadPatchNotes, patchNoteForm, selectedPatchNoteId]);
 
   const handleDeletePatchNote = useCallback(async (patchNoteId) => {
+    if (isPatchNoteOrderDirty) {
+      setPageErrorMessage("패치노트 순서를 먼저 저장한 뒤 삭제해 주세요.");
+      return;
+    }
     const target = patchNotes.find((item) => item.patchNoteId === patchNoteId);
     const confirmed = window.confirm(`'${target?.title || "선택한 패치노트"}'를 삭제하시겠습니까?`);
     if (!confirmed) return;
@@ -1130,7 +1186,7 @@ export const AdminConsolePage = () => {
     } finally {
       setDeletingPatchNoteId(null);
     }
-  }, [loadPatchNotes, patchNotes]);
+  }, [isPatchNoteOrderDirty, loadPatchNotes, patchNotes]);
 
   const handlePatchNoteDragStart = useCallback((patchNoteId) => {
     setDraggingPatchNoteId(patchNoteId);
@@ -2038,14 +2094,15 @@ export const AdminConsolePage = () => {
                 {loadingInterviewSettings ? <InlineSpinner label="불러오는 중" /> : null}
               </div>
               <div className="mt-5 grid gap-3 md:grid-cols-2">
-                <label className={`rounded-[16px] border px-4 py-4 ${interviewSettings.techQuestionReusePolicy === "REUSE_MATCHING" ? "border-[#171b24] bg-[#f8fafc]" : "border-[#d9dde5] bg-white"}`}>
+                <label className={`rounded-[16px] border px-4 py-4 ${interviewSettings?.techQuestionReusePolicy === "REUSE_MATCHING" ? "border-[#171b24] bg-[#f8fafc]" : "border-[#d9dde5] bg-white"} ${!interviewSettings || loadingInterviewSettings ? "opacity-60" : ""}`}>
                   <div className="flex items-start gap-3">
                     <input
                       type="radio"
                       name="techQuestionReusePolicy"
                       value="REUSE_MATCHING"
-                      checked={interviewSettings.techQuestionReusePolicy === "REUSE_MATCHING"}
-                      onChange={(event) => setInterviewSettings((prev) => ({ ...prev, techQuestionReusePolicy: event.target.value }))}
+                      checked={interviewSettings?.techQuestionReusePolicy === "REUSE_MATCHING"}
+                      disabled={!interviewSettings || loadingInterviewSettings}
+                      onChange={(event) => setInterviewSettings((prev) => ({ ...(prev || { updatedAt: null }), techQuestionReusePolicy: event.target.value }))}
                       className="mt-1"
                     />
                     <div>
@@ -2056,14 +2113,15 @@ export const AdminConsolePage = () => {
                     </div>
                   </div>
                 </label>
-                <label className={`rounded-[16px] border px-4 py-4 ${interviewSettings.techQuestionReusePolicy === "ALWAYS_GENERATE" ? "border-[#171b24] bg-[#f8fafc]" : "border-[#d9dde5] bg-white"}`}>
+                <label className={`rounded-[16px] border px-4 py-4 ${interviewSettings?.techQuestionReusePolicy === "ALWAYS_GENERATE" ? "border-[#171b24] bg-[#f8fafc]" : "border-[#d9dde5] bg-white"} ${!interviewSettings || loadingInterviewSettings ? "opacity-60" : ""}`}>
                   <div className="flex items-start gap-3">
                     <input
                       type="radio"
                       name="techQuestionReusePolicy"
                       value="ALWAYS_GENERATE"
-                      checked={interviewSettings.techQuestionReusePolicy === "ALWAYS_GENERATE"}
-                      onChange={(event) => setInterviewSettings((prev) => ({ ...prev, techQuestionReusePolicy: event.target.value }))}
+                      checked={interviewSettings?.techQuestionReusePolicy === "ALWAYS_GENERATE"}
+                      disabled={!interviewSettings || loadingInterviewSettings}
+                      onChange={(event) => setInterviewSettings((prev) => ({ ...(prev || { updatedAt: null }), techQuestionReusePolicy: event.target.value }))}
                       className="mt-1"
                     />
                     <div>
@@ -2077,11 +2135,11 @@ export const AdminConsolePage = () => {
               </div>
               <div className="mt-4 flex items-center justify-between gap-3">
                 <p className="text-[12px] text-[#64748b]">
-                  마지막 저장 시각: <strong className="text-[#111827]">{formatDateTime(interviewSettings.updatedAt)}</strong>
+                  마지막 저장 시각: <strong className="text-[#111827]">{formatDateTime(interviewSettings?.updatedAt)}</strong>
                 </p>
                 <button
                   type="button"
-                  disabled={savingInterviewSettings}
+                  disabled={savingInterviewSettings || !interviewSettings || loadingInterviewSettings}
                   onClick={() => void handleSaveInterviewSettings()}
                   className="rounded-[10px] border border-[#171b24] bg-[#171b24] px-4 py-2 text-[12px] font-semibold text-white disabled:opacity-60"
                 >
@@ -2114,14 +2172,15 @@ export const AdminConsolePage = () => {
                   </div>
                   <div className="mt-3 flex flex-col gap-3 md:flex-row md:items-center">
                     <input
-                      value={siteSettings.landingVersionLabel}
-                      onChange={(event) => setSiteSettings((prev) => ({ ...prev, landingVersionLabel: event.target.value }))}
-                      placeholder="예: v0.4"
+                      value={siteSettings?.landingVersionLabel || ""}
+                      onChange={(event) => setSiteSettings((prev) => ({ ...(prev || { updatedAt: null }), landingVersionLabel: event.target.value }))}
+                      placeholder="예: v0.5"
                       className="w-full rounded-[12px] border border-[#d9dde5] bg-white px-3 py-2 outline-none focus:border-[#9aa9cd]"
+                      disabled={savingSiteSettings || !siteSettings || loadingSiteSettings}
                     />
                     <button
                       type="button"
-                      disabled={savingSiteSettings}
+                      disabled={savingSiteSettings || !siteSettings || loadingSiteSettings}
                       onClick={() => void handleSaveSiteSettings()}
                       className="shrink-0 rounded-[10px] border border-[#171b24] bg-[#171b24] px-4 py-2 text-[12px] font-semibold text-white disabled:opacity-60"
                     >
@@ -2129,7 +2188,7 @@ export const AdminConsolePage = () => {
                     </button>
                   </div>
                   <p className="mt-2 text-[12px] text-[#64748b]">
-                    마지막 반영: <strong className="text-[#111827]">{formatDateTime(siteSettings.updatedAt)}</strong>
+                    마지막 반영: <strong className="text-[#111827]">{formatDateTime(siteSettings?.updatedAt)}</strong>
                   </p>
                 </div>
 

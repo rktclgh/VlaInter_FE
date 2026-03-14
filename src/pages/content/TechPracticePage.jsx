@@ -261,31 +261,24 @@ export const TechPracticePage = () => {
 
   const selectedBranch = useMemo(() => branchItems.find((item) => String(item.categoryId) === String(branchFilter)) || null, [branchFilter, branchItems]);
   const selectedJob = useMemo(() => jobs.find((item) => String(item.categoryId) === String(jobFilter)) || null, [jobFilter, jobs]);
-  const selectedSkill = useMemo(
-    () => skillCategories.find((item) => String(item.categoryId) === String(selectedSkillId)) || null,
-    [selectedSkillId, skillCategories]
-  );
   const normalizedBranchQuery = normalizeCategoryName(branchQuery);
   const normalizedJobQuery = normalizeCategoryName(jobQuery);
   const normalizedCategoryQuery = normalizeCategoryName(categoryQuery);
   const branchAlreadyExists = Boolean(
     normalizedBranchQuery &&
-      branchItems.some((branch) => normalizeCategoryName(branch.name) === normalizedBranchQuery) &&
-      normalizeCategoryName(selectedBranch?.name) !== normalizedBranchQuery
+      branchItems.some((branch) => normalizeCategoryName(branch.name) === normalizedBranchQuery)
   );
   const jobAlreadyExists = Boolean(
     branchFilter &&
       normalizedJobQuery &&
-      visibleJobs.some((job) => normalizeCategoryName(job.displayName || job.name) === normalizedJobQuery) &&
-      normalizeCategoryName(selectedJob?.displayName || selectedJob?.name) !== normalizedJobQuery
+      visibleJobs.some((job) => normalizeCategoryName(job.displayName || job.name) === normalizedJobQuery)
   );
   const categoryAlreadyExists = Boolean(
     jobFilter &&
       normalizedCategoryQuery &&
       skillCategories
         .filter((item) => String(item.parentId || "") === String(jobFilter))
-        .some((item) => normalizeCategoryName(item.displayName || item.name) === normalizedCategoryQuery) &&
-      normalizeCategoryName(selectedSkill?.displayName || selectedSkill?.name) !== normalizedCategoryQuery
+        .some((item) => normalizeCategoryName(item.displayName || item.name) === normalizedCategoryQuery)
   );
   const canCreateBranch = Boolean(normalizedBranchQuery && !branchAlreadyExists);
   const canCreateJob = Boolean(branchFilter && normalizedJobQuery && !jobAlreadyExists);

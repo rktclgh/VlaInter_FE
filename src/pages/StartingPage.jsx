@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { Link, useNavigate } from "react-router-dom";
 import { getMyProfile } from "../lib/userApi";
 import { hasAuthenticatedBrowserSession } from "../lib/authSessionMarker";
@@ -213,9 +213,14 @@ export const StartingPage = () => {
   const [isLanguageMenuOpen, setIsLanguageMenuOpen] = useState(false);
   const { locale: language, setLocale: setLanguage } = usePublicLocale();
   const [patchNotes, setPatchNotes] = useState(fallbackPatchNotes);
-  const [landingVersionLabel, setLandingVersionLabel] = useState("v0.4");
+  const [landingVersionLabel, setLandingVersionLabel] = useState("v0.5");
   const [activePatchNoteIndex, setActivePatchNoteIndex] = useState(0);
   const copy = CONTENT_BY_LANGUAGE[language] || CONTENT_BY_LANGUAGE.ko;
+  const prefersReducedMotion = useReducedMotion();
+
+  const resolveMotionProps = useCallback((animated, reduced) => (
+    prefersReducedMotion ? reduced : animated
+  ), [prefersReducedMotion]);
 
   useEffect(() => {
     let unmounted = false;
@@ -246,11 +251,13 @@ export const StartingPage = () => {
 
     const loadLandingData = async () => {
       try {
-        const [patchNotePayload, settingsPayload] = await Promise.all([
+        const [patchNoteResult, settingsResult] = await Promise.allSettled([
           getLandingPatchNotes(),
           getLandingSiteSettings(),
         ]);
         if (cancelled) return;
+        const patchNotePayload = patchNoteResult.status === "fulfilled" ? patchNoteResult.value : null;
+        const settingsPayload = settingsResult.status === "fulfilled" ? settingsResult.value : null;
         const nextPatchNotes = Array.isArray(patchNotePayload)
           ? patchNotePayload
               .map((item) => ({
@@ -304,17 +311,17 @@ export const StartingPage = () => {
               type="button"
               aria-label="사이드바 닫기"
               className="fixed inset-0 z-40 bg-black/54 backdrop-blur-[2px]"
-              initial={{ opacity: 0 }}
+              initial={resolveMotionProps({ opacity: 0 }, { opacity: 1 })}
               animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
+              exit={resolveMotionProps({ opacity: 0 }, { opacity: 1 })}
               onClick={() => setIsSidebarOpen(false)}
             />
             <MotionAside
               className="fixed left-0 top-0 z-50 flex h-screen w-[min(11.25rem,88vw)] flex-col border-r border-white/10 bg-[#181818]/96 px-4 py-4 shadow-[1.5rem_0_3.5rem_rgba(0,0,0,0.35)] backdrop-blur-xl"
-              initial={{ x: "-100%", opacity: 0.6 }}
-              animate={{ x: 0, opacity: 1 }}
-              exit={{ x: "-100%", opacity: 0.6 }}
-              transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+              initial={resolveMotionProps({ x: "-100%", opacity: 0.6 }, { opacity: 1 })}
+              animate={resolveMotionProps({ x: 0, opacity: 1 }, { opacity: 1 })}
+              exit={resolveMotionProps({ x: "-100%", opacity: 0.6 }, { opacity: 1 })}
+              transition={prefersReducedMotion ? { duration: 0 } : { duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
             >
               <div className="flex items-center justify-end border-b border-white/8 pb-3">
                 <button
@@ -416,18 +423,18 @@ export const StartingPage = () => {
 
                 <MotionH1
                   className="mt-4 bg-[linear-gradient(90deg,#5d83de_1%,#8c63f3_45%,#ff1c91_92%)] bg-clip-text text-[clamp(4.2rem,12vw,8.6rem)] font-extralight leading-[0.94] tracking-[-0.08em] text-transparent"
-                  initial={{ opacity: 0, y: 18 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
+                  initial={resolveMotionProps({ opacity: 0, y: 18 }, { opacity: 1 })}
+                  animate={resolveMotionProps({ opacity: 1, y: 0 }, { opacity: 1 })}
+                  transition={prefersReducedMotion ? { duration: 0 } : { duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
                 >
                   VLAINTER
                 </MotionH1>
 
                 <MotionDiv
                   className="mt-5 flex flex-wrap items-center justify-center gap-2"
-                  initial={{ opacity: 0, y: 12 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.1, duration: 0.55 }}
+                  initial={resolveMotionProps({ opacity: 0, y: 12 }, { opacity: 1 })}
+                  animate={resolveMotionProps({ opacity: 1, y: 0 }, { opacity: 1 })}
+                  transition={prefersReducedMotion ? { duration: 0 } : { delay: 0.1, duration: 0.55 }}
                 >
                   {copy.heroPills.map((pill) => (
                     <Link
@@ -442,25 +449,25 @@ export const StartingPage = () => {
 
                 <MotionDiv
                   className="mt-16 max-w-[34rem] text-[clamp(0.98rem,1.35vw,1.08rem)] leading-8 text-white/66"
-                  initial={{ opacity: 0, y: 18 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.2, duration: 0.55 }}
+                  initial={resolveMotionProps({ opacity: 0, y: 18 }, { opacity: 1 })}
+                  animate={resolveMotionProps({ opacity: 1, y: 0 }, { opacity: 1 })}
+                  transition={prefersReducedMotion ? { duration: 0 } : { delay: 0.2, duration: 0.55 }}
                 >
                   {copy.heroDescription}
                 </MotionDiv>
 
                 <MotionDiv
                   className="mt-5 h-px w-8 bg-white/34"
-                  initial={{ opacity: 0, scaleX: 0.6 }}
-                  animate={{ opacity: 1, scaleX: 1 }}
-                  transition={{ delay: 0.26, duration: 0.4 }}
+                  initial={resolveMotionProps({ opacity: 0, scaleX: 0.6 }, { opacity: 1 })}
+                  animate={resolveMotionProps({ opacity: 1, scaleX: 1 }, { opacity: 1 })}
+                  transition={prefersReducedMotion ? { duration: 0 } : { delay: 0.26, duration: 0.4 }}
                 />
 
                 <MotionDiv
                   className="mt-7"
-                  initial={{ opacity: 0, y: 18 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.28, duration: 0.55 }}
+                  initial={resolveMotionProps({ opacity: 0, y: 18 }, { opacity: 1 })}
+                  animate={resolveMotionProps({ opacity: 1, y: 0 }, { opacity: 1 })}
+                  transition={prefersReducedMotion ? { duration: 0 } : { delay: 0.28, duration: 0.55 }}
                 >
                   <Link
                     to="/join"
@@ -501,10 +508,10 @@ export const StartingPage = () => {
               <MotionDiv
                 key={card.title}
                 className="rounded-[1.35rem] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.02))] p-6 shadow-[0_24px_50px_rgba(0,0,0,0.22)]"
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
+                initial={resolveMotionProps({ opacity: 0, y: 20 }, { opacity: 1 })}
+                whileInView={resolveMotionProps({ opacity: 1, y: 0 }, { opacity: 1 })}
                 viewport={{ once: true, amount: 0.2 }}
-                transition={{ duration: 0.5, delay: index * 0.08 }}
+                transition={prefersReducedMotion ? { duration: 0 } : { duration: 0.5, delay: index * 0.08 }}
               >
                 <p className="text-[0.72rem] tracking-[0.16em] text-white/36">0{index + 1}</p>
                 <h3 className="mt-4 text-[1.3rem] font-medium tracking-[-0.04em] text-white">{card.title}</h3>
@@ -541,10 +548,10 @@ export const StartingPage = () => {
                     <MotionDiv
                       key={icon.alt}
                       className="flex h-[3.65rem] items-center justify-center rounded-[1rem] border border-white/8 bg-white/95 px-4"
-                      initial={{ opacity: 0, y: 16 }}
-                      whileInView={{ opacity: 1, y: 0 }}
+                      initial={resolveMotionProps({ opacity: 0, y: 16 }, { opacity: 1 })}
+                      whileInView={resolveMotionProps({ opacity: 1, y: 0 }, { opacity: 1 })}
                       viewport={{ once: true, amount: 0.2 }}
-                      transition={{ duration: 0.45, delay: columnIndex * 0.05 }}
+                      transition={prefersReducedMotion ? { duration: 0 } : { duration: 0.45, delay: columnIndex * 0.05 }}
                     >
                       <img src={icon.src} alt={icon.alt} className="max-h-[1.55rem] w-auto object-contain" />
                     </MotionDiv>
@@ -591,6 +598,7 @@ export const StartingPage = () => {
                   type="button"
                   onClick={showPreviousPatchNote}
                   disabled={activePatchNoteIndex === 0}
+                  aria-label={language === "en" ? "Previous patch note" : "이전 패치노트"}
                   className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-white/14 bg-white/[0.03] text-white/82 disabled:opacity-35"
                 >
                   <span aria-hidden="true" className="text-[1rem]">‹</span>
@@ -599,6 +607,7 @@ export const StartingPage = () => {
                   type="button"
                   onClick={showNextPatchNote}
                   disabled={activePatchNoteIndex >= patchNotes.length - 1}
+                  aria-label={language === "en" ? "Next patch note" : "다음 패치노트"}
                   className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-white/14 bg-white/[0.03] text-white/82 disabled:opacity-35"
                 >
                   <span aria-hidden="true" className="text-[1rem]">›</span>
@@ -615,12 +624,16 @@ export const StartingPage = () => {
                     key={`${note.patchNoteId || note.title}-${activePatchNoteIndex}-${index}`}
                     className="absolute inset-x-0 top-0 rounded-[1.45rem] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.06),rgba(255,255,255,0.03))] p-6 shadow-[0_24px_60px_rgba(0,0,0,0.28)] backdrop-blur-md"
                     initial={false}
-                    animate={{
+                    animate={prefersReducedMotion ? {
+                      y: 0,
+                      scale: 1,
+                      opacity: isFront ? 1 : 0.72,
+                    } : {
                       y: index * 18,
                       scale: 1 - index * 0.04,
                       opacity: isFront ? 1 : 0.5 - index * 0.06,
                     }}
-                    transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+                    transition={prefersReducedMotion ? { duration: 0 } : { duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
                     style={{ zIndex: 30 - index }}
                   >
                     <p className="text-[0.72rem] tracking-[0.16em] text-white/34">
