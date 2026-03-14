@@ -430,11 +430,21 @@ export const SavedQuestionsPage = () => {
   };
 
   return (
-    <div className="min-h-screen overflow-x-hidden bg-white pt-[54px]">
+    <div className="min-h-screen overflow-x-hidden bg-white pt-[3.75rem]">
       <ContentTopNav point={formatPoint(userPoint)} onClickCharge={() => setShowPointChargeModal(true)} onOpenMenu={() => setIsMobileMenuOpen(true)} />
-      <MobileSidebarDrawer open={isMobileMenuOpen} activeKey="saved_question" onClose={() => setIsMobileMenuOpen(false)} onNavigate={handleSidebarNavigate} userName={userName} profileImageUrl={profileImageUrl} onLogout={() => { setIsMobileMenuOpen(false); setShowLogoutModal(true); }} />
-      <div className="flex min-h-[calc(100vh-54px)]">
-        <div className="hidden w-[272px] shrink-0 md:block"><Sidebar activeKey="saved_question" onNavigate={handleSidebarNavigate} userName={userName} profileImageUrl={profileImageUrl} onLogout={() => setShowLogoutModal(true)} /></div>
+      <MobileSidebarDrawer
+        open={isMobileMenuOpen}
+        activeKey="saved_question"
+        onClose={() => setIsMobileMenuOpen(false)}
+        onNavigate={handleSidebarNavigate}
+        userName={userName}
+        profileImageUrl={profileImageUrl}
+        point={formatPoint(userPoint)}
+        onClickCharge={() => setShowPointChargeModal(true)}
+        onLogout={() => { setIsMobileMenuOpen(false); setShowLogoutModal(true); }}
+      />
+      <div className="flex min-h-[calc(100vh-3.75rem)]">
+        <div className="hidden w-[17rem] shrink-0 md:block"><Sidebar activeKey="saved_question" onNavigate={handleSidebarNavigate} userName={userName} profileImageUrl={profileImageUrl} onLogout={() => setShowLogoutModal(true)} /></div>
         <main className="flex min-w-0 flex-1 flex-col px-4 pb-8 pt-6 sm:px-5 md:px-8 md:pt-10">
           <div className="mx-auto w-full max-w-[1280px]">
             <section className="rounded-[24px] border border-[#e4e7ee] bg-[linear-gradient(180deg,#ffffff_0%,#f7f9fc_100%)] p-6">

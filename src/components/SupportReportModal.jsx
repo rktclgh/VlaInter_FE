@@ -9,6 +9,7 @@ const CATEGORY_OPTIONS = [
 export const SupportReportModal = ({ open, onClose }) => {
   const dialogRef = useRef(null);
   const titleInputRef = useRef(null);
+  const screenshotInputRef = useRef(null);
   const lastFocusedElementRef = useRef(null);
   const [category, setCategory] = useState("BUG_REPORT");
   const [title, setTitle] = useState("");
@@ -17,6 +18,7 @@ export const SupportReportModal = ({ open, onClose }) => {
   const [sending, setSending] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
+  const [showSuccessState, setShowSuccessState] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -28,7 +30,19 @@ export const SupportReportModal = ({ open, onClose }) => {
     setSending(false);
     setErrorMessage("");
     setSuccessMessage("");
+    setShowSuccessState(false);
+    if (screenshotInputRef.current) {
+      screenshotInputRef.current.value = "";
+    }
   }, [open]);
+
+  useEffect(() => {
+    if (!showSuccessState) return undefined;
+    const timer = window.setTimeout(() => {
+      onClose?.();
+    }, 900);
+    return () => window.clearTimeout(timer);
+  }, [showSuccessState, onClose]);
 
   useEffect(() => {
     if (!open) return undefined;
@@ -87,10 +101,14 @@ export const SupportReportModal = ({ open, onClose }) => {
         message: message.trim(),
         screenshot,
       });
-      setSuccessMessage(response?.message || "운영자 디스코드로 전송했습니다.");
+      setSuccessMessage(response?.message || "운영자에게 성공적으로 전달되었습니다. 감사합니다!");
       setTitle("");
       setMessage("");
       setScreenshot(null);
+      setShowSuccessState(true);
+      if (screenshotInputRef.current) {
+        screenshotInputRef.current.value = "";
+      }
     } catch (error) {
       setErrorMessage(error?.message || "전송에 실패했습니다.");
     } finally {
@@ -174,6 +192,7 @@ export const SupportReportModal = ({ open, onClose }) => {
           <label className="grid gap-2">
             <span className="text-[12px] font-semibold text-[#4f5664]">스크린샷 첨부</span>
             <input
+              ref={screenshotInputRef}
               type="file"
               accept="image/*"
               onChange={(event) => setScreenshot(event.target.files?.[0] || null)}
@@ -183,7 +202,14 @@ export const SupportReportModal = ({ open, onClose }) => {
           </label>
 
           {errorMessage ? <p className="rounded-[14px] bg-[#fff2f2] px-4 py-3 text-[13px] text-[#d12f2f]">{errorMessage}</p> : null}
-          {successMessage ? <p className="rounded-[14px] bg-[#eefaf1] px-4 py-3 text-[13px] text-[#18794e]">{successMessage}</p> : null}
+          {successMessage ? (
+            <p className="flex items-center gap-2 rounded-[14px] bg-[#eefaf1] px-4 py-3 text-[13px] text-[#18794e]">
+              <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-[#18794e] text-[12px] font-bold text-white">
+                ✓
+              </span>
+              <span>{successMessage}</span>
+            </p>
+          ) : null}
 
           <div className="mt-2 flex justify-end gap-2">
             <button

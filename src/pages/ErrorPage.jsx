@@ -1,24 +1,32 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { usePublicLocale } from "../lib/publicLocale";
 
 export const ErrorPage = ({ code = 404 }) => {
   const navigate = useNavigate();
+  const { locale } = usePublicLocale();
   const [isVideoOpen, setIsVideoOpen] = useState(false);
 
   const content = useMemo(() => {
     if (code === 403) {
       return {
-        title: "접근 권한이 없어요",
-        description: "현재 계정으로는 이 페이지를 볼 수 없습니다.",
+        title: locale === "en" ? "You do not have access" : "접근 권한이 없어요",
+        description:
+          locale === "en"
+            ? "This page is not available for your current account."
+            : "현재 계정으로는 이 페이지를 볼 수 없습니다.",
         eyeColor: "#ff1c91",
       };
     }
     return {
-      title: "페이지를 찾을 수 없어요",
-      description: "요청하신 경로가 존재하지 않거나, 접근할 수 없는 화면입니다.",
+      title: locale === "en" ? "Page not found" : "페이지를 찾을 수 없어요",
+      description:
+        locale === "en"
+          ? "The requested path does not exist or is not accessible."
+          : "요청하신 경로가 존재하지 않거나, 접근할 수 없는 화면입니다.",
       eyeColor: "#5d83de",
     };
-  }, [code]);
+  }, [code, locale]);
 
   const handleBack = () => {
     if (window.history.length > 1) {
@@ -57,7 +65,7 @@ export const ErrorPage = ({ code = 404 }) => {
               type="button"
               onClick={() => setIsVideoOpen(true)}
               className="relative mx-auto my-[14px] block h-16 w-16 rounded-[26px_26px_18px_18px] border-2 border-[#d8deed] bg-white transition hover:-translate-y-[1px] hover:shadow-[0_8px_18px_rgba(93,131,222,0.18)]"
-              aria-label="404 비디오 열기"
+              aria-label={locale === "en" ? "Open 404 video" : "404 비디오 열기"}
             >
               <span
                 className="absolute left-5 top-6 h-2 w-2 rounded-full"
@@ -92,7 +100,7 @@ export const ErrorPage = ({ code = 404 }) => {
             onClick={handleBack}
             className="inline-flex h-11 items-center justify-center rounded-full border border-[#c8d2f2] bg-white px-6 text-[15px] font-semibold text-[#334155] transition hover:-translate-y-[1px] hover:shadow-[0_8px_18px_rgba(93,131,222,0.18)]"
           >
-            이전 페이지로 돌아가기
+            {locale === "en" ? "Go back" : "이전 페이지로 돌아가기"}
           </button>
         </div>
       </section>
@@ -102,7 +110,7 @@ export const ErrorPage = ({ code = 404 }) => {
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4"
           role="dialog"
           aria-modal="true"
-          aria-label="404 비디오 모달"
+          aria-label={locale === "en" ? "404 video modal" : "404 비디오 모달"}
           onClick={() => setIsVideoOpen(false)}
         >
           <div
@@ -113,7 +121,7 @@ export const ErrorPage = ({ code = 404 }) => {
               type="button"
               onClick={() => setIsVideoOpen(false)}
               className="absolute right-3 top-3 z-10 inline-flex h-8 w-8 items-center justify-center rounded-full bg-white/90 text-lg font-semibold text-black"
-              aria-label="모달 닫기"
+              aria-label={locale === "en" ? "Close modal" : "모달 닫기"}
             >
               ×
             </button>

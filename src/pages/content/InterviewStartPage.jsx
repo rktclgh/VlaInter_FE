@@ -9,7 +9,7 @@ import { GeminiOverloadModal } from "../../components/GeminiOverloadModal";
 import { JobSkillExampleModal } from "../../components/JobSkillExampleModal";
 import { PointChargeModal } from "../../components/PointChargeModal";
 import { PointChargeSuccessModal } from "../../components/PointChargeSuccessModal";
-import { StarRatingInput, StarIcons } from "../../components/DifficultyStars";
+import { StarRatingInput } from "../../components/DifficultyStars";
 import tempProfileImage from "../../assets/icon/temp.png";
 import { isAuthenticationError } from "../../lib/apiClient";
 import { logout } from "../../lib/authApi";
@@ -23,7 +23,7 @@ import { consumePointChargeSuccessResult } from "../../lib/pointChargeFlow";
 import { extractProfile, formatPoint, parsePoint } from "../../lib/profileUtils";
 import { getMyProfile, getMyProfileImageUrl } from "../../lib/userApi";
 import { isGeminiOverloadError } from "../../lib/geminiErrorUtils";
-import { getInterviewLanguageLabel, INTERVIEW_LANGUAGE_OPTIONS, normalizeInterviewLanguage } from "../../lib/interviewLanguage";
+import { INTERVIEW_LANGUAGE_OPTIONS, normalizeInterviewLanguage } from "../../lib/interviewLanguage";
 
 const DOCUMENT_TYPES = [
   { key: "RESUME", label: "이력서" },
@@ -116,11 +116,11 @@ const InterviewPrerequisiteGuideModal = ({ onClose, onMoveToUpload }) => (
   </div>
 );
 
-const CategoryCard = ({ title, description, children }) => (
-  <section className="rounded-3xl border border-[#e4e7ee] bg-white p-5 shadow-[0_12px_28px_rgba(15,23,42,0.04)] sm:p-6">
-    <div className="mb-4">
-      <p className="text-[12px] font-semibold tracking-[0.08em] text-[#7a8190]">{title}</p>
-      {description ? <p className="mt-1 text-[13px] leading-[1.7] text-[#5e6472]">{description}</p> : null}
+const CategoryCard = ({ title, description, children, className = "" }) => (
+  <section className={`space-y-3 ${className}`}>
+    <div>
+      <p className={SECTION_TITLE_CLASS}>{title}</p>
+      {description ? <p className={SECTION_DESCRIPTION_CLASS}>{description}</p> : null}
     </div>
     {children}
   </section>
@@ -130,35 +130,61 @@ const FilterChip = ({ label, active = false, onClick }) => (
   <button
     type="button"
     onClick={onClick}
-    className={`rounded-full border px-3 py-1 text-[12px] transition ${active ? "border-[#171b24] bg-[#171b24] text-white" : "border-[#d9dde5] bg-white text-[#505866]"}`}
+    className={`rounded-full p-px transition ${
+      active ? GRADIENT_BORDER_CLASS : "bg-[#EDEDED]"
+    }`}
   >
-    {label}
+    <span className={`inline-flex min-h-[1.625rem] min-w-[3.1875rem] items-center justify-center rounded-full bg-white px-3 text-[0.75rem] font-normal tracking-[0.02em] ${
+      active ? "text-[#000000]" : "text-[#B5B5B5]"
+    }`}>
+      {label}
+    </span>
   </button>
+);
+
+const SelectionPillButton = ({
+  active = false,
+  disabled = false,
+  onClick,
+  className = "",
+  innerClassName = "",
+  minHeightClass = "min-h-[3rem]",
+  children,
+}) => (
+  <button
+    type="button"
+    disabled={disabled}
+    onClick={onClick}
+    className={`rounded-[1rem] p-px transition disabled:opacity-50 ${active ? GRADIENT_BORDER_CLASS : "bg-[#C9C9C9]"} ${className}`}
+  >
+    <span className={`flex h-full w-full items-center justify-center rounded-[calc(1rem-1px)] bg-white px-4 text-center text-[0.8125rem] font-medium tracking-[0.02em] ${
+      active ? "text-[#000000]" : "text-[#AFAFAF]"
+    } ${minHeightClass} ${innerClassName}`}>
+      {children}
+    </span>
+  </button>
+);
+
+const SummaryChip = ({ children, tone = "default" }) => (
+  <span
+    className={`inline-flex items-center rounded-full border bg-white px-3 py-1.5 text-[0.75rem] font-normal tracking-[0.02em] ${
+      tone === "accent"
+        ? "border-[#CFCFCF] text-[#000000]"
+        : "border-[#E3E3E3] text-[#6D6D6D]"
+    }`}>
+    {children}
+  </span>
 );
 
 const HelpIconButton = ({ onClick }) => (
   <button
     type="button"
     onClick={onClick}
-    className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-[#d9dde5] bg-white text-[13px] font-semibold text-[#556070] transition hover:bg-[#f8fafc]"
+    className="inline-flex h-[2.5rem] w-[2.5rem] items-center justify-center rounded-full bg-white text-[0.9375rem] font-medium text-[#9E9E9E] shadow-[inset_0_0_0.1875rem_rgba(0,0,0,0.25)] transition hover:bg-[#fafafa]"
     aria-label="직무와 기술 입력 예시 보기"
   >
     ?
   </button>
-);
-
-const LanguageSelect = ({ value, onChange }) => (
-  <select
-    value={value}
-    onChange={(event) => onChange(event.target.value)}
-    className="rounded-[14px] border border-[#dfe3eb] bg-white px-4 py-3 text-[13px] outline-none focus:border-[#8aa2e8]"
-  >
-    {INTERVIEW_LANGUAGE_OPTIONS.map((option) => (
-      <option key={option.value} value={option.value}>
-        {option.label}
-      </option>
-    ))}
-  </select>
 );
 
 const toggleSkillSelection = (prev, nextId) => {
@@ -175,13 +201,48 @@ const prioritizeCreatedSelection = (prev, nextId, limit = 3) => {
   const deduped = prev.filter((id) => id !== nextId);
   return [...deduped.slice(-(limit - 1)), nextId];
 };
+const normalizeCategoryName = (value) => String(value || "").trim().toLowerCase();
 
 const getFirstFileId = (options = []) => String(options[0]?.fileId || options[0]?.file_id || "");
+const GRADIENT_BORDER_CLASS = "bg-[linear-gradient(45deg,#5D83DE_0%,#FF1C91_100%)]";
+const SECTION_TITLE_CLASS = "text-[0.875rem] font-medium tracking-[0.02em] text-[#4B4B4B]";
+const SECTION_DESCRIPTION_CLASS = "mt-1 text-[0.75rem] font-normal leading-[1.7] tracking-[0.02em] text-[#9E9E9E]";
+const TEXT_INPUT_CLASS = "min-h-[2.5625rem] w-full rounded-[0.6875rem] border border-[#EDEDED] bg-white px-[0.9375rem] py-[0.75rem] text-[0.75rem] font-normal tracking-[0.02em] text-[#4B4B4B] shadow-[inset_0_0_0.1875rem_rgba(0,0,0,0.25)] placeholder:text-[#CCCCCC] disabled:bg-[#FAFAFA] disabled:text-[#BDBDBD]";
+const SUB_COPY_CLASS = "text-[0.75rem] font-normal leading-[1.65] tracking-[0.02em] text-[#8F8F8F]";
+const hasQuestionSetQuestions = (set) => {
+  const count = Number(set?.questionCount || 0);
+  if (count > 0) return true;
+  return Array.isArray(set?.questions) && set.questions.length > 0;
+};
+const getSetBranchName = (set) => String(
+  set?.branchName
+  || set?.questions?.find((question) => String(question?.branchName || "").trim())?.branchName
+  || ""
+).trim();
+const getSetJobNames = (set) => {
+  const direct = Array.isArray(set?.jobNames) ? set.jobNames : [set?.jobName];
+  const questionJobs = Array.isArray(set?.questions) ? set.questions.map((question) => question?.jobName) : [];
+  return [...direct, ...questionJobs]
+    .filter(Boolean)
+    .map((name) => String(name).trim())
+    .filter((name, index, all) => all.findIndex((candidate) => candidate.toLowerCase() === name.toLowerCase()) === index);
+};
+const getSetSkillLabels = (set) => {
+  const direct = Array.isArray(set?.skillNames) ? set.skillNames : [set?.skillName];
+  const questionSkills = Array.isArray(set?.questions)
+    ? set.questions.map((question) => question?.skillName || question?.categoryName)
+    : [];
+  return [...direct, ...questionSkills]
+    .filter(Boolean)
+    .map((name) => String(name).trim())
+    .filter((name, index, all) => all.findIndex((candidate) => candidate.toLowerCase() === name.toLowerCase()) === index);
+};
 
 export const InterviewStartPage = () => {
   const navigate = useNavigate();
   const initialDraft = useMemo(() => loadInterviewStartDraft(), []);
   const [userName, setUserName] = useState("사용자");
+  const [userJob, setUserJob] = useState("");
   const [userPoint, setUserPoint] = useState(0);
   const [profileImageUrl, setProfileImageUrl] = useState(tempProfileImage);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -228,6 +289,7 @@ export const InterviewStartPage = () => {
       const profilePayload = await getMyProfile();
       profile = extractProfile(profilePayload);
       setUserName(profile?.name || "사용자");
+      setUserJob(typeof profile?.jobName === "string" ? profile.jobName.trim() : "");
       setUserPoint(parsePoint(profile?.point));
       setProfileImageUrl(getMyProfileImageUrl());
     } catch (error) {
@@ -273,7 +335,7 @@ export const InterviewStartPage = () => {
       const defaultBranch = matchedJob?.parentId ? String(matchedJob.parentId) : nextJobs[0]?.parentId ? String(nextJobs[0].parentId) : "";
 
       setCategoryTree(nextCategoryTree);
-      setMyQuestionSets(Array.isArray(mySetsPayload) ? mySetsPayload.filter((item) => !item?.aiGenerated && Number(item?.questionCount || 0) > 0) : []);
+      setMyQuestionSets(Array.isArray(mySetsPayload) ? mySetsPayload.filter((item) => !item?.aiGenerated && hasQuestionSetQuestions(item)) : []);
       setFilesByType(nextFilesByType);
       setBranchFilter((prev) => prev || defaultBranch);
       setJobFilter((prev) => prev || defaultJob);
@@ -389,34 +451,69 @@ export const InterviewStartPage = () => {
     });
   }, [selectedCategoryIds, skillItems]);
 
-  const canCreateJob = Boolean(branchFilter && jobQuery.trim() && !visibleJobs.some((job) => (job.displayName || job.name || "").trim().toLowerCase() === jobQuery.trim().toLowerCase()));
-  const canCreateBranch = Boolean(branchQuery.trim() && !branchItems.some((branch) => (branch.name || "").trim().toLowerCase() === branchQuery.trim().toLowerCase()));
-  const canCreateSkill = Boolean(jobFilter && skillQuery.trim() && !(categoryTree || []).some((item) => Number(item.depth) === 2 && String(item.name || "").trim().toLowerCase() === skillQuery.trim().toLowerCase()));
-  const branchAlreadyExists = Boolean(branchQuery.trim() && !canCreateBranch);
-  const jobAlreadyExists = Boolean(jobQuery.trim() && !canCreateJob);
-  const skillAlreadyExists = Boolean(skillQuery.trim() && !canCreateSkill);
-
   const selectedSkills = useMemo(
     () => skillItems.filter((item) => selectedCategoryIds.includes(String(item.categoryId))),
     [selectedCategoryIds, skillItems]
   );
+  const selectedBranch = useMemo(
+    () => branchItems.find((item) => String(item.categoryId) === String(branchFilter)) || null,
+    [branchFilter, branchItems]
+  );
   const selectedJob = useMemo(() => jobs.find((item) => String(item.categoryId) === String(jobFilter)) || null, [jobFilter, jobs]);
+  const normalizedBranchQuery = normalizeCategoryName(branchQuery);
+  const normalizedJobQuery = normalizeCategoryName(jobQuery);
+  const normalizedSkillQuery = normalizeCategoryName(skillQuery);
+  const branchAlreadyExists = Boolean(
+    normalizedBranchQuery &&
+      branchItems.some((branch) => normalizeCategoryName(branch.name) === normalizedBranchQuery)
+  );
+  const jobAlreadyExists = Boolean(
+    branchFilter &&
+      normalizedJobQuery &&
+      visibleJobs.some((job) => normalizeCategoryName(job.displayName || job.name) === normalizedJobQuery)
+  );
+  const skillAlreadyExists = Boolean(
+    jobFilter &&
+      normalizedSkillQuery &&
+      skillItems.some((item) => normalizeCategoryName(item.displayName || item.name) === normalizedSkillQuery)
+  );
+  const canCreateJob = Boolean(branchFilter && normalizedJobQuery && !jobAlreadyExists);
+  const canCreateBranch = Boolean(normalizedBranchQuery && !branchAlreadyExists);
+  const canCreateSkill = Boolean(jobFilter && normalizedSkillQuery && !skillAlreadyExists);
   const selectedQuestionSet = useMemo(
     () => myQuestionSets.find((item) => String(item.setId) === String(selectedQuestionSetId)) || null,
     [myQuestionSets, selectedQuestionSetId]
   );
   const visibleQuestionSets = useMemo(() => {
-    const normalizedBranchName = String(branchItems.find((item) => String(item.categoryId) === String(branchFilter))?.name || "").trim().toLowerCase();
+    const normalizedBranchName = String(
+      branchItems.find((item) => String(item.categoryId) === String(branchFilter))?.name || ""
+    ).trim().toLowerCase();
     const normalizedJobName = String(selectedJob?.displayName || selectedJob?.name || "").trim().toLowerCase();
-    return myQuestionSets.filter((set) => {
-      const setBranchName = String(set.branchName || "").trim().toLowerCase();
-      const setJobNames = Array.isArray(set.jobNames)
-        ? set.jobNames.map((name) => String(name || "").trim().toLowerCase()).filter(Boolean)
-        : [String(set.jobName || "").trim().toLowerCase()].filter(Boolean);
-      if (normalizedBranchName && setBranchName !== normalizedBranchName) return false;
-      if (!normalizedJobName) return true;
-      return setJobNames.includes(normalizedJobName) || setJobNames.includes("공통");
+
+    const scored = myQuestionSets.map((set) => {
+      const setBranchName = getSetBranchName(set).toLowerCase();
+      const setJobNames = getSetJobNames(set).map((name) => name.toLowerCase());
+      const branchMatched = normalizedBranchName && setBranchName === normalizedBranchName;
+      const jobMatched = normalizedJobName && (setJobNames.includes(normalizedJobName) || setJobNames.includes("공통"));
+      const questionCount = Array.isArray(set?.questions) ? set.questions.length : Number(set?.questionCount || 0);
+      const score = (branchMatched ? 2 : 0) + (jobMatched ? 1 : 0);
+
+      return {
+        set,
+        score,
+        questionCount,
+      };
     });
+
+    return scored
+      .sort((left, right) => {
+        if (right.score !== left.score) return right.score - left.score;
+        if (right.questionCount !== left.questionCount) return right.questionCount - left.questionCount;
+        const leftTime = new Date(left.set?.updatedAt || left.set?.createdAt || "").getTime() || 0;
+        const rightTime = new Date(right.set?.updatedAt || right.set?.createdAt || "").getTime() || 0;
+        return rightTime - leftTime;
+      })
+      .map((item) => item.set);
   }, [branchFilter, branchItems, myQuestionSets, selectedJob]);
 
   useEffect(() => {
@@ -597,6 +694,7 @@ export const InterviewStartPage = () => {
   };
 
   const handleStartInterview = async () => {
+    const clampedQuestionCount = Math.min(20, Math.max(5, Number(selectedQuestionCount) || 5));
     const hasRequiredDocuments = Boolean(selectedFileObjects.RESUME);
     const selectedDocumentIds = DOCUMENT_TYPES
       .map((item) => selectedFiles[item.key])
@@ -630,7 +728,7 @@ export const InterviewStartPage = () => {
         difficulty: ratingToDifficulty(selectedRating),
         language: selectedLanguage,
         includeSelfIntroduction,
-        questionCount: Math.max(5, Number(selectedQuestionCount) || 5),
+        questionCount: clampedQuestionCount,
       });
 
       if (!response?.sessionId || !response?.currentQuestion) {
@@ -659,7 +757,7 @@ export const InterviewStartPage = () => {
             : resolvedSkillNames.join(", "),
           jobName: resolvedJobName,
           questionCount: totalInterviewQuestionCount,
-          requestedQuestionCount: Math.max(5, Number(selectedQuestionCount) || 5),
+          requestedQuestionCount: clampedQuestionCount,
           includeSelfIntroduction,
           questionSetId: selectedQuestionSet ? Number(selectedQuestionSet.setId) : null,
           providerUsed: response.providerUsed || null,
@@ -718,8 +816,9 @@ export const InterviewStartPage = () => {
   };
 
   return (
-    <div className="min-h-screen overflow-x-hidden bg-white pt-13.5">
+    <div className="min-h-screen overflow-x-hidden bg-white pt-[3.75rem]">
       <ContentTopNav
+        variant="mockStart"
         point={formatPoint(userPoint)}
         onClickCharge={() => {
           if (startingInterview) return;
@@ -734,10 +833,18 @@ export const InterviewStartPage = () => {
       <MobileSidebarDrawer
         open={isMobileMenuOpen}
         activeKey="interview_start"
+        variant="mockStart"
         onClose={() => setIsMobileMenuOpen(false)}
         onNavigate={handleSidebarNavigate}
         userName={userName}
+        userRole={userJob}
         profileImageUrl={profileImageUrl}
+        point={formatPoint(userPoint)}
+        onClickCharge={() => {
+          if (startingInterview) return;
+          setShowPointChargeModal(true);
+        }}
+        interactionDisabled={startingInterview}
         onLogout={() => {
           if (startingInterview) return;
           setIsMobileMenuOpen(false);
@@ -745,12 +852,14 @@ export const InterviewStartPage = () => {
         }}
       />
 
-      <div className="flex min-h-[calc(100vh-54px)]">
-        <div className="hidden w-68 shrink-0 md:block">
+      <div className="flex min-h-[calc(100vh-3.75rem)]">
+        <div className="hidden w-[17rem] shrink-0 md:block">
           <Sidebar
             activeKey="interview_start"
+            variant="mockStart"
             onNavigate={handleSidebarNavigate}
             userName={userName}
+            userRole={userJob}
             profileImageUrl={profileImageUrl}
             onLogout={() => {
               if (startingInterview) return;
@@ -759,58 +868,50 @@ export const InterviewStartPage = () => {
           />
         </div>
 
-        <main className="flex min-w-0 flex-1 flex-col">
-          <div className="flex-1 overflow-y-auto px-4 pb-6 pt-6 sm:px-5 md:px-8 md:pt-10">
-            <div className="mx-auto w-full max-w-7xl space-y-5">
-              <section className="rounded-3xl border border-[#e4e7ee] bg-[linear-gradient(180deg,#ffffff_0%,#f7f9fc_100%)] p-5 sm:p-6">
-                <p className="text-[12px] font-semibold tracking-[0.08em] text-[#7a8190]">MOCK INTERVIEW</p>
-                <h1 className="mt-2 text-[30px] font-semibold tracking-[-0.02em] text-[#161a22] sm:text-[42px]">
-                  서류와 직무를 고르고
-                  <br />
-                  실전처럼 면접을 시작합니다
-                </h1>
-                <p className="mt-3 max-w-180 text-[14px] leading-[1.7] text-[#5e6472] sm:text-[15px]">
-                  분석 완료된 서류만 선택하실 수 있습니다. 이력서는 필수이고, 자기소개서와 포트폴리오는 선택 사항입니다. 직무와 기술 카테고리를 함께 선택하시면 문서 질문과 기술 질문을 섞어 면접을 생성합니다.
-                </p>
-              </section>
-
-              <div className="grid grid-cols-1 gap-5 xl:grid-cols-[1.15fr_0.85fr]">
-                <div className="space-y-5">
-                  <section className="rounded-3xl border border-[#e4e7ee] bg-white p-5 sm:p-6">
-                    <div className="flex items-center justify-between gap-3">
-                      <div>
-                        <p className="text-[12px] font-semibold tracking-[0.08em] text-[#7a8190]">입력 가이드</p>
-                        <p className="mt-1 text-[13px] leading-[1.7] text-[#5e6472]">계열, 직무, 기술의 범위가 헷갈리면 예시를 먼저 확인하고 같은 방식으로 선택해 주세요.</p>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <HelpIconButton onClick={() => setShowExampleModal(true)} />
-                        <button type="button" onClick={() => setShowExampleModal(true)} className="text-[12px] font-semibold text-[#556070] underline-offset-2 hover:underline">
-                          예시 보기
-                        </button>
-                      </div>
-                    </div>
+        <main className="flex min-w-0 flex-1 flex-col bg-white">
+          <div className="flex-1 overflow-y-auto px-4 pb-10 pt-8 sm:px-6 md:px-8 md:pt-10 xl:px-10">
+            <div className="mx-auto w-full max-w-[98rem]">
+              <div className="grid grid-cols-1 gap-8 xl:grid-cols-[minmax(0,1.08fr)_minmax(20rem,0.92fr)] xl:gap-12">
+                <div className="space-y-8">
+                  <section>
+                    <h1 className="text-[clamp(2.1rem,3vw,2.25rem)] font-medium tracking-[0] text-[#000000]">
+                      실전 모의 면접 시작하기
+                    </h1>
+                    <p className="mt-3 max-w-[49rem] text-[0.9375rem] leading-[1.9] tracking-[0] text-[#5C5C5C]">
+                      실전 모의면접은 서류와 직무를 기반으로 한 맞춤 면접 시스템입니다. 서류 선택 시 AI 분석이 완료된 서류만 선택하실 수 있습니다.
+                      직무와 기술 카테고리를 함께 선택하시면 문서 질문과 기술 질문을 섞어 면접을 생성합니다.
+                    </p>
                   </section>
 
-                  <CategoryCard title="계열 선택" description="최상위 루트(계열)를 먼저 선택하면 직무/기술 후보를 더 빠르게 좁힐 수 있습니다.">
-                    <div className="grid gap-3 md:grid-cols-[1fr_auto]">
+                  <section className="flex w-full max-w-[36.5rem] items-center justify-between gap-4 rounded-[1.25rem] bg-[#FDFDFD] px-5 py-4 shadow-[0_0_0.1875rem_rgba(0,0,0,0.25)]">
+                    <div>
+                      <p className="text-[0.875rem] font-medium tracking-[0.02em] text-[#9E9E9E]">입력 가이드</p>
+                      <p className="mt-1 text-[0.9375rem] font-normal tracking-[0.02em] text-[#535353]">계열, 직무, 기술의 범위에 대한 가이드입니다</p>
+                    </div>
+                    <HelpIconButton onClick={() => setShowExampleModal(true)} />
+                  </section>
+
+                  <CategoryCard title="계열 선택" description="계열을 먼저 선택하면 직무 및 기술 후보를 빠르게 선택 가능합니다">
+                    <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-start">
                       <input
                         value={branchQuery}
                         onChange={(event) => setBranchQuery(event.target.value)}
                         placeholder="계열 검색 또는 새 계열 입력"
-                        className="rounded-[14px] border border-[#dfe3eb] px-4 py-3 text-[13px] outline-none focus:border-[#8aa2e8]"
+                        className={`${TEXT_INPUT_CLASS} md:max-w-[31.1875rem]`}
                       />
                       {canCreateBranch ? (
-                        <button type="button" disabled={creatingCategory} onClick={handleCreateBranch} className="rounded-[14px] border border-[#171b24] px-4 py-3 text-[13px] font-semibold text-[#171b24] disabled:opacity-60">
+                        <button
+                          type="button"
+                          disabled={creatingCategory}
+                          onClick={handleCreateBranch}
+                          className="min-h-[2.5625rem] rounded-[0.875rem] border border-[#D8D8D8] bg-white px-4 text-[0.75rem] font-medium tracking-[0.02em] text-[#444444] disabled:opacity-60"
+                        >
                           {creatingCategory ? "생성 중..." : "계열 추가"}
                         </button>
-                      ) : <div />}
+                      ) : null}
                     </div>
-                    <div className="mt-4 flex flex-wrap gap-2">
-                      <FilterChip
-                        label="전체 계열"
-                        active={!branchFilter}
-                        onClick={() => setBranchFilter("")}
-                      />
+                    <div className="flex flex-wrap gap-2 pt-1">
+                      <FilterChip label="전체" active={!branchFilter} onClick={() => setBranchFilter("")} />
                       {visibleBranches.map((branch) => (
                         <FilterChip
                           key={branch.categoryId}
@@ -819,30 +920,35 @@ export const InterviewStartPage = () => {
                           onClick={() => setBranchFilter(String(branch.categoryId))}
                         />
                       ))}
-                      {!visibleBranches.length && !loadingPage ? <span className="text-[12px] text-[#7a8190]">표시할 계열이 없습니다.</span> : null}
                     </div>
-                    <p className={`mt-3 text-[12px] ${branchAlreadyExists ? "text-[#d14343]" : "text-[#7a8190]"}`}>
+                    {!visibleBranches.length && !loadingPage ? <p className={SUB_COPY_CLASS}>표시할 계열이 없습니다.</p> : null}
+                    <p className={`text-[0.75rem] tracking-[0.02em] ${branchAlreadyExists ? "text-[#d14343]" : "text-[#9A9A9A]"}`}>
                       {branchAlreadyExists
-                        ? "같은 이름의 계열이 이미 있습니다. 중복/장난 입력은 관리자 확인 후 즉시 로그인 차단될 수 있습니다."
-                        : "없는 계열은 직접 추가할 수 있습니다. 장난성 입력은 관리자 확인 후 즉시 로그인 차단될 수 있습니다."}
+                        ? "같은 이름의 계열이 이미 있습니다. 중복 입력은 제한됩니다."
+                        : "없는 계열은 직접 추가할 수 있습니다."}
                     </p>
                   </CategoryCard>
 
-                  <CategoryCard title="직무 선택" description="직무는 한글 기준으로 선택하시고, 없으면 바로 추가해 주세요.">
-                    <div className="grid gap-3 md:grid-cols-[1fr_auto]">
+                  <CategoryCard title="직무 선택" description="직무 추가는 한글로만 입력 가능합니다">
+                    <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-start">
                       <input
                         value={jobQuery}
                         onChange={(event) => setJobQuery(event.target.value)}
                         placeholder="직무 검색 또는 새 직무 입력"
-                        className="rounded-[14px] border border-[#dfe3eb] px-4 py-3 text-[13px] outline-none focus:border-[#8aa2e8]"
+                        className={`${TEXT_INPUT_CLASS} md:max-w-[31.1875rem]`}
                       />
                       {canCreateJob ? (
-                        <button type="button" disabled={creatingCategory} onClick={handleCreateJob} className="rounded-[14px] border border-[#171b24] px-4 py-3 text-[13px] font-semibold text-[#171b24] disabled:opacity-60">
+                        <button
+                          type="button"
+                          disabled={creatingCategory}
+                          onClick={handleCreateJob}
+                          className="min-h-[2.5625rem] rounded-[0.875rem] border border-[#D8D8D8] bg-white px-4 text-[0.75rem] font-medium tracking-[0.02em] text-[#444444] disabled:opacity-60"
+                        >
                           {creatingCategory ? "생성 중..." : "직무 추가"}
                         </button>
-                      ) : <div />}
+                      ) : null}
                     </div>
-                    <div className="mt-4 flex flex-wrap gap-2">
+                    <div className="flex flex-wrap gap-2 pt-1">
                       {visibleJobs.map((job) => (
                         <FilterChip
                           key={job.categoryId}
@@ -851,51 +957,36 @@ export const InterviewStartPage = () => {
                           onClick={() => setJobFilter(String(job.categoryId))}
                         />
                       ))}
-                      {!visibleJobs.length && !loadingPage ? <span className="text-[12px] text-[#7a8190]">표시할 직무가 없습니다.</span> : null}
                     </div>
-                    <p className={`mt-3 text-[12px] ${jobAlreadyExists ? "text-[#d14343]" : "text-[#7a8190]"}`}>
+                    {!visibleJobs.length && !loadingPage ? <p className={SUB_COPY_CLASS}>표시할 직무가 없습니다.</p> : null}
+                    <p className={`text-[0.75rem] tracking-[0.02em] ${jobAlreadyExists ? "text-[#d14343]" : "text-[#9A9A9A]"}`}>
                       {jobAlreadyExists
-                        ? "같은 이름의 직무가 이미 있습니다. 중복/장난 입력은 관리자 확인 후 즉시 로그인 차단될 수 있습니다."
-                        : "새로 만든 직무는 바로 선택됩니다. 장난성 입력은 관리자 확인 후 즉시 로그인 차단될 수 있습니다."}
+                        ? "같은 이름의 직무가 이미 있습니다."
+                        : "새로 만든 직무는 바로 선택됩니다."}
                     </p>
                   </CategoryCard>
 
-                  <CategoryCard title="기술 카테고리 선택" description="모의면접에는 기술질문이 40% 비율로 포함됩니다. 직무를 먼저 고른 뒤 기술을 여러 개 선택하거나 직접 추가해 주세요.">
-                    <div className="grid gap-3 md:grid-cols-[1fr_auto]">
+                  <CategoryCard title="기술 카테고리 선택" description="모의면접에는 40% 비율로 기술질문이 포함되며, 최대 3개까지 선택 가능합니다">
+                    <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-start">
                       <input
                         value={skillQuery}
                         onChange={(event) => setSkillQuery(event.target.value)}
                         placeholder={jobFilter ? "기술 검색 또는 새 기술 입력" : "직무를 먼저 선택해 주세요"}
                         disabled={!jobFilter}
-                        className="rounded-[14px] border border-[#dfe3eb] px-4 py-3 text-[13px] outline-none focus:border-[#8aa2e8] disabled:bg-[#f4f6f8]"
+                        className={`${TEXT_INPUT_CLASS} md:max-w-[31.1875rem]`}
                       />
                       {canCreateSkill ? (
-                        <button type="button" disabled={creatingCategory} onClick={handleCreateSkill} className="rounded-[14px] border border-[#171b24] px-4 py-3 text-[13px] font-semibold text-[#171b24] disabled:opacity-60">
+                        <button
+                          type="button"
+                          disabled={creatingCategory}
+                          onClick={handleCreateSkill}
+                          className="min-h-[2.5625rem] rounded-[0.875rem] border border-[#D8D8D8] bg-white px-4 text-[0.75rem] font-medium tracking-[0.02em] text-[#444444] disabled:opacity-60"
+                        >
                           {creatingCategory ? "생성 중..." : "기술 추가"}
                         </button>
-                      ) : <div />}
+                      ) : null}
                     </div>
-                    {selectedSkills.length ? (
-                      <div className="mt-4 flex flex-wrap gap-2 rounded-[14px] border border-[#eef1f5] bg-[#fafbfd] p-3">
-                        {selectedSkills.map((skill) => (
-                          <span
-                            key={`selected-skill-${skill.categoryId}`}
-                            className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[12px] ${skill.isCommon ? "border-[#61a8e8] bg-[#e8f4ff] text-[#2563a6]" : "border-[#171b24] bg-[#171b24] text-white"}`}
-                          >
-                            <span>{skill.displayName || skill.name}</span>
-                            <button
-                              type="button"
-                              onClick={() => setSelectedCategoryIds((prev) => prev.filter((id) => id !== String(skill.categoryId)))}
-                              className={`inline-flex h-4 w-4 items-center justify-center rounded-full text-[11px] leading-none ${skill.isCommon ? "bg-[#61a8e8]/15 text-[#2563a6]" : "bg-white/18 text-white/90"}`}
-                              aria-label={`${skill.displayName || skill.name} 제거`}
-                            >
-                              ×
-                            </button>
-                          </span>
-                        ))}
-                      </div>
-                    ) : null}
-                    <div className="mt-4 flex flex-wrap gap-2">
+                    <div className="flex flex-wrap gap-2 pt-1">
                       {visibleSkills.map((skill) => (
                         <FilterChip
                           key={skill.categoryId}
@@ -913,32 +1004,55 @@ export const InterviewStartPage = () => {
                           }}
                         />
                       ))}
-                      {!visibleSkills.length && jobFilter ? <span className="text-[12px] text-[#7a8190]">현재 직무에 등록된 기술이 없습니다. 직접 추가하시면 바로 사용하실 수 있습니다.</span> : null}
                     </div>
-                    <p className={`mt-3 text-[12px] ${skillAlreadyExists ? "text-[#d14343]" : "text-[#7a8190]"}`}>
+                    {selectedSkills.length ? (
+                      <div className="flex flex-wrap gap-2 pt-1">
+                        {selectedSkills.map((skill) => (
+                          <SummaryChip key={`selected-skill-${skill.categoryId}`} tone={skill.isCommon ? "accent" : "default"}>
+                            <span className="inline-flex items-center gap-2">
+                              <span>{skill.displayName || skill.name}</span>
+                              <button
+                                type="button"
+                                onClick={() => setSelectedCategoryIds((prev) => prev.filter((id) => id !== String(skill.categoryId)))}
+                                className="text-[0.75rem]"
+                                aria-label={`${skill.displayName || skill.name} 제거`}
+                              >
+                                ×
+                              </button>
+                            </span>
+                          </SummaryChip>
+                        ))}
+                      </div>
+                    ) : null}
+                    {!visibleSkills.length && jobFilter ? <p className={SUB_COPY_CLASS}>현재 직무에 등록된 기술이 없습니다. 직접 추가하시면 바로 사용하실 수 있습니다.</p> : null}
+                    <p className={`text-[0.75rem] tracking-[0.02em] ${skillAlreadyExists ? "text-[#d14343]" : "text-[#9A9A9A]"}`}>
                       {skillAlreadyExists
-                        ? "같은 이름의 기술이 이미 있습니다. 직무가 달라도 중복 생성은 막힙니다. 장난성 입력은 관리자 확인 후 즉시 로그인 차단될 수 있습니다."
-                        : "새로 만든 기술은 바로 선택됩니다. 장난성 입력은 관리자 확인 후 즉시 로그인 차단될 수 있습니다."}
+                        ? "같은 이름의 기술이 이미 있습니다."
+                        : "선택한 기술 전체에서 질문 후보를 생성합니다."}
                     </p>
-                    <p className="mt-3 text-[12px] text-[#7a8190]">최대 3개까지 선택하실 수 있으며, 선택한 기술 전체에서 질문 후보를 한 번에 생성한 뒤 품질 통과분만 섞어 출제합니다.</p>
                   </CategoryCard>
 
-                  <CategoryCard title="내 질문 세트로 기술질문 대체" description="AI 기술질문 대신 내가 만든 질문 세트를 그대로 기술 질문 풀로 사용할 수 있습니다. 선택 시 위 기술 카테고리 대신 이 세트가 우선 적용됩니다.">
+                  <CategoryCard title="내 질문 세트로 기술질문 대체" description="AI가 생성할 기술질문 대신 저장된 질문 세트를 사용할 수 있습니다">
                     <div className="space-y-2">
                       <button
                         type="button"
                         onClick={() => setSelectedQuestionSetId("")}
-                        className={`flex w-full items-center gap-3 rounded-[14px] border px-3 py-2.5 text-left transition ${!selectedQuestionSetId ? "border-[#171b24] bg-[#f8fafc]" : "border-[#d9dde5] bg-white text-[#4f5664]"}`}
+                        className={`flex w-full max-w-[31.1875rem] items-center justify-between rounded-[1rem] p-px text-left ${
+                          !selectedQuestionSetId ? GRADIENT_BORDER_CLASS : "bg-[#EDEDED]"
+                        }`}
                       >
-                        <span className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full border text-[10px] ${!selectedQuestionSetId ? "border-[#171b24] bg-[#171b24] text-white" : "border-[#c7cfdd] bg-white text-transparent"}`}>✓</span>
-                        <div className="min-w-0">
-                          <p className="text-[12px] font-semibold text-[#171b24]">기술 카테고리 생성 사용</p>
-                          <p className="mt-0.5 text-[11px] text-[#7a8190]">선택한 기술 카테고리 기준으로 AI 기술질문을 생성합니다.</p>
+                        <div className="flex w-full items-center justify-between rounded-[calc(1rem-1px)] bg-white px-5 py-4">
+                          <div>
+                            <p className="text-[0.9375rem] font-medium tracking-[0.02em] text-[#000000]">기술 카테고리 생성 사용</p>
+                            <p className="mt-1 text-[0.75rem] font-normal tracking-[0.02em] text-[#717171]">선택한 기술 카테고리를 기준으로 AI 기술질문을 생성합니다.</p>
+                          </div>
+                          <span className="inline-flex h-[2.0625rem] w-[2.0625rem] items-center justify-center rounded-full bg-white text-[0.875rem] text-[#000000] shadow-[inset_0_0_0.1875rem_rgba(0,0,0,0.25)]">⌃</span>
                         </div>
                       </button>
                       {visibleQuestionSets.map((set) => {
                         const selected = selectedQuestionSetId === String(set.setId);
-                        const skillLabels = (Array.isArray(set.skillNames) ? set.skillNames : [set.skillName]).filter(Boolean);
+                        const skillLabels = getSetSkillLabels(set);
+                        const branchLabel = getSetBranchName(set) || set.jobName || "계열 미지정";
                         return (
                           <button
                             key={set.setId}
@@ -948,177 +1062,189 @@ export const InterviewStartPage = () => {
                               setSelectedCategoryIds([]);
                               setPageErrorMessage("");
                             }}
-                            className={`flex w-full items-center gap-3 rounded-[14px] border px-3 py-2.5 text-left transition ${selected ? "border-[#171b24] bg-[#f8fafc]" : "border-[#d9dde5] bg-white text-[#4f5664]"}`}
+                            className={`block w-full max-w-[31.1875rem] rounded-[1rem] p-px text-left ${
+                              selected ? GRADIENT_BORDER_CLASS : "bg-[#EDEDED]"
+                            }`}
                           >
-                            <span className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full border text-[10px] ${selected ? "border-[#171b24] bg-[#171b24] text-white" : "border-[#c7cfdd] bg-white text-transparent"}`}>✓</span>
-                            <div className="min-w-0 flex-1">
-                              <p className="truncate text-[12px] font-semibold text-[#171b24]">{set.title}</p>
-                              <p className="mt-0.5 truncate text-[11px] text-[#7a8190]">
-                                {(set.branchName || set.jobName || "계열 미지정")} · {(skillLabels.length ? skillLabels.slice(0, 3).join(", ") : "기술 없음")}
+                            <span className="block rounded-[calc(1rem-1px)] bg-white px-5 py-4">
+                              <p className="truncate text-[0.9375rem] font-medium tracking-[0.02em] text-[#000000]">{set.title}</p>
+                              <p className="mt-1 truncate text-[0.75rem] tracking-[0.02em] text-[#717171]">
+                                {branchLabel} · {(skillLabels.length ? skillLabels.slice(0, 3).join(", ") : "기술 없음")}
                               </p>
-                            </div>
+                            </span>
                           </button>
                         );
                       })}
-                      {!visibleQuestionSets.length ? <span className="text-[12px] text-[#7a8190]">현재 선택한 직무에서 사용할 수 있는 내 질문 세트가 없습니다.</span> : null}
                     </div>
-                    <p className="mt-3 text-[12px] text-[#7a8190]">세트를 선택하면 기술질문은 AI 생성 대신 해당 세트 문답에서 랜덤하게 대체됩니다.</p>
+                    {!visibleQuestionSets.length ? <p className={SUB_COPY_CLASS}>현재 선택한 직무에서 사용할 수 있는 내 질문 세트가 없습니다.</p> : null}
                   </CategoryCard>
+                </div>
 
-                  <CategoryCard title="서류 선택" description="AI 분석이 끝난 서류만 노출됩니다. 이력서는 필수이며, 자기소개서와 포트폴리오는 선택 사항입니다. OCR fallback이 사용된 문서는 배지를 함께 표시합니다.">
-                    <div className="grid gap-4 md:grid-cols-3">
+                <div className="space-y-8">
+                  <CategoryCard title="서류 선택" description="AI 분석이 끝난 서류만 선택 가능합니다">
+                    <div className="grid gap-4 sm:grid-cols-2 2xl:grid-cols-3">
                       {DOCUMENT_TYPES.map((documentType) => {
                         const files = filesByType[documentType.key] || [];
+                        const currentValue = String(selectedFiles[documentType.key] || "");
+                        const isOptionalDocument = documentType.key !== "RESUME";
                         return (
-                          <div key={documentType.key} className="rounded-[18px] border border-[#e4e7ee] bg-[#f8fafc] p-4">
-                            <p className="text-[12px] font-semibold text-[#6a7383]">{documentType.label}</p>
-                            <div className="mt-3 space-y-2">
-                              <button
-                                type="button"
+                          <div key={documentType.key} className="space-y-2">
+                            <p className="text-[0.8125rem] font-medium tracking-[0.02em] text-[#4B4B4B]">{documentType.label}</p>
+                            {isOptionalDocument ? (
+                              <SelectionPillButton
+                                active={!currentValue}
                                 onClick={() => setSelectedFiles((prev) => ({ ...prev, [documentType.key]: "" }))}
-                                className={`block w-full rounded-xl border px-3 py-2 text-left text-[12px] ${!selectedFiles[documentType.key] ? "border-[#171b24] bg-[#171b24] text-white" : "border-[#d7dce5] bg-white text-[#485160]"}`}
+                                className="w-full max-w-[13.8125rem]"
                               >
                                 미선택
-                              </button>
-                              {files.map((file) => {
-                                const fileId = String(file?.fileId || file?.file_id || "");
-                                const active = String(selectedFiles[documentType.key] || "") === fileId;
-                                return (
-                                  <button
-                                    key={`${documentType.key}-${fileId}`}
-                                    type="button"
-                                    onClick={() => setSelectedFiles((prev) => ({ ...prev, [documentType.key]: fileId }))}
-                                    className={`block w-full rounded-xl border px-3 py-2 text-left text-[12px] ${active ? "border-[#171b24] bg-[#171b24] text-white" : "border-[#d7dce5] bg-white text-[#485160]"}`}
-                                  >
-                                    <span className="flex min-w-0 items-center gap-2">
-                                      <span className="truncate">{resolveDisplayFileName(file)}</span>
-                                      {file?.ocrUsed ? <OcrInfoBadge compact /> : null}
-                                    </span>
-                                  </button>
-                                );
-                              })}
-                              {!loadingPage && !files.length ? <p className="text-[11px] text-[#7a8190]">분석 완료된 파일이 없습니다.</p> : null}
-                            </div>
+                              </SelectionPillButton>
+                            ) : null}
+                            {files.map((file) => {
+                              const fileId = String(file?.fileId || file?.file_id || "");
+                              const active = currentValue === fileId;
+                              return (
+                                <SelectionPillButton
+                                  key={`${documentType.key}-${fileId}`}
+                                  active={active}
+                                  onClick={() => setSelectedFiles((prev) => ({ ...prev, [documentType.key]: fileId }))}
+                                  className="w-full max-w-[13.8125rem]"
+                                >
+                                  <span className="flex min-w-0 items-center gap-2">
+                                    <span className="truncate">{resolveDisplayFileName(file)}</span>
+                                    {file?.ocrUsed ? <OcrInfoBadge compact /> : null}
+                                  </span>
+                                </SelectionPillButton>
+                              );
+                            })}
+                            {!loadingPage && !files.length ? (
+                              <SelectionPillButton disabled className="w-full max-w-[13.8125rem]">
+                                {documentType.key === "RESUME" ? "이력서 없음" : `${documentType.label} 없음`}
+                              </SelectionPillButton>
+                            ) : null}
                           </div>
                         );
                       })}
                     </div>
-                    <div className="mt-4 rounded-[14px] border border-[#e6eaf2] bg-[#fbfcfe] px-4 py-3">
-                      <p className="text-[12px] leading-[1.7] text-[#5e6472]">
-                        면접 시작 전, 이력서 업로드 및 AI 분석 완료가 반드시 선행되어야 합니다. 자기소개서와 포트폴리오는 선택 사항입니다.
-                      </p>
-                      <div className="mt-2 flex justify-end">
-                        <button
-                          type="button"
-                          onClick={() => navigate("/content/files")}
-                          className="rounded-[10px] border border-[#171b24] px-3 py-1.5 text-[12px] font-semibold text-[#171b24]"
-                        >
-                          이력서 업로드 페이지로 이동
-                        </button>
-                      </div>
-                    </div>
                   </CategoryCard>
-                </div>
 
-                <div className="space-y-5">
-                  <CategoryCard title="난이도와 문항 수" description="모의면접은 최소 5문항이며, 기술질문은 전체의 40% 비율로 자동 배분됩니다.">
-                    <div className="rounded-[18px] border border-[#eef1f5] bg-[#fafbfd] p-4">
-                      <p className="text-[12px] font-semibold text-[#6a7383]">난이도</p>
-                      <div className="mt-3 flex items-center gap-3">
-                        <StarRatingInput value={selectedRating} onChange={setSelectedRating} />
-                        <div className="inline-flex items-center gap-2 rounded-full border border-[#f3ddad] bg-[#fff8e8] px-3 py-1 text-[12px] text-[#8a5a00]">
-                          <StarIcons rating={selectedRating} />
-                          <span className="font-medium">{selectedRating} / 5</span>
+                  <CategoryCard title="난이도 및 문항 수" description="모의 면접은 최소 5문항이며, 기술질문은 전체 문항의 40% 비율로 자동 배분됩니다">
+                    <div className="flex flex-col gap-3 md:flex-row md:items-center">
+                      <div className="w-fit min-w-[8rem] rounded-[0.875rem] bg-white px-4 py-3 shadow-[0_0_0.1875rem_rgba(0,0,0,0.25)]">
+                        <div className="flex items-center">
+                          <StarRatingInput
+                            value={selectedRating}
+                            onChange={setSelectedRating}
+                            size="sm"
+                            activeColorClass="text-[#FFD900]"
+                            inactiveColorClass="text-[#EAEAEA]"
+                            hoverColorClass="hover:text-[#FFD900]"
+                          />
+                        </div>
+                      </div>
+                      <div className="w-full max-w-[8rem] rounded-[0.875rem] bg-white px-4 py-3 shadow-[0_0_0.1875rem_rgba(0,0,0,0.25)]">
+                        <div className="flex items-center justify-between gap-2">
+                          <label htmlFor="interview-question-count" className="text-[0.75rem] font-normal tracking-[0.02em] text-[#4B4B4B]">문항 수</label>
+                          <input
+                            id="interview-question-count"
+                            type="number"
+                            aria-label="문항 수"
+                            min={5}
+                            max={20}
+                            value={selectedQuestionCount}
+                            onChange={(event) => {
+                              const clamped = Math.min(20, Math.max(5, Number(event.target.value) || 5));
+                              setSelectedQuestionCount(clamped);
+                            }}
+                            className="w-12 bg-transparent text-right text-[0.875rem] font-normal tracking-[0.02em] text-[#4B4B4B]"
+                          />
                         </div>
                       </div>
                     </div>
-                    <div className="mt-4 rounded-[18px] border border-[#eef1f5] bg-[#fafbfd] p-4">
-                      <p className="text-[12px] font-semibold text-[#6a7383]">문항 수</p>
-                      <div className="mt-3 flex items-center gap-3">
-                        <input
-                          type="number"
-                          min={5}
-                          max={20}
-                          value={selectedQuestionCount}
-                          onChange={(event) => setSelectedQuestionCount(Math.max(5, Number(event.target.value) || 5))}
-                          className="w-30 rounded-[14px] border border-[#dfe3eb] px-4 py-3 text-[13px] outline-none focus:border-[#8aa2e8]"
-                        />
-                        <span className="text-[12px] text-[#6a7383]">최소 5문항, 최대 20문항</span>
-                      </div>
-                      <label className="mt-4 inline-flex cursor-pointer items-center gap-2 text-[12px] text-[#4f5664]">
-                        <input
-                          type="checkbox"
-                          checked={includeSelfIntroduction}
-                          onChange={(event) => setIncludeSelfIntroduction(event.target.checked)}
-                          className="sr-only"
-                        />
-                        <span
-                          aria-hidden="true"
-                          className={`inline-flex h-4 w-4 items-center justify-center rounded-sm border text-[11px] leading-none transition ${
-                            includeSelfIntroduction
-                              ? "border-[#171b24] bg-[#171b24] text-white"
-                              : "border-[#cfd6e4] bg-white text-transparent"
-                          }`}
+                    <label className="inline-flex cursor-pointer items-center gap-2 pt-1 text-[0.75rem] tracking-[0.02em] text-[#666666]">
+                      <input
+                        type="checkbox"
+                        checked={includeSelfIntroduction}
+                        onChange={(event) => setIncludeSelfIntroduction(event.target.checked)}
+                        className="sr-only"
+                      />
+                      <span
+                        aria-hidden="true"
+                        className={`inline-flex h-4 w-4 items-center justify-center rounded-sm border text-[11px] leading-none ${
+                          includeSelfIntroduction ? "border-[#575757] bg-[#575757] text-white" : "border-[#cfcfcf] bg-white text-transparent"
+                        }`}
+                      >
+                        ✓
+                      </span>
+                      첫 질문에 자기소개 문항 추가
+                    </label>
+                  </CategoryCard>
+
+                  <CategoryCard title="언어 선택" description="모의 면접은 영어로 진행하게 되면 질문과 답변, 피드백을 모두 영어로 작성하게 됩니다">
+                    <div className="flex flex-wrap gap-3">
+                      {INTERVIEW_LANGUAGE_OPTIONS.map((option) => (
+                        <SelectionPillButton
+                          key={option.value}
+                          active={selectedLanguage === option.value}
+                          onClick={() => setSelectedLanguage(option.value)}
+                          className="min-w-[7.125rem]"
+                          minHeightClass="min-h-[2.125rem]"
+                          innerClassName="px-5 text-[0.8125rem]"
                         >
-                          ✓
-                        </span>
-                        <span>첫 질문에 자기소개 문항 추가</span>
-                      </label>
-                      <p className="mt-2 text-[12px] text-[#7a8190]">
-                        체크하면 첫 질문으로 &quot;자기소개 부탁드리겠습니다.&quot;가 추가되며, 선택 문항 수에 1문항이 더해집니다.
-                      </p>
+                          {option.label}
+                        </SelectionPillButton>
+                      ))}
                     </div>
                   </CategoryCard>
 
-                  <CategoryCard title="면접 언어" description="영어 면접을 선택하면 질문, 답변, 피드백이 영어 기준으로 진행됩니다. 영어 세션에서는 답변도 영어로 작성해야 합니다.">
-                    <LanguageSelect value={selectedLanguage} onChange={setSelectedLanguage} />
-                    <p className="mt-3 text-[12px] text-[#7a8190]">
-                      현재 선택: {getInterviewLanguageLabel(selectedLanguage)}
-                    </p>
-                  </CategoryCard>
-
-                  <CategoryCard title="선택 요약" description="세션 상단에 그대로 표시되는 메타 정보입니다.">
+                  <CategoryCard title="선택 요약" description="모의 면접 진행 시 선택한 메타 정보를 상단에 요약하여 알려드립니다">
                     <div className="flex flex-wrap gap-2">
-                      {selectedJob ? <span className="rounded-full border border-[#d8dde7] bg-white px-3 py-1 text-[12px] text-[#4f5664]">{selectedJob.displayName || selectedJob.name}</span> : null}
-                      <span className="rounded-full border border-[#d8dde7] bg-white px-3 py-1 text-[12px] text-[#4f5664]">
-                        언어: {getInterviewLanguageLabel(selectedLanguage)}
-                      </span>
+                      {selectedBranch ? <SummaryChip>{selectedBranch.name}</SummaryChip> : null}
+                      {selectedJob ? <SummaryChip tone="accent">{selectedJob.displayName || selectedJob.name}</SummaryChip> : null}
                       {selectedQuestionSet ? (
-                        <span className="rounded-full border border-[#d8dde7] bg-[#f7f9fc] px-3 py-1 text-[12px] text-[#4f5664]">
-                          질문 세트: {selectedQuestionSet.title}
-                        </span>
+                        <SummaryChip>질문 세트: {selectedQuestionSet.title}</SummaryChip>
                       ) : selectedSkills.length ? selectedSkills.map((skill) => (
-                        <span key={`summary-skill-${skill.categoryId}`} className="rounded-full border border-[#d8dde7] bg-white px-3 py-1 text-[12px] text-[#4f5664]">
-                          {skill.displayName || skill.name}
-                        </span>
+                        <SummaryChip key={`summary-skill-${skill.categoryId}`}>{skill.displayName || skill.name}</SummaryChip>
                       )) : (
-                        <span className="rounded-full border border-[#d8dde7] bg-white px-3 py-1 text-[12px] text-[#4f5664]">
-                          기술 미선택
-                        </span>
+                        <SummaryChip>기술 미선택</SummaryChip>
                       )}
-                      <span className="rounded-full border border-[#d8dde7] bg-white px-3 py-1 text-[12px] text-[#4f5664]">
-                        문항 {totalInterviewQuestionCount}개{includeSelfIntroduction ? " (자기소개 포함)" : ""}
-                      </span>
-                      {includeSelfIntroduction ? (
-                        <span className="rounded-full border border-[#bfe3fb] bg-[#f3fbff] px-3 py-1 text-[12px] font-medium text-[#2b6cb0]">
-                          첫 질문: 자기소개
-                        </span>
-                      ) : null}
+                      <SummaryChip>문항 {totalInterviewQuestionCount}개</SummaryChip>
                       {DOCUMENT_TYPES.map((type) => {
                         const file = selectedFileObjects[type.key];
                         return (
-                          <span key={type.key} className="inline-flex items-center gap-1.5 rounded-full border border-[#d8dde7] bg-white px-3 py-1 text-[12px] text-[#4f5664]">
-                            <span>{file ? resolveDisplayFileName(file) : `${type.label} 미선택`}</span>
-                            {file?.ocrUsed ? <OcrInfoBadge compact /> : null}
-                          </span>
+                          <SummaryChip key={type.key} tone={file ? "accent" : "default"}>
+                            <span className="inline-flex items-center gap-1.5">
+                              <span>{file ? resolveDisplayFileName(file) : `${type.label} 미선택`}</span>
+                              {file?.ocrUsed ? <OcrInfoBadge compact /> : null}
+                            </span>
+                          </SummaryChip>
                         );
                       })}
                     </div>
-                    {pageErrorMessage ? <p className="mt-4 text-[12px] text-[#dc4b4b]">{pageErrorMessage}</p> : null}
-                    <div className="mt-6 flex items-center justify-between gap-3">
+                    <div className="pt-2">
+                      <button
+                        type="button"
+                        onClick={() => navigate("/content/files")}
+                        className="text-[0.75rem] font-medium tracking-[0.02em] text-[#757575] underline-offset-2 hover:underline"
+                      >
+                        이력서 및 자기소개서 업로드로 이동
+                      </button>
+                    </div>
+                    {pageErrorMessage ? <p className="text-[0.75rem] tracking-[0.02em] text-[#dc4b4b]">{pageErrorMessage}</p> : null}
+                    <div className="flex items-center justify-between gap-3 pt-6">
                       {startingInterview ? <InlineSpinner label="면접 세션과 질문을 생성하고 있습니다." /> : <span />}
-                      <button type="button" onClick={handleStartInterview} disabled={loadingPage || startingInterview} className="rounded-[14px] bg-[#171b24] px-4 py-2.5 text-[13px] font-semibold text-white disabled:opacity-60">
-                        {startingInterview ? "면접 생성 중..." : "면접 시작"}
+                      <button
+                        type="button"
+                        onClick={handleStartInterview}
+                        disabled={loadingPage || startingInterview}
+                        className={`rounded-full p-px transition ${
+                          loadingPage || startingInterview ? "bg-[#D6D6D6]" : GRADIENT_BORDER_CLASS
+                        }`}
+                      >
+                        <span className={`inline-flex min-h-[3rem] min-w-[8.625rem] items-center justify-center rounded-full bg-white px-6 text-[1rem] font-medium tracking-[0.02em] ${
+                          loadingPage || startingInterview ? "text-[#B1B1B1]" : "text-[#000000]"
+                        }`}>
+                          {startingInterview ? "면접 생성 중..." : "시작하기 →"}
+                        </span>
                       </button>
                     </div>
                   </CategoryCard>
