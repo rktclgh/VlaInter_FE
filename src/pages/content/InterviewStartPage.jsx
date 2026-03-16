@@ -626,7 +626,7 @@ export const InterviewStartPage = () => {
       setJobFilter(matched?.categoryId ? String(matched.categoryId) : "");
       setSelectedCategoryIds([]);
       setSkillQuery("");
-      setJobQuery(displayName);
+      setJobQuery("");
     } catch (error) {
       setPageErrorMessage(error?.message || "직무 생성에 실패했습니다.");
     } finally {
@@ -655,7 +655,7 @@ export const InterviewStartPage = () => {
       setSelectedCategoryIds([]);
       setJobQuery("");
       setSkillQuery("");
-      setBranchQuery(displayName);
+      setBranchQuery("");
     } catch (error) {
       setPageErrorMessage(error?.message || "계열 생성에 실패했습니다.");
     } finally {
