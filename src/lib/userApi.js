@@ -107,6 +107,112 @@ export async function changeMyPassword(currentPassword, newPassword) {
   });
 }
 
+export async function updateMyServiceMode(serviceMode) {
+  return apiRequest("/api/users/me/service-mode", {
+    method: "PATCH",
+    body: {
+      serviceMode,
+    },
+  });
+}
+
+export async function updateMyAcademicProfile({
+  universityName,
+  universityId,
+  departmentName,
+  departmentId,
+}) {
+  return apiRequest("/api/users/me/academic-profile", {
+    method: "PATCH",
+    body: {
+      universityName,
+      universityId,
+      departmentName,
+      departmentId,
+    },
+  });
+}
+
+export async function searchUniversities(keyword) {
+  const params = new URLSearchParams({
+    keyword: String(keyword || "").trim(),
+  });
+  return apiRequest(`/api/academics/universities/search?${params.toString()}`, {
+    method: "GET",
+  });
+}
+
+export async function searchDepartments(universityId, universityName, keyword) {
+  const params = new URLSearchParams({
+    universityName: String(universityName || "").trim(),
+    keyword: String(keyword || "").trim(),
+  });
+  if (Number.isFinite(Number(universityId))) {
+    params.set("universityId", String(universityId));
+  }
+  return apiRequest(`/api/academics/departments/search?${params.toString()}`, {
+    method: "GET",
+  });
+}
+
+export async function getMyStudentCourses() {
+  return apiRequest("/api/student/courses", {
+    method: "GET",
+  });
+}
+
+export async function createStudentCourse({ courseName, professorName, description }) {
+  return apiRequest("/api/student/courses", {
+    method: "POST",
+    body: {
+      courseName,
+      professorName,
+      description,
+    },
+  });
+}
+
+export async function getStudentCourseMaterials(courseId) {
+  return apiRequest(`/api/student/courses/${courseId}/materials`, {
+    method: "GET",
+  });
+}
+
+export async function uploadStudentCourseMaterial(courseId, file) {
+  const formData = new FormData();
+  formData.append("file", file);
+
+  const doUpload = () => fetch(`${API_BASE_URL}/api/student/courses/${courseId}/materials`, {
+    method: "POST",
+    credentials: "include",
+    body: formData,
+  });
+
+  let response = await doUpload();
+  if (response.status === 401) {
+    const refreshed = await refreshAuthSession();
+    if (refreshed) {
+      response = await doUpload();
+    }
+  }
+
+  const raw = await response.text();
+  let data = null;
+  if (raw) {
+    try {
+      data = JSON.parse(raw);
+    } catch {
+      data = null;
+    }
+  }
+
+  if (!response.ok) {
+    throw new Error(data?.message || "과목 자료 업로드에 실패했습니다.");
+  }
+
+  return data;
+}
+
 export async function updateMyGeminiApiKey(geminiApiKey) {
   return apiRequest("/api/users/me/gemini-api-key", {
     method: "PUT",

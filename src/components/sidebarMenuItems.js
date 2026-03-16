@@ -23,6 +23,15 @@ export const MAIN_MENU_SECTIONS = [
   },
 ];
 
+export const STUDENT_MENU_SECTIONS = [
+  {
+    title: "대학생 모드",
+    items: [
+      { key: "student_home", label: "과목 홈", path: "/content/student" },
+    ],
+  },
+];
+
 export const ADMIN_MENU_ITEMS = [
   { key: "admin_console", label: "관리자 콘솔", path: "/content/admin" },
 ];

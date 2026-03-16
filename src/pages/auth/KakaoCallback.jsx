@@ -84,7 +84,7 @@ export const KakaoCallback = () => {
         });
         sessionStorage.removeItem("kakao_client_id");
         sessionStorage.removeItem("kakao_redirect_uri");
-        navigate("/content/interview", { replace: true });
+        navigate("/content", { replace: true });
       } catch (error) {
         setAsyncErrorMessage(
           error.message ||

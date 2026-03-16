@@ -11,12 +11,16 @@ export const Sidebar = ({
   isAdmin = null,
   onLogout,
   variant = "default",
+  menuSectionsOverride = null,
 }) => {
   const resolvedIsAdmin = useAdminStatus(isAdmin);
   const hasProfileImage = typeof profileImageUrl === "string" && profileImageUrl.trim().length > 0;
   const isMockStart = variant !== "legacy";
 
-  const mainMenuSections = useMemo(() => getMainMenuSections({ isAdmin: resolvedIsAdmin }), [resolvedIsAdmin]);
+  const mainMenuSections = useMemo(
+    () => menuSectionsOverride || getMainMenuSections({ isAdmin: resolvedIsAdmin }),
+    [menuSectionsOverride, resolvedIsAdmin]
+  );
 
   const renderMenuButton = (item) => {
     const active = item.key === activeKey;

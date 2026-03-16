@@ -17,13 +17,17 @@ export const MobileSidebarDrawer = ({
   onClickCharge,
   interactionDisabled = false,
   variant = "default",
+  menuSectionsOverride = null,
 }) => {
   const resolvedIsAdmin = useAdminStatus(isAdmin);
   const hasProfileImage = typeof profileImageUrl === "string" && profileImageUrl.trim().length > 0;
   const isMockStart = variant !== "legacy";
   const [showReportModal, setShowReportModal] = useState(false);
 
-  const mainMenuSections = useMemo(() => getMainMenuSections({ isAdmin: resolvedIsAdmin }), [resolvedIsAdmin]);
+  const mainMenuSections = useMemo(
+    () => menuSectionsOverride || getMainMenuSections({ isAdmin: resolvedIsAdmin }),
+    [menuSectionsOverride, resolvedIsAdmin]
+  );
 
   const renderMenuButton = (item) => {
     const active = item.key === activeKey;
