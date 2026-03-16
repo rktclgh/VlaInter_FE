@@ -12,10 +12,12 @@ import { consumePointChargeSuccessResult } from "../../lib/pointChargeFlow";
 import { extractProfile, formatPoint, parsePoint } from "../../lib/profileUtils";
 import { STUDENT_MENU_SECTIONS } from "../../components/sidebarMenuItems";
 import {
+  createStudentCourseSession,
   createStudentCourse,
   getMyProfile,
   getMyProfileImageUrl,
   getStudentCourseMaterials,
+  getStudentCourseSessions,
   getMyStudentCourses,
   uploadStudentCourseMaterial,
   updateMyAcademicProfile,
@@ -122,6 +124,11 @@ export const StudentHomePage = () => {
   const [materialUploadingByCourse, setMaterialUploadingByCourse] = useState({});
   const [materialMessageByCourse, setMaterialMessageByCourse] = useState({});
   const [materialErrorByCourse, setMaterialErrorByCourse] = useState({});
+  const [sessionsByCourse, setSessionsByCourse] = useState({});
+  const [sessionLoadingByCourse, setSessionLoadingByCourse] = useState({});
+  const [sessionCreatingByCourse, setSessionCreatingByCourse] = useState({});
+  const [sessionMessageByCourse, setSessionMessageByCourse] = useState({});
+  const [sessionErrorByCourse, setSessionErrorByCourse] = useState({});
 
   useEffect(() => {
     const charged = consumePointChargeSuccessResult();
@@ -130,19 +137,6 @@ export const StudentHomePage = () => {
     setUserPoint(nextPoint);
     setShowPointChargeSuccessModal(true);
   }, []);
-
-  const loadCourses = async () => {
-    setCoursesLoading(true);
-    setCourseErrorMessage("");
-    try {
-      const payload = await getMyStudentCourses();
-      setCourses(Array.isArray(payload) ? payload : []);
-    } catch (error) {
-      setCourseErrorMessage(error?.message || "과목 목록을 불러오지 못했습니다.");
-    } finally {
-      setCoursesLoading(false);
-    }
-  };
 
   const loadMaterialsForCourses = async (courseItems) => {
     const nextCourses = Array.isArray(courseItems) ? courseItems : [];
@@ -165,6 +159,30 @@ export const StudentHomePage = () => {
       setCourseErrorMessage(error?.message || "과목 자료 목록을 불러오지 못했습니다.");
     } finally {
       setMaterialLoadingByCourse({});
+    }
+  };
+
+  const loadSessionsForCourses = async (courseItems) => {
+    const nextCourses = Array.isArray(courseItems) ? courseItems : [];
+    if (nextCourses.length === 0) {
+      setSessionsByCourse({});
+      setSessionLoadingByCourse({});
+      return;
+    }
+    const loadingState = Object.fromEntries(nextCourses.map((course) => [course.courseId, true]));
+    setSessionLoadingByCourse(loadingState);
+    try {
+      const responses = await Promise.all(
+        nextCourses.map(async (course) => {
+          const items = await getStudentCourseSessions(course.courseId);
+          return [course.courseId, Array.isArray(items) ? items : []];
+        })
+      );
+      setSessionsByCourse(Object.fromEntries(responses));
+    } catch (error) {
+      setCourseErrorMessage(error?.message || "모의고사 세션 목록을 불러오지 못했습니다.");
+    } finally {
+      setSessionLoadingByCourse({});
     }
   };
 
@@ -192,6 +210,7 @@ export const StudentHomePage = () => {
             if (!cancelled) {
               setCourses(nextCourses);
               await loadMaterialsForCourses(nextCourses);
+              await loadSessionsForCourses(nextCourses);
             }
           } catch (error) {
             if (!cancelled) setCourseErrorMessage(error?.message || "과목 목록을 불러오지 못했습니다.");
@@ -242,7 +261,11 @@ export const StudentHomePage = () => {
       const hasProfile = hasAcademicProfile(nextProfile);
       setModalOpen(!hasProfile);
       if (hasProfile) {
-        await loadCourses();
+        const refreshedCourses = await getMyStudentCourses();
+        const nextCourses = Array.isArray(refreshedCourses) ? refreshedCourses : [];
+        setCourses(nextCourses);
+        await loadMaterialsForCourses(nextCourses);
+        await loadSessionsForCourses(nextCourses);
       } else {
         setCourses([]);
       }
@@ -266,6 +289,7 @@ export const StudentHomePage = () => {
       });
       setCourses((prev) => [payload, ...prev]);
       setMaterialsByCourse((prev) => ({ ...prev, [payload.courseId]: [] }));
+      setSessionsByCourse((prev) => ({ ...prev, [payload.courseId]: [] }));
       setCourseName("");
       setProfessorName("");
       setCourseDescription("");
@@ -301,6 +325,30 @@ export const StudentHomePage = () => {
       }));
     } finally {
       setMaterialUploadingByCourse((prev) => ({ ...prev, [courseId]: false }));
+    }
+  };
+
+  const handleCreateCourseSession = async (courseId, questionCount) => {
+    setSessionCreatingByCourse((prev) => ({ ...prev, [courseId]: true }));
+    setSessionErrorByCourse((prev) => ({ ...prev, [courseId]: "" }));
+    setSessionMessageByCourse((prev) => ({ ...prev, [courseId]: "" }));
+    try {
+      const created = await createStudentCourseSession(courseId, questionCount);
+      setSessionsByCourse((prev) => ({
+        ...prev,
+        [courseId]: [created, ...(prev[courseId] || [])],
+      }));
+      setSessionMessageByCourse((prev) => ({
+        ...prev,
+        [courseId]: `${questionCount}문항 모의고사가 생성되었습니다.`,
+      }));
+    } catch (error) {
+      setSessionErrorByCourse((prev) => ({
+        ...prev,
+        [courseId]: error?.message || "모의고사 세션 생성에 실패했습니다.",
+      }));
+    } finally {
+      setSessionCreatingByCourse((prev) => ({ ...prev, [courseId]: false }));
     }
   };
 
@@ -540,6 +588,72 @@ export const StudentHomePage = () => {
                               <p className="mt-1 text-[11px] text-[#7c8497]">
                                 업로드: {new Date(material.createdAt).toLocaleString("ko-KR")}
                               </p>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                    <div className="mt-4 rounded-[14px] border border-[#edf1f6] bg-[#fbfcfe] p-3">
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                          <p className="text-[13px] font-semibold text-[#1f2937]">모의고사 세션</p>
+                          <p className="mt-1 text-[11px] text-[#6b7280]">
+                            자료 기반으로 즉시 연습 세션을 만들 수 있습니다.
+                          </p>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          {[5, 10, 15].map((count) => (
+                            <button
+                              key={`student-session-create-${course.courseId}-${count}`}
+                              type="button"
+                              disabled={Boolean(sessionCreatingByCourse[course.courseId])}
+                              onClick={() => void handleCreateCourseSession(course.courseId, count)}
+                              className="rounded-[10px] border border-[#d1d5db] bg-white px-3 py-2 text-[11px] font-semibold text-[#374151] disabled:cursor-not-allowed disabled:opacity-55"
+                            >
+                              {count}문항
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      {sessionMessageByCourse[course.courseId] ? (
+                        <p className="mt-2 text-[11px] text-[#1f8f55]">{sessionMessageByCourse[course.courseId]}</p>
+                      ) : null}
+                      {sessionErrorByCourse[course.courseId] ? (
+                        <p className="mt-2 text-[11px] text-[#d84a4a]">{sessionErrorByCourse[course.courseId]}</p>
+                      ) : null}
+                      <div className="mt-3 space-y-2">
+                        {sessionLoadingByCourse[course.courseId] ? (
+                          <p className="text-[12px] text-[#7c8497]">세션 목록을 불러오는 중입니다...</p>
+                        ) : (sessionsByCourse[course.courseId] || []).length === 0 ? (
+                          <p className="text-[12px] text-[#7c8497]">아직 생성된 모의고사 세션이 없습니다.</p>
+                        ) : (
+                          (sessionsByCourse[course.courseId] || []).slice(0, 3).map((session) => (
+                            <div key={session.sessionId} className="rounded-[10px] border border-[#e5e7eb] bg-white px-3 py-3">
+                              <div className="flex items-start justify-between gap-3">
+                                <div>
+                                  <p className="text-[12px] font-semibold text-[#111827]">{session.title}</p>
+                                  <p className="mt-1 text-[11px] text-[#7c8497]">
+                                    {session.questionCount}문항 · 자료 {session.sourceMaterialCount}개 · {new Date(session.createdAt).toLocaleString("ko-KR")}
+                                  </p>
+                                </div>
+                                <span className="rounded-full bg-[#f3f4f6] px-2.5 py-1 text-[10px] font-semibold text-[#4b5563]">
+                                  {session.status}
+                                </span>
+                              </div>
+                              {Array.isArray(session.previewQuestions) && session.previewQuestions.length > 0 ? (
+                                <ul className="mt-2 space-y-1 text-[11px] leading-[1.6] text-[#4b5563]">
+                                  {session.previewQuestions.map((question, index) => (
+                                    <li key={`${session.sessionId}-preview-${index}`}>• {question}</li>
+                                  ))}
+                                </ul>
+                              ) : null}
+                              <button
+                                type="button"
+                                onClick={() => navigate(`/content/student/sessions/${session.sessionId}`)}
+                                className="mt-3 rounded-[10px] border border-[#d1d5db] bg-white px-3 py-2 text-[11px] font-semibold text-[#374151]"
+                              >
+                                세션 풀어보기
+                              </button>
                             </div>
                           ))
                         )}

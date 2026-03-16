@@ -213,6 +213,36 @@ export async function uploadStudentCourseMaterial(courseId, file) {
   return data;
 }
 
+export async function getStudentCourseSessions(courseId) {
+  return apiRequest(`/api/student/courses/${courseId}/sessions`, {
+    method: "GET",
+  });
+}
+
+export async function createStudentCourseSession(courseId, questionCount) {
+  return apiRequest(`/api/student/courses/${courseId}/sessions`, {
+    method: "POST",
+    body: {
+      questionCount,
+    },
+  });
+}
+
+export async function getStudentExamSessionDetail(sessionId) {
+  return apiRequest(`/api/student/courses/sessions/${sessionId}`, {
+    method: "GET",
+  });
+}
+
+export async function submitStudentExamAnswers(sessionId, answers) {
+  return apiRequest(`/api/student/courses/sessions/${sessionId}/submit`, {
+    method: "POST",
+    body: {
+      answers,
+    },
+  });
+}
+
 export async function updateMyGeminiApiKey(geminiApiKey) {
   return apiRequest("/api/users/me/gemini-api-key", {
     method: "PUT",
