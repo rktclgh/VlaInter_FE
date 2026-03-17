@@ -10,16 +10,13 @@ import tempProfileImage from "../../assets/icon/temp.png";
 import { logout } from "../../lib/authApi";
 import { consumePointChargeSuccessResult } from "../../lib/pointChargeFlow";
 import { extractProfile, formatPoint, parsePoint } from "../../lib/profileUtils";
-import { STUDENT_MENU_SECTIONS } from "../../components/sidebarMenuItems";
+import { getStudentMyMenuItems, getStudentSidebarActiveKey, getStudentSidebarSections } from "../../lib/studentNavigation";
 import {
-  createStudentCourseSession,
   createStudentCourse,
+  deleteStudentCourse,
   getMyProfile,
   getMyProfileImageUrl,
-  getStudentCourseMaterials,
-  getStudentCourseSessions,
   getMyStudentCourses,
-  uploadStudentCourseMaterial,
   updateMyAcademicProfile,
   updateMyServiceMode,
 } from "../../lib/userApi";
@@ -91,6 +88,54 @@ const StudentProfileModal = ({
   );
 };
 
+const DeleteCourseConfirmModal = ({
+  open,
+  courseName,
+  pending,
+  onCancel,
+  onConfirm,
+}) => {
+  if (!open) return null;
+  return (
+    <div className="fixed inset-0 z-[130] flex items-center justify-center bg-black/45 px-4">
+      <div
+        role="dialog"
+        aria-modal="true"
+        className="w-full max-w-[420px] rounded-[24px] border border-[#dfe3ee] bg-white p-6 shadow-[0_24px_80px_rgba(15,23,42,0.22)]"
+      >
+        <h2 className="text-[22px] font-semibold text-[#111827]">과목 삭제</h2>
+        <p className="mt-3 text-[14px] leading-[1.8] text-[#5b6475]">
+          정말 과목을 삭제하시겠습니까?
+        </p>
+        <p className="mt-2 rounded-[12px] bg-[#f8fafc] px-4 py-3 text-[14px] font-medium text-[#111827]">
+          {courseName || "선택한 과목"}
+        </p>
+        <p className="mt-3 text-[12px] leading-[1.7] text-[#8a93a5]">
+          과목과 함께 업로드한 자료, 모의고사 세션, 오답노트 기록까지 모두 삭제됩니다.
+        </p>
+        <div className="mt-6 flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={pending}
+            className="rounded-[12px] border border-[#d1d5db] px-4 py-2.5 text-[13px] font-semibold text-[#4b5563] disabled:opacity-60"
+          >
+            취소
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            disabled={pending}
+            className="rounded-[12px] bg-[#dc2626] px-4 py-2.5 text-[13px] font-semibold text-white disabled:opacity-60"
+          >
+            {pending ? "삭제 중..." : "삭제"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 export const StudentHomePage = () => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -119,16 +164,8 @@ export const StudentHomePage = () => {
   const [courseSubmitting, setCourseSubmitting] = useState(false);
   const [courseErrorMessage, setCourseErrorMessage] = useState("");
   const [courseMessage, setCourseMessage] = useState("");
-  const [materialsByCourse, setMaterialsByCourse] = useState({});
-  const [materialLoadingByCourse, setMaterialLoadingByCourse] = useState({});
-  const [materialUploadingByCourse, setMaterialUploadingByCourse] = useState({});
-  const [materialMessageByCourse, setMaterialMessageByCourse] = useState({});
-  const [materialErrorByCourse, setMaterialErrorByCourse] = useState({});
-  const [sessionsByCourse, setSessionsByCourse] = useState({});
-  const [sessionLoadingByCourse, setSessionLoadingByCourse] = useState({});
-  const [sessionCreatingByCourse, setSessionCreatingByCourse] = useState({});
-  const [sessionMessageByCourse, setSessionMessageByCourse] = useState({});
-  const [sessionErrorByCourse, setSessionErrorByCourse] = useState({});
+  const [deleteTargetCourse, setDeleteTargetCourse] = useState(null);
+  const [courseDeleting, setCourseDeleting] = useState(false);
 
   useEffect(() => {
     const charged = consumePointChargeSuccessResult();
@@ -137,54 +174,6 @@ export const StudentHomePage = () => {
     setUserPoint(nextPoint);
     setShowPointChargeSuccessModal(true);
   }, []);
-
-  const loadMaterialsForCourses = async (courseItems) => {
-    const nextCourses = Array.isArray(courseItems) ? courseItems : [];
-    if (nextCourses.length === 0) {
-      setMaterialsByCourse({});
-      setMaterialLoadingByCourse({});
-      return;
-    }
-    const loadingState = Object.fromEntries(nextCourses.map((course) => [course.courseId, true]));
-    setMaterialLoadingByCourse(loadingState);
-    try {
-      const responses = await Promise.all(
-        nextCourses.map(async (course) => {
-          const items = await getStudentCourseMaterials(course.courseId);
-          return [course.courseId, Array.isArray(items) ? items : []];
-        })
-      );
-      setMaterialsByCourse(Object.fromEntries(responses));
-    } catch (error) {
-      setCourseErrorMessage(error?.message || "과목 자료 목록을 불러오지 못했습니다.");
-    } finally {
-      setMaterialLoadingByCourse({});
-    }
-  };
-
-  const loadSessionsForCourses = async (courseItems) => {
-    const nextCourses = Array.isArray(courseItems) ? courseItems : [];
-    if (nextCourses.length === 0) {
-      setSessionsByCourse({});
-      setSessionLoadingByCourse({});
-      return;
-    }
-    const loadingState = Object.fromEntries(nextCourses.map((course) => [course.courseId, true]));
-    setSessionLoadingByCourse(loadingState);
-    try {
-      const responses = await Promise.all(
-        nextCourses.map(async (course) => {
-          const items = await getStudentCourseSessions(course.courseId);
-          return [course.courseId, Array.isArray(items) ? items : []];
-        })
-      );
-      setSessionsByCourse(Object.fromEntries(responses));
-    } catch (error) {
-      setCourseErrorMessage(error?.message || "모의고사 세션 목록을 불러오지 못했습니다.");
-    } finally {
-      setSessionLoadingByCourse({});
-    }
-  };
 
   useEffect(() => {
     let cancelled = false;
@@ -209,8 +198,6 @@ export const StudentHomePage = () => {
             const nextCourses = Array.isArray(coursesPayload) ? coursesPayload : [];
             if (!cancelled) {
               setCourses(nextCourses);
-              await loadMaterialsForCourses(nextCourses);
-              await loadSessionsForCourses(nextCourses);
             }
           } catch (error) {
             if (!cancelled) setCourseErrorMessage(error?.message || "과목 목록을 불러오지 못했습니다.");
@@ -264,8 +251,6 @@ export const StudentHomePage = () => {
         const refreshedCourses = await getMyStudentCourses();
         const nextCourses = Array.isArray(refreshedCourses) ? refreshedCourses : [];
         setCourses(nextCourses);
-        await loadMaterialsForCourses(nextCourses);
-        await loadSessionsForCourses(nextCourses);
       } else {
         setCourses([]);
       }
@@ -288,8 +273,6 @@ export const StudentHomePage = () => {
         description: courseDescription,
       });
       setCourses((prev) => [payload, ...prev]);
-      setMaterialsByCourse((prev) => ({ ...prev, [payload.courseId]: [] }));
-      setSessionsByCourse((prev) => ({ ...prev, [payload.courseId]: [] }));
       setCourseName("");
       setProfessorName("");
       setCourseDescription("");
@@ -301,54 +284,21 @@ export const StudentHomePage = () => {
     }
   };
 
-  const handleUploadCourseMaterial = async (courseId, file) => {
-    if (!file) return;
-    setMaterialUploadingByCourse((prev) => ({ ...prev, [courseId]: true }));
-    setMaterialErrorByCourse((prev) => ({ ...prev, [courseId]: "" }));
-    setMaterialMessageByCourse((prev) => ({ ...prev, [courseId]: "" }));
+  const handleDeleteCourse = async () => {
+    if (!deleteTargetCourse || courseDeleting) return;
+    const targetCourseId = Number(deleteTargetCourse.courseId);
+    setCourseDeleting(true);
+    setCourseErrorMessage("");
+    setCourseMessage("");
     try {
-      const uploaded = await uploadStudentCourseMaterial(courseId, file);
-      setMaterialsByCourse((prev) => ({
-        ...prev,
-        [courseId]: [uploaded, ...(prev[courseId] || [])],
-      }));
-      setCourses((prev) => prev.map((course) => (
-        course.courseId === courseId
-          ? { ...course, materialCount: Number(course.materialCount || 0) + 1 }
-          : course
-      )));
-      setMaterialMessageByCourse((prev) => ({ ...prev, [courseId]: "자료가 업로드되었습니다." }));
+      await deleteStudentCourse(targetCourseId);
+      setCourses((prev) => prev.filter((course) => course.courseId !== targetCourseId));
+      setCourseMessage(`과목 "${deleteTargetCourse.courseName}"을 삭제했습니다.`);
+      setDeleteTargetCourse(null);
     } catch (error) {
-      setMaterialErrorByCourse((prev) => ({
-        ...prev,
-        [courseId]: error?.message || "과목 자료 업로드에 실패했습니다.",
-      }));
+      setCourseErrorMessage(error?.message || "과목 삭제에 실패했습니다.");
     } finally {
-      setMaterialUploadingByCourse((prev) => ({ ...prev, [courseId]: false }));
-    }
-  };
-
-  const handleCreateCourseSession = async (courseId, questionCount) => {
-    setSessionCreatingByCourse((prev) => ({ ...prev, [courseId]: true }));
-    setSessionErrorByCourse((prev) => ({ ...prev, [courseId]: "" }));
-    setSessionMessageByCourse((prev) => ({ ...prev, [courseId]: "" }));
-    try {
-      const created = await createStudentCourseSession(courseId, questionCount);
-      setSessionsByCourse((prev) => ({
-        ...prev,
-        [courseId]: [created, ...(prev[courseId] || [])],
-      }));
-      setSessionMessageByCourse((prev) => ({
-        ...prev,
-        [courseId]: `${questionCount}문항 모의고사가 생성되었습니다.`,
-      }));
-    } catch (error) {
-      setSessionErrorByCourse((prev) => ({
-        ...prev,
-        [courseId]: error?.message || "모의고사 세션 생성에 실패했습니다.",
-      }));
-    } finally {
-      setSessionCreatingByCourse((prev) => ({ ...prev, [courseId]: false }));
+      setCourseDeleting(false);
     }
   };
 
@@ -383,10 +333,9 @@ export const StudentHomePage = () => {
   };
 
   const pointSummaryText = useMemo(() => formatPoint(userPoint), [userPoint]);
-  const sidebarActiveKey = useMemo(() => {
-    if (location.pathname.startsWith("/content/student")) return "student_home";
-    return "student_home";
-  }, [location.pathname]);
+  const studentMenuSections = useMemo(() => getStudentSidebarSections(courses), [courses]);
+  const studentMyMenuItems = useMemo(() => getStudentMyMenuItems(), []);
+  const sidebarActiveKey = useMemo(() => getStudentSidebarActiveKey(location.pathname), [location.pathname]);
 
   if (loading) {
     return (
@@ -418,7 +367,8 @@ export const StudentHomePage = () => {
             setIsMobileMenuOpen(false);
             requestLogout();
           }}
-          menuSectionsOverride={STUDENT_MENU_SECTIONS}
+          menuSectionsOverride={studentMenuSections}
+          myMenuItemsOverride={studentMyMenuItems}
         />
 
         <div className="flex min-h-[calc(100vh-3.75rem)]">
@@ -429,7 +379,8 @@ export const StudentHomePage = () => {
               userName={userName}
               profileImageUrl={profileImageUrl}
               onLogout={requestLogout}
-              menuSectionsOverride={STUDENT_MENU_SECTIONS}
+              menuSectionsOverride={studentMenuSections}
+              myMenuItemsOverride={studentMyMenuItems}
             />
           </div>
 
@@ -518,7 +469,7 @@ export const StudentHomePage = () => {
             <div className="flex items-center justify-between gap-3">
               <div>
                 <h2 className="text-[18px] font-semibold text-[#111827]">내 과목</h2>
-                <p className="mt-1 text-[13px] text-[#5b6475]">등록된 과목별로 자료 업로드와 시험문제 생성을 이어 붙일 예정입니다.</p>
+                <p className="mt-1 text-[13px] text-[#5b6475]">카드를 눌러 과목 상세로 이동하면 자료, 분석, 모의고사, 오답노트를 관리할 수 있습니다.</p>
               </div>
               <span className="rounded-full bg-white px-3 py-1 text-[12px] font-medium text-[#4b5563]">
                 {courses.length}개
@@ -539,129 +490,37 @@ export const StudentHomePage = () => {
                   아직 등록된 과목이 없습니다. 위에서 첫 과목을 먼저 만들어 주세요.
                 </div>
               ) : (
-                courses.map((course) => (
-                  <article key={course.courseId} className="rounded-[16px] border border-[#e2e8f0] bg-white p-4">
-                    <p className="text-[12px] font-medium text-[#7c8497]">{course.universityName} · {course.departmentName}</p>
-                    <h3 className="mt-2 text-[18px] font-semibold text-[#111827]">{course.courseName}</h3>
-                    <p className="mt-1 text-[13px] text-[#5b6475]">{course.professorName || "교수명 미입력"}</p>
-                    <p className="mt-3 min-h-[44px] text-[13px] leading-[1.7] text-[#4b5563]">
-                      {course.description || "설명이 아직 없습니다."}
-                    </p>
-                    <div className="mt-4 rounded-[14px] border border-[#edf1f6] bg-[#fbfcfe] p-3">
-                      <div className="flex items-center justify-between gap-3">
-                        <div>
-                          <p className="text-[13px] font-semibold text-[#1f2937]">과목 자료</p>
-                          <p className="mt-1 text-[11px] text-[#6b7280]">
-                            PDF, DOCX, PPTX만 업로드할 수 있습니다. 현재 {Number(course.materialCount || 0)}개
-                          </p>
-                        </div>
-                        <label className={`rounded-[10px] px-3 py-2 text-[12px] font-semibold ${materialUploadingByCourse[course.courseId] ? "bg-[#d1d5db] text-white" : "bg-[#111827] text-white"} cursor-pointer`}>
-                          {materialUploadingByCourse[course.courseId] ? "업로드 중..." : "자료 업로드"}
-                          <input
-                            type="file"
-                            accept=".pdf,.docx,.pptx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.presentationml.presentation"
-                            className="hidden"
-                            disabled={Boolean(materialUploadingByCourse[course.courseId])}
-                            onChange={(event) => {
-                              const file = event.target.files?.[0];
-                              void handleUploadCourseMaterial(course.courseId, file);
-                              event.target.value = "";
-                            }}
-                          />
-                        </label>
-                      </div>
-                      {materialMessageByCourse[course.courseId] ? (
-                        <p className="mt-2 text-[11px] text-[#1f8f55]">{materialMessageByCourse[course.courseId]}</p>
-                      ) : null}
-                      {materialErrorByCourse[course.courseId] ? (
-                        <p className="mt-2 text-[11px] text-[#d84a4a]">{materialErrorByCourse[course.courseId]}</p>
-                      ) : null}
-                      <div className="mt-3 space-y-2">
-                        {materialLoadingByCourse[course.courseId] ? (
-                          <p className="text-[12px] text-[#7c8497]">자료 목록을 불러오는 중입니다...</p>
-                        ) : (materialsByCourse[course.courseId] || []).length === 0 ? (
-                          <p className="text-[12px] text-[#7c8497]">아직 업로드된 자료가 없습니다.</p>
-                        ) : (
-                          (materialsByCourse[course.courseId] || []).slice(0, 4).map((material) => (
-                            <div key={material.materialId} className="rounded-[10px] border border-[#e5e7eb] bg-white px-3 py-2">
-                              <p className="text-[12px] font-medium text-[#111827]">{material.fileName}</p>
-                              <p className="mt-1 text-[11px] text-[#7c8497]">
-                                업로드: {new Date(material.createdAt).toLocaleString("ko-KR")}
-                              </p>
-                            </div>
-                          ))
-                        )}
-                      </div>
-                    </div>
-                    <div className="mt-4 rounded-[14px] border border-[#edf1f6] bg-[#fbfcfe] p-3">
-                      <div className="flex flex-wrap items-center justify-between gap-3">
-                        <div>
-                          <p className="text-[13px] font-semibold text-[#1f2937]">모의고사 세션</p>
-                          <p className="mt-1 text-[11px] text-[#6b7280]">
-                            자료 기반으로 즉시 연습 세션을 만들 수 있습니다.
-                          </p>
-                        </div>
-                        <div className="flex flex-wrap gap-2">
-                          {[5, 10, 15].map((count) => (
-                            <button
-                              key={`student-session-create-${course.courseId}-${count}`}
-                              type="button"
-                              disabled={Boolean(sessionCreatingByCourse[course.courseId])}
-                              onClick={() => void handleCreateCourseSession(course.courseId, count)}
-                              className="rounded-[10px] border border-[#d1d5db] bg-white px-3 py-2 text-[11px] font-semibold text-[#374151] disabled:cursor-not-allowed disabled:opacity-55"
-                            >
-                              {count}문항
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                      {sessionMessageByCourse[course.courseId] ? (
-                        <p className="mt-2 text-[11px] text-[#1f8f55]">{sessionMessageByCourse[course.courseId]}</p>
-                      ) : null}
-                      {sessionErrorByCourse[course.courseId] ? (
-                        <p className="mt-2 text-[11px] text-[#d84a4a]">{sessionErrorByCourse[course.courseId]}</p>
-                      ) : null}
-                      <div className="mt-3 space-y-2">
-                        {sessionLoadingByCourse[course.courseId] ? (
-                          <p className="text-[12px] text-[#7c8497]">세션 목록을 불러오는 중입니다...</p>
-                        ) : (sessionsByCourse[course.courseId] || []).length === 0 ? (
-                          <p className="text-[12px] text-[#7c8497]">아직 생성된 모의고사 세션이 없습니다.</p>
-                        ) : (
-                          (sessionsByCourse[course.courseId] || []).slice(0, 3).map((session) => (
-                            <div key={session.sessionId} className="rounded-[10px] border border-[#e5e7eb] bg-white px-3 py-3">
-                              <div className="flex items-start justify-between gap-3">
-                                <div>
-                                  <p className="text-[12px] font-semibold text-[#111827]">{session.title}</p>
-                                  <p className="mt-1 text-[11px] text-[#7c8497]">
-                                    {session.questionCount}문항 · 자료 {session.sourceMaterialCount}개 · {new Date(session.createdAt).toLocaleString("ko-KR")}
-                                  </p>
-                                </div>
-                                <span className="rounded-full bg-[#f3f4f6] px-2.5 py-1 text-[10px] font-semibold text-[#4b5563]">
-                                  {session.status}
-                                </span>
-                              </div>
-                              {Array.isArray(session.previewQuestions) && session.previewQuestions.length > 0 ? (
-                                <ul className="mt-2 space-y-1 text-[11px] leading-[1.6] text-[#4b5563]">
-                                  {session.previewQuestions.map((question, index) => (
-                                    <li key={`${session.sessionId}-preview-${index}`}>• {question}</li>
-                                  ))}
-                                </ul>
-                              ) : null}
-                              <button
-                                type="button"
-                                onClick={() => navigate(`/content/student/sessions/${session.sessionId}`)}
-                                className="mt-3 rounded-[10px] border border-[#d1d5db] bg-white px-3 py-2 text-[11px] font-semibold text-[#374151]"
-                              >
-                                세션 풀어보기
-                              </button>
-                            </div>
-                          ))
-                        )}
-                      </div>
-                    </div>
-                    <p className="mt-3 text-[11px] text-[#9ca3af]">최근 갱신: {new Date(course.updatedAt).toLocaleString("ko-KR")}</p>
-                  </article>
-                ))
+                courses.map((course) => {
+                  return (
+                    <article
+                      key={course.courseId}
+                      className="relative rounded-[16px] border border-[#e2e8f0] bg-white p-5 transition hover:border-[#cfd6e4] hover:shadow-[0_16px_36px_rgba(15,23,42,0.08)]"
+                    >
+                      <button
+                        type="button"
+                        onClick={() => setDeleteTargetCourse(course)}
+                        aria-label={`${course.courseName} 삭제`}
+                        className="absolute right-4 top-4 inline-flex h-8 w-8 items-center justify-center rounded-full border border-[#fecaca] bg-[#fff5f5] text-[18px] font-semibold leading-none text-[#dc2626]"
+                      >
+                        ×
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => navigate(`/content/student/courses/${course.courseId}`)}
+                        className="block w-full text-left"
+                      >
+                        <p className="text-[12px] font-medium text-[#7c8497]">대학교</p>
+                        <p className="mt-1 text-[17px] font-semibold text-[#111827]">{course.universityName}</p>
+                        <p className="mt-4 text-[12px] font-medium text-[#7c8497]">학과</p>
+                        <p className="mt-1 text-[15px] font-medium text-[#1f2937]">{course.departmentName}</p>
+                        <p className="mt-4 text-[12px] font-medium text-[#7c8497]">과목명</p>
+                        <h3 className="mt-1 text-[22px] font-semibold text-[#111827]">{course.courseName}</h3>
+                        <p className="mt-4 text-[12px] font-medium text-[#7c8497]">교수명</p>
+                        <p className="mt-1 text-[15px] text-[#4b5563]">{course.professorName || "교수명 미입력"}</p>
+                      </button>
+                    </article>
+                  );
+                })
               )}
             </div>
           </section>
@@ -702,6 +561,16 @@ export const StudentHomePage = () => {
         onSubmit={handleSaveAcademicProfile}
         pending={savingAcademicProfile}
         errorMessage={academicProfileError}
+      />
+      <DeleteCourseConfirmModal
+        open={Boolean(deleteTargetCourse)}
+        courseName={deleteTargetCourse?.courseName}
+        pending={courseDeleting}
+        onCancel={() => {
+          if (courseDeleting) return;
+          setDeleteTargetCourse(null);
+        }}
+        onConfirm={() => void handleDeleteCourse()}
       />
       {showPointChargeModal ? (
         <PointChargeModal

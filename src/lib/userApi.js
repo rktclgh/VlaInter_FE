@@ -161,6 +161,16 @@ export async function getMyStudentCourses() {
   });
 }
 
+export async function getStudentCourse(courseId) {
+  const courses = await getMyStudentCourses();
+  const normalizedCourses = Array.isArray(courses) ? courses : [];
+  const matchedCourse = normalizedCourses.find((course) => String(course?.courseId) === String(courseId));
+  if (!matchedCourse) {
+    throw new Error("과목을 찾을 수 없습니다.");
+  }
+  return matchedCourse;
+}
+
 export async function createStudentCourse({ courseName, professorName, description }) {
   return apiRequest("/api/student/courses", {
     method: "POST",
@@ -172,15 +182,22 @@ export async function createStudentCourse({ courseName, professorName, descripti
   });
 }
 
+export async function deleteStudentCourse(courseId) {
+  return apiRequest(`/api/student/courses/${courseId}`, {
+    method: "DELETE",
+  });
+}
+
 export async function getStudentCourseMaterials(courseId) {
   return apiRequest(`/api/student/courses/${courseId}/materials`, {
     method: "GET",
   });
 }
 
-export async function uploadStudentCourseMaterial(courseId, file) {
+export async function uploadStudentCourseMaterial(courseId, file, materialKind = "LECTURE_MATERIAL") {
   const formData = new FormData();
   formData.append("file", file);
+  formData.append("materialKind", materialKind);
 
   const doUpload = () => fetch(`${API_BASE_URL}/api/student/courses/${courseId}/materials`, {
     method: "POST",
@@ -213,17 +230,61 @@ export async function uploadStudentCourseMaterial(courseId, file) {
   return data;
 }
 
+export async function deleteStudentCourseMaterial(courseId, materialId) {
+  return apiRequest(`/api/student/courses/${courseId}/materials/${materialId}`, {
+    method: "DELETE",
+  });
+}
+
+export async function getStudentCourseMaterialDownloadUrl(courseId, materialId) {
+  return apiRequest(`/api/student/courses/${courseId}/materials/${materialId}/download`, {
+    method: "GET",
+  });
+}
+
+export async function analyzeStudentCourseMaterial(courseId, materialId) {
+  return apiRequest(`/api/student/courses/${courseId}/materials/${materialId}/analyze`, {
+    method: "POST",
+  });
+}
+
 export async function getStudentCourseSessions(courseId) {
   return apiRequest(`/api/student/courses/${courseId}/sessions`, {
     method: "GET",
   });
 }
 
-export async function createStudentCourseSession(courseId, questionCount) {
+export async function getStudentCourseWrongAnswerSets(courseId) {
+  return apiRequest(`/api/student/courses/${courseId}/wrong-answer-sets`, {
+    method: "GET",
+  });
+}
+
+export async function getStudentWrongAnswerSetDetail(setId) {
+  return apiRequest(`/api/student/courses/wrong-answer-sets/${setId}`, {
+    method: "GET",
+  });
+}
+
+export async function createStudentWrongAnswerRetest(setId) {
+  return apiRequest(`/api/student/courses/wrong-answer-sets/${setId}/retest`, {
+    method: "POST",
+  });
+}
+
+export async function createStudentCourseSession(courseId, {
+  questionCount,
+  generationMode = "STANDARD",
+  difficultyLevel = null,
+  questionStyles = [],
+}) {
   return apiRequest(`/api/student/courses/${courseId}/sessions`, {
     method: "POST",
     body: {
       questionCount,
+      generationMode,
+      difficultyLevel,
+      questionStyles,
     },
   });
 }
@@ -234,11 +295,27 @@ export async function getStudentExamSessionDetail(sessionId) {
   });
 }
 
+export async function deleteStudentExamSession(sessionId) {
+  return apiRequest(`/api/student/courses/sessions/${sessionId}`, {
+    method: "DELETE",
+  });
+}
+
 export async function submitStudentExamAnswers(sessionId, answers) {
   return apiRequest(`/api/student/courses/sessions/${sessionId}/submit`, {
     method: "POST",
     body: {
       answers,
+    },
+  });
+}
+
+export async function createStudentWrongAnswerSet(sessionId, { title, questionIds }) {
+  return apiRequest(`/api/student/courses/sessions/${sessionId}/wrong-answer-set`, {
+    method: "POST",
+    body: {
+      title,
+      questionIds,
     },
   });
 }

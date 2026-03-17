@@ -12,6 +12,7 @@ import { logout } from "../../lib/authApi";
 import { consumePointChargeSuccessResult } from "../../lib/pointChargeFlow";
 import { extractProfile } from "../../lib/profileUtils";
 import { hasAcademicProfile, normalizeServiceMode, SERVICE_MODE } from "../../lib/serviceMode";
+import { getStudentMyMenuItems, getStudentSidebarActiveKey, getStudentSidebarSections } from "../../lib/studentNavigation";
 import {
   getPointLedgerHistory,
   getPointPaymentHistory,
@@ -25,6 +26,7 @@ import {
   getMyFiles,
   getMyProfile,
   getMyProfileImageUrl,
+  getMyStudentCourses,
   updateMyAcademicProfile,
   updateMyGeminiApiKey,
   updateMyServiceMode,
@@ -377,6 +379,7 @@ export const MyPage = () => {
   const [serviceModeMessage, setServiceModeMessage] = useState("");
   const [serviceModeErrorMessage, setServiceModeErrorMessage] = useState("");
   const [profileImageUrl, setProfileImageUrl] = useState(tempProfileImage);
+  const [studentCourses, setStudentCourses] = useState([]);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [showPointChargeModal, setShowPointChargeModal] = useState(false);
   const [showPointChargeSuccessModal, setShowPointChargeSuccessModal] = useState(false);
@@ -487,6 +490,12 @@ export const MyPage = () => {
         setSelectedDepartmentId(null);
         setHasGeminiApiKey(Boolean(profile?.hasGeminiApiKey));
         setProfileImageUrl(getMyProfileImageUrl());
+        if (normalizeServiceMode(profile?.serviceMode) === SERVICE_MODE.STUDENT) {
+          const coursesPayload = await getMyStudentCourses();
+          setStudentCourses(Array.isArray(coursesPayload) ? coursesPayload : []);
+        } else {
+          setStudentCourses([]);
+        }
       } catch (error) {
         if (isAuthenticationError(error)) {
           navigate("/login", { replace: true });
@@ -712,6 +721,9 @@ export const MyPage = () => {
   };
 
   const pointSummaryText = useMemo(() => formatPoint(userPoint), [userPoint]);
+  const isStudentRoute = location.pathname.startsWith("/content/student");
+  const studentMenuSections = useMemo(() => getStudentSidebarSections(studentCourses), [studentCourses]);
+  const studentMyMenuItems = useMemo(() => getStudentMyMenuItems(), []);
   const academicProfileLabel = useMemo(() => {
     const normalizedUniversity = universityName.trim();
     const normalizedDepartment = departmentName.trim();
@@ -719,11 +731,12 @@ export const MyPage = () => {
     return `${normalizedUniversity} · ${normalizedDepartment}`;
   }, [departmentName, universityName]);
   const sidebarActiveKey = useMemo(() => {
+    if (isStudentRoute) return getStudentSidebarActiveKey(location.pathname);
     if (location.pathname.startsWith("/content/files")) return "file_upload";
     if (location.pathname.startsWith("/content/point-charge")) return "mypage";
     if (location.pathname.startsWith("/content/mypage")) return "mypage";
     return "mypage";
-  }, [location.pathname]);
+  }, [isStudentRoute, location.pathname]);
 
   const handleUpdateServiceMode = async (nextServiceMode) => {
     if (serviceModeSubmitting || nextServiceMode === serviceMode) return;
@@ -733,12 +746,27 @@ export const MyPage = () => {
     try {
       const payload = await updateMyServiceMode(nextServiceMode);
       const profile = extractProfile(payload);
-      setServiceMode(normalizeServiceMode(profile?.serviceMode));
+      const normalizedMode = normalizeServiceMode(profile?.serviceMode);
+      setServiceMode(normalizedMode);
       setUniversityName(String(profile?.universityName || ""));
       setSelectedUniversityId(null);
       setDepartmentName(String(profile?.departmentName || ""));
       setSelectedDepartmentId(null);
+      if (normalizedMode === SERVICE_MODE.STUDENT) {
+        try {
+          const coursesPayload = await getMyStudentCourses();
+          setStudentCourses(Array.isArray(coursesPayload) ? coursesPayload : []);
+        } catch {
+          setStudentCourses([]);
+        }
+      } else {
+        setStudentCourses([]);
+      }
       setServiceModeMessage(nextServiceMode === SERVICE_MODE.STUDENT ? "대학생 모드로 전환했습니다." : "취준생 모드로 전환했습니다.");
+      navigate(
+        nextServiceMode === SERVICE_MODE.STUDENT ? "/content/student" : "/content/interview",
+        { replace: true }
+      );
     } catch (error) {
       setServiceModeErrorMessage(error?.message || "서비스 모드 변경에 실패했습니다.");
     } finally {
@@ -796,6 +824,8 @@ export const MyPage = () => {
           setIsMobileMenuOpen(false);
           requestLogout();
         }}
+        menuSectionsOverride={isStudentRoute ? studentMenuSections : null}
+        myMenuItemsOverride={isStudentRoute ? studentMyMenuItems : null}
       />
 
       <div className="flex min-h-[calc(100vh-3.75rem)]">
@@ -806,6 +836,8 @@ export const MyPage = () => {
             userName={userName}
             profileImageUrl={profileImageUrl}
             onLogout={requestLogout}
+            menuSectionsOverride={isStudentRoute ? studentMenuSections : null}
+            myMenuItemsOverride={isStudentRoute ? studentMyMenuItems : null}
           />
         </div>
 
@@ -887,47 +919,51 @@ export const MyPage = () => {
                   </button>
                 </div>
 
-                <div className="mt-5">
-                  <AcademicProfileFields
-                    universityName={universityName}
-                    departmentName={departmentName}
-                    onChangeUniversityName={(value) => {
-                      setUniversityName(value);
-                      setSelectedUniversityId(null);
-                      setDepartmentName("");
-                      setSelectedDepartmentId(null);
-                    }}
-                    onChangeDepartmentName={(value) => {
-                      setDepartmentName(value);
-                      setSelectedDepartmentId(null);
-                    }}
-                    onSelectUniversity={(item) => {
-                      setUniversityName(String(item?.universityName || ""));
-                      setSelectedUniversityId(Number.isFinite(Number(item?.universityId)) ? Number(item.universityId) : null);
-                      setDepartmentName("");
-                      setSelectedDepartmentId(null);
-                    }}
-                    onSelectDepartment={(item) => {
-                      setDepartmentName(String(item?.departmentName || ""));
-                      setSelectedDepartmentId(Number.isFinite(Number(item?.departmentId)) ? Number(item.departmentId) : null);
-                    }}
-                    selectedUniversityId={selectedUniversityId}
-                    universitySelected={Boolean(selectedUniversityId)}
-                    departmentSelected={Boolean(selectedDepartmentId)}
-                    disabled={academicProfileSubmitting}
-                  />
-                </div>
-                <div className="mt-4 flex flex-wrap items-center gap-3">
-                  <button
-                    type="button"
-                    onClick={handleSaveAcademicProfile}
-                    disabled={academicProfileSubmitting || !selectedUniversityId || !selectedDepartmentId}
-                    className="rounded-[10px] border border-[#111827] bg-[#111827] px-4 py-2 text-[12px] font-semibold text-white disabled:opacity-60"
-                  >
-                    {academicProfileSubmitting ? "저장 중..." : "대학교 / 학과 저장"}
-                  </button>
-                  <p className="text-[12px] text-[#666]">현재 등록: {academicProfileLabel}</p>
-                </div>
+                {serviceMode === SERVICE_MODE.STUDENT ? (
+                  <>
+                    <div className="mt-5">
+                      <AcademicProfileFields
+                        universityName={universityName}
+                        departmentName={departmentName}
+                        onChangeUniversityName={(value) => {
+                          setUniversityName(value);
+                          setSelectedUniversityId(null);
+                          setDepartmentName("");
+                          setSelectedDepartmentId(null);
+                        }}
+                        onChangeDepartmentName={(value) => {
+                          setDepartmentName(value);
+                          setSelectedDepartmentId(null);
+                        }}
+                        onSelectUniversity={(item) => {
+                          setUniversityName(String(item?.universityName || ""));
+                          setSelectedUniversityId(Number.isFinite(Number(item?.universityId)) ? Number(item.universityId) : null);
+                          setDepartmentName("");
+                          setSelectedDepartmentId(null);
+                        }}
+                        onSelectDepartment={(item) => {
+                          setDepartmentName(String(item?.departmentName || ""));
+                          setSelectedDepartmentId(Number.isFinite(Number(item?.departmentId)) ? Number(item.departmentId) : null);
+                        }}
+                        selectedUniversityId={selectedUniversityId}
+                        universitySelected={Boolean(selectedUniversityId)}
+                        departmentSelected={Boolean(selectedDepartmentId)}
+                        disabled={academicProfileSubmitting}
+                      />
+                    </div>
+                    <div className="mt-4 flex flex-wrap items-center gap-3">
+                      <button
+                        type="button"
+                        onClick={handleSaveAcademicProfile}
+                        disabled={academicProfileSubmitting || !selectedUniversityId || !selectedDepartmentId}
+                        className="rounded-[10px] border border-[#111827] bg-[#111827] px-4 py-2 text-[12px] font-semibold text-white disabled:opacity-60"
+                      >
+                        {academicProfileSubmitting ? "저장 중..." : "대학교 / 학과 저장"}
+                      </button>
+                      <p className="text-[12px] text-[#666]">현재 등록: {academicProfileLabel}</p>
+                    </div>
+                  </>
+                ) : null}
                 {serviceModeMessage ? <p className="mt-2 text-[12px] text-[#1f8f55]">{serviceModeMessage}</p> : null}
                 {serviceModeErrorMessage ? <p className="mt-2 text-[12px] text-[#d84a4a]">{serviceModeErrorMessage}</p> : null}
               </div>
