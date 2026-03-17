@@ -20,6 +20,8 @@ export const AcademicProfileFields = ({
   const [departmentResults, setDepartmentResults] = useState([]);
   const [loadingUniversityResults, setLoadingUniversityResults] = useState(false);
   const [loadingDepartmentResults, setLoadingDepartmentResults] = useState(false);
+  const [universityFocused, setUniversityFocused] = useState(false);
+  const [departmentFocused, setDepartmentFocused] = useState(false);
 
   const normalizedUniversityName = String(universityName || "").trim();
   const normalizedDepartmentName = String(departmentName || "").trim();
@@ -77,13 +79,27 @@ export const AcademicProfileFields = ({
   }, [disabled, normalizedDepartmentName, normalizedUniversityName, selectedUniversityId]);
 
   const showUniversityResults = useMemo(
-    () => normalizedUniversityName.length >= 2 && universityResults.length > 0,
-    [normalizedUniversityName.length, universityResults.length]
+    () => universityFocused && normalizedUniversityName.length >= 2 && universityResults.length > 0,
+    [normalizedUniversityName.length, universityFocused, universityResults.length]
   );
   const showDepartmentResults = useMemo(
-    () => normalizedDepartmentName.length >= 2 && departmentResults.length > 0,
-    [departmentResults.length, normalizedDepartmentName.length]
+    () => departmentFocused && normalizedDepartmentName.length >= 2 && departmentResults.length > 0,
+    [departmentFocused, departmentResults.length, normalizedDepartmentName.length]
   );
+
+  const handleSelectUniversity = (item) => {
+    onSelectUniversity(item);
+    setUniversityFocused(false);
+    setDepartmentFocused(false);
+    setUniversityResults([]);
+    setDepartmentResults([]);
+  };
+
+  const handleSelectDepartment = (item) => {
+    onSelectDepartment(item);
+    setDepartmentFocused(false);
+    setDepartmentResults([]);
+  };
 
   return (
     <div className="space-y-4">
@@ -94,6 +110,12 @@ export const AcademicProfileFields = ({
             type="text"
             value={universityName}
             onChange={(event) => onChangeUniversityName(event.target.value)}
+            onFocus={() => setUniversityFocused(true)}
+            onBlur={() => {
+              window.setTimeout(() => {
+                setUniversityFocused(false);
+              }, 120);
+            }}
             disabled={disabled}
             className="h-11 w-full rounded-[12px] border border-[#d7dbe7] px-3 text-[14px] text-[#111827] disabled:bg-[#f3f4f6] disabled:text-[#9ca3af]"
             placeholder="예: 서울대학교"
@@ -109,7 +131,10 @@ export const AcademicProfileFields = ({
                 <button
                   key={`${item.universityCode || item.universityName}-university`}
                   type="button"
-                  onClick={() => onSelectUniversity(item)}
+                  onMouseDown={(event) => {
+                    event.preventDefault();
+                    handleSelectUniversity(item);
+                  }}
                   className="block w-full px-3 py-2 text-left text-[13px] text-[#111827] hover:bg-[#f6f7fb]"
                 >
                   {item.universityName}
@@ -130,6 +155,12 @@ export const AcademicProfileFields = ({
             type="text"
             value={departmentName}
             onChange={(event) => onChangeDepartmentName(event.target.value)}
+            onFocus={() => setDepartmentFocused(true)}
+            onBlur={() => {
+              window.setTimeout(() => {
+                setDepartmentFocused(false);
+              }, 120);
+            }}
             disabled={disabled}
             className="h-11 w-full rounded-[12px] border border-[#d7dbe7] px-3 text-[14px] text-[#111827] disabled:bg-[#f3f4f6] disabled:text-[#9ca3af]"
             placeholder="예: 컴퓨터공학과"
@@ -145,7 +176,10 @@ export const AcademicProfileFields = ({
                 <button
                   key={`${item.departmentCode || item.departmentName}-department`}
                   type="button"
-                  onClick={() => onSelectDepartment(item)}
+                  onMouseDown={(event) => {
+                    event.preventDefault();
+                    handleSelectDepartment(item);
+                  }}
                   className="block w-full px-3 py-2 text-left text-[13px] text-[#111827] hover:bg-[#f6f7fb]"
                 >
                   {item.departmentName}
@@ -155,12 +189,12 @@ export const AcademicProfileFields = ({
           ) : null}
         </div>
         <p className={`mt-1 text-[11px] ${departmentSelected ? "text-[#1f8f55]" : "text-[#7c8497]"}`}>
-          {departmentSelected ? "검색 결과에서 선택된 학과입니다." : "검색 결과에서 학과를 선택해야 저장할 수 있습니다."}
+          {departmentSelected ? "검색 결과에서 선택된 학과입니다." : "학과는 검색 결과를 선택하거나 직접 입력해서 저장할 수 있습니다."}
         </p>
       </label>
 
       <p className="text-[11px] leading-[1.7] text-[#7c8497]">
-        대학과 학과는 검색 결과에서 선택한 항목만 저장할 수 있습니다. 외부 API가 준비되지 않으면 저장도 제한됩니다.
+        대학교는 검색 결과에서 선택해야 하고, 학과는 검색 결과 선택 또는 직접 입력으로 저장할 수 있습니다.
       </p>
     </div>
   );

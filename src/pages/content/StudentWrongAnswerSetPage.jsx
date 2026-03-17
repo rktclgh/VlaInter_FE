@@ -4,6 +4,7 @@ import { ContentTopNav } from "../../components/ContentTopNav";
 import { MobileSidebarDrawer } from "../../components/MobileSidebarDrawer";
 import { PointChargeModal } from "../../components/PointChargeModal";
 import { PointChargeSuccessModal } from "../../components/PointChargeSuccessModal";
+import { ProtectedImage } from "../../components/ProtectedImage";
 import { Sidebar } from "../../components/Sidebar";
 import tempProfileImage from "../../assets/icon/temp.png";
 import { logout } from "../../lib/authApi";
@@ -35,6 +36,81 @@ const examStyleLabel = (style) => {
   }
 };
 
+const visualAssetTypeLabel = (assetType) => {
+  switch (assetType) {
+    case "PDF_PAGE_RENDER":
+      return "PDF 페이지";
+    case "PPT_SLIDE_RENDER":
+      return "PPT 슬라이드";
+    case "DOCX_EMBEDDED_IMAGE":
+      return "문서 이미지";
+    case "ORIGINAL_IMAGE":
+      return "원본 이미지";
+    default:
+      return "원문 이미지";
+  }
+};
+
+const VisualAssetModal = ({ open, title, assets, onClose }) => {
+  if (!open) return null;
+  return (
+    <div className="fixed inset-0 z-[140] flex items-center justify-center bg-black/60 px-4 py-8" onClick={onClose}>
+      <div
+        role="dialog"
+        aria-modal="true"
+        className="max-h-[92vh] w-full max-w-[1080px] overflow-hidden rounded-[28px] border border-[#d7dbe7] bg-white shadow-[0_30px_90px_rgba(15,23,42,0.35)]"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="flex items-center justify-between border-b border-[#e5e7eb] px-6 py-4">
+          <div>
+            <p className="text-[11px] font-semibold tracking-[0.08em] text-[#7c8497]">SOURCE ASSETS</p>
+            <h2 className="mt-1 text-[20px] font-semibold text-[#111827]">{title}</h2>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-[12px] border border-[#d1d5db] px-3 py-2 text-[12px] font-semibold text-[#4b5563]"
+          >
+            닫기
+          </button>
+        </div>
+        <div className="max-h-[calc(92vh-84px)] overflow-y-auto px-6 py-6">
+          <div className="grid gap-5 md:grid-cols-2">
+            {(assets || []).map((asset) => (
+              <div key={asset.assetId} className="overflow-hidden rounded-[20px] border border-[#e5e7eb] bg-[#fcfcfd]">
+                <div className="flex items-center justify-between gap-3 border-b border-[#edf0f5] px-4 py-3">
+                  <div>
+                    <p className="text-[13px] font-semibold text-[#111827]">{asset.label}</p>
+                    <p className="mt-1 text-[11px] text-[#7c8497]">
+                      {visualAssetTypeLabel(asset.assetType)}
+                      {asset.pageNo ? ` · 페이지 ${asset.pageNo}` : ""}
+                      {asset.slideNo ? ` · 슬라이드 ${asset.slideNo}` : ""}
+                    </p>
+                  </div>
+                  <a
+                    href={asset.downloadUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="rounded-[10px] border border-[#d1d5db] px-3 py-2 text-[11px] font-semibold text-[#374151]"
+                  >
+                    새 창으로
+                  </a>
+                </div>
+                <ProtectedImage
+                  src={asset.downloadUrl}
+                  alt={asset.label}
+                  className="max-h-[520px] w-full bg-[#f8fafc] object-contain"
+                  placeholderClassName="min-h-[240px] w-full bg-[#f8fafc]"
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 export const StudentWrongAnswerSetPage = () => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -51,6 +127,7 @@ export const StudentWrongAnswerSetPage = () => {
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [creatingRetest, setCreatingRetest] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
+  const [sourceAssetViewer, setSourceAssetViewer] = useState(null);
 
   useEffect(() => {
     const charged = consumePointChargeSuccessResult();
@@ -288,6 +365,52 @@ export const StudentWrongAnswerSetPage = () => {
                                 </p>
                               </div>
                             ) : null}
+                            {item.sourceFileName || (Array.isArray(item.sourceVisualAssets) && item.sourceVisualAssets.length > 0) ? (
+                              <div className="rounded-[16px] bg-white p-4">
+                                <div className="flex flex-wrap items-center justify-between gap-3">
+                                  <div>
+                                    <p className="text-[12px] font-semibold text-[#5d6676]">원문 족보 출처</p>
+                                    {item.sourceFileName ? (
+                                      <p className="mt-2 text-[13px] font-semibold text-[#111827]">{item.sourceFileName}</p>
+                                    ) : null}
+                                  </div>
+                                  {Array.isArray(item.sourceVisualAssets) && item.sourceVisualAssets.length > 0 ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => setSourceAssetViewer({
+                                        title: item.sourceFileName || `문제 ${item.questionOrder} 원문`,
+                                        assets: item.sourceVisualAssets,
+                                      })}
+                                      className="rounded-[10px] border border-[#d1d5db] px-3 py-2 text-[11px] font-semibold text-[#374151]"
+                                    >
+                                      원문 이미지 보기
+                                    </button>
+                                  ) : null}
+                                </div>
+                                {Array.isArray(item.sourceVisualAssets) && item.sourceVisualAssets.length > 0 ? (
+                                  <div className="mt-3 grid grid-cols-3 gap-2">
+                                    {item.sourceVisualAssets.slice(0, 3).map((asset) => (
+                                      <button
+                                        key={asset.assetId}
+                                        type="button"
+                                        onClick={() => setSourceAssetViewer({
+                                          title: item.sourceFileName || `문제 ${item.questionOrder} 원문`,
+                                          assets: item.sourceVisualAssets,
+                                        })}
+                                        className="overflow-hidden rounded-[12px] border border-[#e5e7eb] bg-[#f8fafc]"
+                                      >
+                                        <ProtectedImage
+                                          src={asset.downloadUrl}
+                                          alt={asset.label}
+                                          className="h-24 w-full object-cover"
+                                          placeholderClassName="h-24 w-full bg-[#eef2f7]"
+                                        />
+                                      </button>
+                                    ))}
+                                  </div>
+                                ) : null}
+                              </div>
+                            ) : null}
                           </div>
                         </div>
                       </article>
@@ -339,6 +462,12 @@ export const StudentWrongAnswerSetPage = () => {
           </div>
         </div>
       ) : null}
+      <VisualAssetModal
+        open={Boolean(sourceAssetViewer)}
+        title={sourceAssetViewer?.title || "원문 이미지"}
+        assets={sourceAssetViewer?.assets || []}
+        onClose={() => setSourceAssetViewer(null)}
+      />
     </>
   );
 };

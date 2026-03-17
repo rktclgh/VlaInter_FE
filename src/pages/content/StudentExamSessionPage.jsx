@@ -4,6 +4,7 @@ import { ContentTopNav } from "../../components/ContentTopNav";
 import { MobileSidebarDrawer } from "../../components/MobileSidebarDrawer";
 import { PointChargeModal } from "../../components/PointChargeModal";
 import { PointChargeSuccessModal } from "../../components/PointChargeSuccessModal";
+import { ProtectedImage } from "../../components/ProtectedImage";
 import { Sidebar } from "../../components/Sidebar";
 import { StarIcons } from "../../components/DifficultyStars";
 import tempProfileImage from "../../assets/icon/temp.png";
@@ -104,6 +105,88 @@ const questionStatusTone = (question) => {
   return "bg-[#fff1f1] text-[#dc2626]";
 };
 
+const visualAssetTypeLabel = (assetType) => {
+  switch (assetType) {
+    case "PDF_PAGE_RENDER":
+      return "PDF 페이지";
+    case "PPT_SLIDE_RENDER":
+      return "PPT 슬라이드";
+    case "DOCX_EMBEDDED_IMAGE":
+      return "문서 이미지";
+    case "ORIGINAL_IMAGE":
+      return "원본 이미지";
+    default:
+      return "원문 이미지";
+  }
+};
+
+const normalizeReferenceExample = (value) => {
+  const normalized = String(value ?? "").trim();
+  if (!normalized) return "";
+  if (normalized.toLowerCase() === "null") return "";
+  return normalized;
+};
+
+const VisualAssetModal = ({ open, title, assets, onClose }) => {
+  if (!open) return null;
+  return (
+    <div className="fixed inset-0 z-[140] flex items-center justify-center bg-black/60 px-4 py-8" onClick={onClose}>
+      <div
+        role="dialog"
+        aria-modal="true"
+        className="max-h-[92vh] w-full max-w-[1080px] overflow-hidden rounded-[28px] border border-[#d7dbe7] bg-white shadow-[0_30px_90px_rgba(15,23,42,0.35)]"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="flex items-center justify-between border-b border-[#e5e7eb] px-6 py-4">
+          <div>
+            <p className="text-[11px] font-semibold tracking-[0.08em] text-[#7c8497]">SOURCE ASSETS</p>
+            <h2 className="mt-1 text-[20px] font-semibold text-[#111827]">{title}</h2>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-[12px] border border-[#d1d5db] px-3 py-2 text-[12px] font-semibold text-[#4b5563]"
+          >
+            닫기
+          </button>
+        </div>
+        <div className="max-h-[calc(92vh-84px)] overflow-y-auto px-6 py-6">
+          <div className="grid gap-5 md:grid-cols-2">
+            {(assets || []).map((asset) => (
+              <div key={asset.assetId} className="overflow-hidden rounded-[20px] border border-[#e5e7eb] bg-[#fcfcfd]">
+                <div className="flex items-center justify-between gap-3 border-b border-[#edf0f5] px-4 py-3">
+                  <div>
+                    <p className="text-[13px] font-semibold text-[#111827]">{asset.label}</p>
+                    <p className="mt-1 text-[11px] text-[#7c8497]">
+                      {visualAssetTypeLabel(asset.assetType)}
+                      {asset.pageNo ? ` · 페이지 ${asset.pageNo}` : ""}
+                      {asset.slideNo ? ` · 슬라이드 ${asset.slideNo}` : ""}
+                    </p>
+                  </div>
+                  <a
+                    href={asset.downloadUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="rounded-[10px] border border-[#d1d5db] px-3 py-2 text-[11px] font-semibold text-[#374151]"
+                  >
+                    새 창으로
+                  </a>
+                </div>
+                <ProtectedImage
+                  src={asset.downloadUrl}
+                  alt={asset.label}
+                  className="max-h-[520px] w-full bg-[#f8fafc] object-contain"
+                  placeholderClassName="min-h-[240px] w-full bg-[#f8fafc]"
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const buildInitialSelectedQuestionIds = (questions) => {
   const normalizedQuestions = Array.isArray(questions) ? questions : [];
   const preferred = normalizedQuestions
@@ -137,6 +220,7 @@ export const StudentExamSessionPage = () => {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [courses, setCourses] = useState([]);
+  const [sourceAssetViewer, setSourceAssetViewer] = useState(null);
 
   useEffect(() => {
     const charged = consumePointChargeSuccessResult();
@@ -191,6 +275,8 @@ export const StudentExamSessionPage = () => {
 
   const questions = useMemo(() => (Array.isArray(session?.questions) ? session.questions : []), [session?.questions]);
   const activeQuestion = questions[activeQuestionIndex] || null;
+  const activeReferenceExample = normalizeReferenceExample(activeQuestion?.referenceExample);
+  const isLastQuestion = activeQuestionIndex >= questions.length - 1;
   const pointSummaryText = useMemo(() => formatPoint(userPoint), [userPoint]);
   const studentMenuSections = useMemo(() => getStudentSidebarSections(courses), [courses]);
   const studentMyMenuItems = useMemo(() => getStudentMyMenuItems(), []);
@@ -504,12 +590,61 @@ export const StudentExamSessionPage = () => {
                       <p className="whitespace-pre-wrap text-[18px] leading-[1.9] text-[#111827]">
                         {activeQuestion.questionText}
                       </p>
-                      {activeQuestion.referenceExample ? (
+                      {activeReferenceExample ? (
                         <div className="mt-4 rounded-[16px] border border-[#e6e9f2] bg-white px-4 py-4">
                           <p className="text-[12px] font-semibold text-[#5d6676]">예시 / 참고 형식</p>
                           <p className="mt-2 whitespace-pre-wrap text-[13px] leading-[1.8] text-[#374151]">
-                            {activeQuestion.referenceExample}
+                            {activeReferenceExample}
                           </p>
+                        </div>
+                      ) : null}
+                      {activeQuestion.sourceFileName || (Array.isArray(activeQuestion.sourceVisualAssets) && activeQuestion.sourceVisualAssets.length > 0) ? (
+                        <div className="mt-4 rounded-[16px] border border-[#e6e9f2] bg-white px-4 py-4">
+                          <div className="flex flex-wrap items-center justify-between gap-3">
+                            <div>
+                              <p className="text-[12px] font-semibold text-[#5d6676]">원문 족보 출처</p>
+                              {activeQuestion.sourceFileName ? (
+                                <p className="mt-2 text-[13px] font-semibold text-[#111827]">{activeQuestion.sourceFileName}</p>
+                              ) : null}
+                              <p className="mt-1 text-[12px] leading-[1.7] text-[#6b7280]">
+                                원문 이미지가 있으면 문제 문맥과 도표를 직접 확인할 수 있습니다.
+                              </p>
+                            </div>
+                            {Array.isArray(activeQuestion.sourceVisualAssets) && activeQuestion.sourceVisualAssets.length > 0 ? (
+                              <button
+                                type="button"
+                                onClick={() => setSourceAssetViewer({
+                                  title: activeQuestion.sourceFileName || `문제 ${activeQuestion.questionOrder} 원문`,
+                                  assets: activeQuestion.sourceVisualAssets,
+                                })}
+                                className="rounded-[10px] border border-[#d1d5db] px-3 py-2 text-[11px] font-semibold text-[#374151]"
+                              >
+                                원문 이미지 보기
+                              </button>
+                            ) : null}
+                          </div>
+                          {Array.isArray(activeQuestion.sourceVisualAssets) && activeQuestion.sourceVisualAssets.length > 0 ? (
+                            <div className="mt-3 grid grid-cols-3 gap-2">
+                              {activeQuestion.sourceVisualAssets.slice(0, 3).map((asset) => (
+                                <button
+                                  key={asset.assetId}
+                                  type="button"
+                                  onClick={() => setSourceAssetViewer({
+                                    title: activeQuestion.sourceFileName || `문제 ${activeQuestion.questionOrder} 원문`,
+                                    assets: activeQuestion.sourceVisualAssets,
+                                  })}
+                                  className="overflow-hidden rounded-[12px] border border-[#e5e7eb] bg-[#f8fafc]"
+                                >
+                                  <ProtectedImage
+                                    src={asset.downloadUrl}
+                                    alt={asset.label}
+                                    className="h-24 w-full object-cover"
+                                    placeholderClassName="h-24 w-full bg-[#eef2f7]"
+                                  />
+                                </button>
+                              ))}
+                            </div>
+                          ) : null}
                         </div>
                       ) : null}
                     </div>
@@ -574,14 +709,25 @@ export const StudentExamSessionPage = () => {
                         >
                           이전 문제
                         </button>
-                        <button
-                          type="button"
-                          onClick={() => setActiveQuestionIndex((prev) => Math.min(questions.length - 1, prev + 1))}
-                          disabled={activeQuestionIndex >= questions.length - 1}
-                          className="rounded-[12px] border border-[#d1d5db] px-4 py-2.5 text-[13px] font-semibold text-[#374151] disabled:opacity-50"
-                        >
-                          다음 문제
-                        </button>
+                        {session.status === "SUBMITTED" || !isLastQuestion ? (
+                          <button
+                            type="button"
+                            onClick={() => setActiveQuestionIndex((prev) => Math.min(questions.length - 1, prev + 1))}
+                            disabled={activeQuestionIndex >= questions.length - 1}
+                            className="rounded-[12px] border border-[#d1d5db] px-4 py-2.5 text-[13px] font-semibold text-[#374151] disabled:opacity-50"
+                          >
+                            다음 문제
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            disabled={submitting}
+                            onClick={handleSubmit}
+                            className="rounded-[12px] bg-[#111827] px-4 py-2.5 text-[13px] font-semibold text-white disabled:opacity-55"
+                          >
+                            {submitting ? "제출 및 채점 중..." : "답안 제출 및 채점"}
+                          </button>
+                        )}
                       </div>
 
                       {session.status === "SUBMITTED" ? (
@@ -589,14 +735,9 @@ export const StudentExamSessionPage = () => {
                           선택한 문제 {selectedQuestionIds.length}개
                         </div>
                       ) : (
-                        <button
-                          type="button"
-                          disabled={submitting}
-                          onClick={handleSubmit}
-                          className="rounded-[14px] bg-[#111827] px-5 py-3 text-[13px] font-semibold text-white disabled:opacity-55"
-                        >
-                          {submitting ? "제출 및 채점 중..." : "답안 제출 및 채점"}
-                        </button>
+                        <div className="text-[12px] text-[#6b7280]">
+                          {isLastQuestion ? "마지막 문제입니다. 제출 후 채점이 진행됩니다." : "다음 문제로 이동하면서 계속 답안을 작성할 수 있습니다."}
+                        </div>
                       )}
                     </div>
                   </section>
@@ -687,6 +828,12 @@ export const StudentExamSessionPage = () => {
           setShowDeleteModal(false);
         }}
         onConfirm={() => void handleDeleteSession()}
+      />
+      <VisualAssetModal
+        open={Boolean(sourceAssetViewer)}
+        title={sourceAssetViewer?.title || "원문 이미지"}
+        assets={sourceAssetViewer?.assets || []}
+        onClose={() => setSourceAssetViewer(null)}
       />
     </>
   );

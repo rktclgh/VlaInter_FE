@@ -277,6 +277,7 @@ export async function createStudentCourseSession(courseId, {
   generationMode = "STANDARD",
   difficultyLevel = null,
   questionStyles = [],
+  selectedPastExamMaterialIds = [],
 }) {
   return apiRequest(`/api/student/courses/${courseId}/sessions`, {
     method: "POST",
@@ -285,6 +286,7 @@ export async function createStudentCourseSession(courseId, {
       generationMode,
       difficultyLevel,
       questionStyles,
+      selectedPastExamMaterialIds,
     },
   });
 }

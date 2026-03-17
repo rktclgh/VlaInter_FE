@@ -776,8 +776,8 @@ export const MyPage = () => {
 
   const handleSaveAcademicProfile = async () => {
     if (academicProfileSubmitting) return;
-    if (!selectedUniversityId || !selectedDepartmentId) {
-      setServiceModeErrorMessage("대학교와 학과는 검색 결과에서 선택한 항목만 저장할 수 있습니다.");
+    if (!selectedUniversityId || !String(departmentName || "").trim()) {
+      setServiceModeErrorMessage("대학교는 검색 결과에서 선택하고, 학과는 입력해 주세요.");
       return;
     }
     setAcademicProfileSubmitting(true);
@@ -788,7 +788,7 @@ export const MyPage = () => {
         universityName,
         universityId: selectedUniversityId,
         departmentName,
-        departmentId: selectedDepartmentId,
+        departmentId: selectedDepartmentId || null,
       });
       const profile = extractProfile(payload);
       setUniversityName(String(profile?.universityName || ""));
@@ -955,7 +955,7 @@ export const MyPage = () => {
                       <button
                         type="button"
                         onClick={handleSaveAcademicProfile}
-                        disabled={academicProfileSubmitting || !selectedUniversityId || !selectedDepartmentId}
+                        disabled={academicProfileSubmitting || !selectedUniversityId || !String(departmentName || "").trim()}
                         className="rounded-[10px] border border-[#111827] bg-[#111827] px-4 py-2 text-[12px] font-semibold text-white disabled:opacity-60"
                       >
                         {academicProfileSubmitting ? "저장 중..." : "대학교 / 학과 저장"}

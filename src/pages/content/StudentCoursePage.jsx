@@ -5,6 +5,7 @@ import { ContentTopNav } from "../../components/ContentTopNav";
 import { MobileSidebarDrawer } from "../../components/MobileSidebarDrawer";
 import { PointChargeModal } from "../../components/PointChargeModal";
 import { PointChargeSuccessModal } from "../../components/PointChargeSuccessModal";
+import { ProtectedImage } from "../../components/ProtectedImage";
 import { Sidebar } from "../../components/Sidebar";
 import tempProfileImage from "../../assets/icon/temp.png";
 import { logout } from "../../lib/authApi";
@@ -108,11 +109,11 @@ const VisualAssetModal = ({ open, title, assets, onClose }) => {
                     {asset.width && asset.height ? ` · ${asset.width} × ${asset.height}` : ""}
                   </p>
                 </div>
-                <img
+                <ProtectedImage
                   src={asset.downloadUrl}
                   alt={asset.label}
-                  loading="lazy"
                   className="w-full bg-[#f8fafc] object-contain"
+                  placeholderClassName="min-h-[220px] w-full bg-[#f8fafc]"
                 />
               </figure>
             ))}
@@ -256,6 +257,7 @@ export const StudentCoursePage = () => {
   const [sessionQuestionCount, setSessionQuestionCount] = useState(5);
   const [sessionDifficultyLevel, setSessionDifficultyLevel] = useState(3);
   const [sessionQuestionStyles, setSessionQuestionStyles] = useState([]);
+  const [selectedPastExamMaterialIds, setSelectedPastExamMaterialIds] = useState([]);
 
   const [materialDeleteTarget, setMaterialDeleteTarget] = useState(null);
   const [sessionDeleteTarget, setSessionDeleteTarget] = useState(null);
@@ -340,6 +342,10 @@ export const StudentCoursePage = () => {
     () => materials.filter((material) => material?.materialKind === "PAST_EXAM" && material?.ingested).length,
     [materials]
   );
+  const readyPastExamMaterials = useMemo(
+    () => materials.filter((material) => material?.materialKind === "PAST_EXAM" && material?.ingested),
+    [materials]
+  );
   const hasOngoingMaterialIngestion = useMemo(
     () =>
       materials.some(
@@ -355,6 +361,15 @@ export const StudentCoursePage = () => {
     [materials]
   );
   const isAnalysisLocked = analyzingMaterialId !== null || hasOngoingMaterialIngestion;
+
+  useEffect(() => {
+    const readyIds = readyPastExamMaterials.map((material) => material.materialId);
+    setSelectedPastExamMaterialIds((prev) => {
+      const preserved = prev.filter((id) => readyIds.includes(id));
+      if (preserved.length > 0) return preserved;
+      return readyIds;
+    });
+  }, [readyPastExamMaterials]);
 
   const refreshCourse = useCallback(async () => {
     const refreshedCourses = await getMyStudentCourses();
@@ -457,6 +472,10 @@ export const StudentCoursePage = () => {
         generationMode: sessionGenerationMode,
         difficultyLevel: sessionGenerationMode === "PAST_EXAM" || sessionGenerationMode === "PAST_EXAM_PRACTICE" ? null : sessionDifficultyLevel,
         questionStyles: sessionGenerationMode === "STANDARD" ? sessionQuestionStyles : [],
+        selectedPastExamMaterialIds:
+          sessionGenerationMode === "PAST_EXAM" || sessionGenerationMode === "PAST_EXAM_PRACTICE"
+            ? selectedPastExamMaterialIds
+            : [],
       });
       setSessionMessage(`${examModeLabel(sessionGenerationMode)} ${questionCount}문항 모의고사를 생성했습니다.`);
       await refreshCourse();
@@ -474,6 +493,14 @@ export const StudentCoursePage = () => {
       }
       return [...prev, styleKey];
     });
+  };
+
+  const togglePastExamMaterialSelection = (materialId) => {
+    setSelectedPastExamMaterialIds((prev) => (
+      prev.includes(materialId)
+        ? prev.filter((id) => id !== materialId)
+        : [...prev, materialId]
+    ));
   };
 
   const handleCreateRetest = async (wrongSet) => {
@@ -726,11 +753,11 @@ export const StudentCoursePage = () => {
                                               onClick={() => setVisualAssetViewer({ title: material.fileName, assets: material.visualAssets })}
                                               className="overflow-hidden rounded-[10px] border border-[#e5e7eb] bg-[#f8fafc]"
                                             >
-                                              <img
+                                              <ProtectedImage
                                                 src={asset.downloadUrl}
                                                 alt={asset.label}
-                                                loading="lazy"
                                                 className="h-20 w-full object-cover"
+                                                placeholderClassName="h-20 w-full bg-[#eef2f7]"
                                               />
                                             </button>
                                           ))}
@@ -783,8 +810,8 @@ export const StudentCoursePage = () => {
                       <p className="text-[18px] font-semibold text-[#111827]">모의고사 세션</p>
                       <p className="mt-1 text-[12px] text-[#6b7280]">
                         강의자료 {readyMaterialCount}개를 기반으로 실제 대학 시험 스타일 문제를 생성합니다.
-                        {sessionGenerationMode === "PAST_EXAM" ? ` 분석 완료 족보 ${readyPastExamCount}개로 난이도와 출제 경향을 맞춥니다.` : ""}
-                        {sessionGenerationMode === "PAST_EXAM_PRACTICE" ? ` 분석 완료 족보 ${readyPastExamCount}개를 바탕으로 실제 문제를 그대로 복원 연습합니다.` : ""}
+                        {sessionGenerationMode === "PAST_EXAM" ? ` 선택한 족보 ${selectedPastExamMaterialIds.length || readyPastExamCount}개로 난이도와 출제 경향을 맞춥니다.` : ""}
+                        {sessionGenerationMode === "PAST_EXAM_PRACTICE" ? ` 선택한 족보 ${selectedPastExamMaterialIds.length || readyPastExamCount}개를 바탕으로 실제 문제를 그대로 복원 연습합니다.` : ""}
                       </p>
                     </div>
                   </div>
@@ -855,11 +882,64 @@ export const StudentCoursePage = () => {
                         </p>
                       </>
                     ) : (
-                      <div className="mt-4 rounded-[12px] border border-[#e5e7eb] bg-[#f8fafc] px-4 py-3 text-[12px] leading-[1.7] text-[#5b6475]">
-                        {sessionGenerationMode === "PAST_EXAM_PRACTICE"
-                          ? "족보 그대로 연습은 사용자가 문제 스타일을 고르지 않습니다. 업로드한 족보 문제 유형을 따라 그대로 복원합니다."
-                          : "족보형은 사용자가 문제 스타일을 고르지 않습니다. 업로드한 족보의 실제 문제 출제 유형에 맞춰 문제를 만듭니다."}
-                      </div>
+                      <>
+                        <div className="mt-4 rounded-[12px] border border-[#e5e7eb] bg-[#f8fafc] px-4 py-3 text-[12px] leading-[1.7] text-[#5b6475]">
+                          {sessionGenerationMode === "PAST_EXAM_PRACTICE"
+                            ? "족보 그대로 연습은 사용자가 문제 스타일을 고르지 않습니다. 선택한 족보의 문제 유형과 문항을 그대로 복원합니다."
+                            : "족보형은 사용자가 문제 스타일을 고르지 않습니다. 선택한 족보의 실제 문제 출제 유형과 경향에 맞춰 문제를 만듭니다."}
+                        </div>
+                        <div className="mt-4 rounded-[14px] border border-[#e5e7eb] bg-white p-4">
+                          <div className="flex items-center justify-between gap-3">
+                            <div>
+                              <p className="text-[13px] font-semibold text-[#111827]">사용할 족보 선택</p>
+                              <p className="mt-1 text-[11px] text-[#7c8497]">분석 완료된 족보만 반영됩니다.</p>
+                            </div>
+                            <p className="text-[11px] font-semibold text-[#4b5563]">{selectedPastExamMaterialIds.length}개 선택</p>
+                          </div>
+                          <div className="mt-3 grid gap-2">
+                            {readyPastExamMaterials.length === 0 ? (
+                              <p className="text-[12px] text-[#7c8497]">선택 가능한 족보가 없습니다.</p>
+                            ) : (
+                              readyPastExamMaterials.map((material) => (
+                                <label
+                                  key={material.materialId}
+                                  className={`flex cursor-pointer items-center justify-between gap-3 rounded-[12px] border px-3 py-3 transition ${
+                                    selectedPastExamMaterialIds.includes(material.materialId)
+                                      ? "border-[#111827] bg-[#eef2ff] shadow-[0_10px_24px_rgba(17,24,39,0.08)]"
+                                      : "border-[#e5e7eb] bg-[#fcfcfd]"
+                                  }`}
+                                >
+                                  <div className="min-w-0">
+                                    <p className={`truncate text-[12px] font-semibold ${
+                                      selectedPastExamMaterialIds.includes(material.materialId) ? "text-[#111827]" : "text-[#111827]"
+                                    }`}>
+                                      {material.fileName}
+                                    </p>
+                                    <p className={`mt-1 text-[10px] ${
+                                      selectedPastExamMaterialIds.includes(material.materialId) ? "text-[#4158c7]" : "text-[#7c8497]"
+                                    }`}>
+                                      {new Date(material.createdAt).toLocaleDateString("ko-KR")}
+                                    </p>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    {selectedPastExamMaterialIds.includes(material.materialId) ? (
+                                      <span className="rounded-full bg-[#111827] px-2 py-1 text-[10px] font-semibold text-white">
+                                        선택됨
+                                      </span>
+                                    ) : null}
+                                    <input
+                                      type="checkbox"
+                                      checked={selectedPastExamMaterialIds.includes(material.materialId)}
+                                      onChange={() => togglePastExamMaterialSelection(material.materialId)}
+                                      className="h-4 w-4 accent-[#111827]"
+                                    />
+                                  </div>
+                                </label>
+                              ))
+                            )}
+                          </div>
+                        </div>
+                      </>
                     )}
 
                     {sessionGenerationMode === "STANDARD" ? (
@@ -885,7 +965,8 @@ export const StudentCoursePage = () => {
                           Boolean(creatingSessionCount) ||
                           (sessionGenerationMode !== "PAST_EXAM_PRACTICE" && readyMaterialCount === 0) ||
                           (sessionGenerationMode === "STANDARD" && sessionQuestionStyles.length === 0) ||
-                          ((sessionGenerationMode === "PAST_EXAM" || sessionGenerationMode === "PAST_EXAM_PRACTICE") && readyPastExamCount === 0)
+                          ((sessionGenerationMode === "PAST_EXAM" || sessionGenerationMode === "PAST_EXAM_PRACTICE") &&
+                            (readyPastExamCount === 0 || selectedPastExamMaterialIds.length === 0))
                         }
                         onClick={() => void handleCreateSession(sessionQuestionCount)}
                         className="rounded-[12px] bg-[#111827] px-4 py-3 text-[12px] font-semibold text-white disabled:opacity-55"

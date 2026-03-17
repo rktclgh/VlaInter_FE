@@ -60,6 +60,21 @@ async function executeJsonRequest(path, options = {}) {
   });
 }
 
+function resolveRequestUrl(path) {
+  if (/^https?:\/\//i.test(path)) return path;
+  return `${API_BASE_URL}${path}`;
+}
+
+async function executeRawRequest(path, options = {}) {
+  const { method = "GET", headers = {}, credentials = "include", body } = options;
+  return fetch(resolveRequestUrl(path), {
+    method,
+    credentials,
+    headers,
+    body,
+  });
+}
+
 export async function refreshAuthSession() {
   if (refreshPromise) return refreshPromise;
 
@@ -128,4 +143,39 @@ export async function apiRequest(path, options = {}) {
   }
 
   return data;
+}
+
+export async function fetchProtectedResource(path, options = {}) {
+  const retryOnUnauthorizedOption = options.retryOnUnauthorized;
+  const requestMethod = String(options.method || "GET").trim().toUpperCase();
+  const safeRetryMethods = new Set(["GET", "HEAD", "OPTIONS"]);
+  const retryOnUnauthorized = retryOnUnauthorizedOption !== false;
+  const canRetryUnauthorized = retryOnUnauthorizedOption === true || safeRetryMethods.has(requestMethod);
+  const requestStartedAt = Date.now();
+
+  let response = await executeRawRequest(path, options);
+  if (
+    response.status === 401 &&
+    retryOnUnauthorized &&
+    canRetryUnauthorized &&
+    !String(path).includes("/api/auth/refresh")
+  ) {
+    const alreadyRefreshedBeforeRetry = getKnownLastSuccessfulRefreshAt() > requestStartedAt;
+    const refreshed = alreadyRefreshedBeforeRetry
+      ? true
+      : await refreshAuthSession();
+    const refreshedAfterRetryAttempt = refreshed || getKnownLastSuccessfulRefreshAt() > requestStartedAt;
+    if (refreshedAfterRetryAttempt) {
+      response = await executeRawRequest(path, {
+        ...options,
+        retryOnUnauthorized: false,
+      });
+    }
+  }
+
+  if (!response.ok) {
+    throw new ApiError("리소스를 불러오지 못했습니다.", response.status);
+  }
+
+  return response.blob();
 }

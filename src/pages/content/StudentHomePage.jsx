@@ -75,8 +75,8 @@ const StudentProfileModal = ({
           </button>
           <button
             type="button"
-            disabled={pending || !universitySelected || !departmentSelected}
-            aria-disabled={pending || !universitySelected || !departmentSelected}
+            disabled={pending || !universitySelected || !String(departmentName || "").trim()}
+            aria-disabled={pending || !universitySelected || !String(departmentName || "").trim()}
             onClick={onSubmit}
             className="rounded-[12px] bg-[#111827] px-4 py-2.5 text-[13px] font-semibold text-white disabled:cursor-not-allowed disabled:opacity-55"
           >
@@ -228,8 +228,8 @@ export const StudentHomePage = () => {
 
   const handleSaveAcademicProfile = async () => {
     if (savingAcademicProfile) return;
-    if (!selectedUniversityId || !selectedDepartmentId) {
-      setAcademicProfileError("대학교와 학과는 검색 결과에서 선택한 항목만 저장할 수 있습니다.");
+    if (!selectedUniversityId || !String(departmentName || "").trim()) {
+      setAcademicProfileError("대학교는 검색 결과에서 선택하고, 학과는 입력해 주세요.");
       return;
     }
     setSavingAcademicProfile(true);
@@ -239,7 +239,7 @@ export const StudentHomePage = () => {
         universityName,
         universityId: selectedUniversityId,
         departmentName,
-        departmentId: selectedDepartmentId,
+        departmentId: selectedDepartmentId || null,
       });
       const nextProfile = extractProfile(payload);
       setProfile(nextProfile);
