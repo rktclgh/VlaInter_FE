@@ -7,9 +7,10 @@ import { PointChargeSuccessModal } from "../../components/PointChargeSuccessModa
 import { ProtectedImage } from "../../components/ProtectedImage";
 import { Sidebar } from "../../components/Sidebar";
 import tempProfileImage from "../../assets/icon/temp.png";
+import { downloadProtectedResource } from "../../lib/apiClient";
 import { logout } from "../../lib/authApi";
 import { consumePointChargeSuccessResult } from "../../lib/pointChargeFlow";
-import { formatPoint, parsePoint } from "../../lib/profileUtils";
+import { extractProfile, formatPoint, parsePoint } from "../../lib/profileUtils";
 import { getStudentMyMenuItems, getStudentSidebarSections } from "../../lib/studentNavigation";
 import {
   createStudentWrongAnswerRetest,
@@ -53,6 +54,27 @@ const visualAssetTypeLabel = (assetType) => {
 
 const VisualAssetModal = ({ open, title, assets, onClose }) => {
   if (!open) return null;
+
+  const handleDownloadProtectedAsset = async (asset) => {
+    try {
+      const { blob } = await downloadProtectedResource(asset.downloadUrl);
+      const objectUrl = URL.createObjectURL(blob);
+      const openedWindow = window.open(objectUrl, "_blank", "noopener,noreferrer");
+      if (!openedWindow) {
+        const link = document.createElement("a");
+        link.href = objectUrl;
+        link.target = "_blank";
+        link.rel = "noreferrer";
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      }
+      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
+    } catch {
+      // ignore and keep the embedded preview available
+    }
+  };
+
   return (
     <div className="fixed inset-0 z-[140] flex items-center justify-center bg-black/60 px-4 py-8" onClick={onClose}>
       <div
@@ -87,14 +109,15 @@ const VisualAssetModal = ({ open, title, assets, onClose }) => {
                       {asset.slideNo ? ` · 슬라이드 ${asset.slideNo}` : ""}
                     </p>
                   </div>
-                  <a
-                    href={asset.downloadUrl}
-                    target="_blank"
-                    rel="noreferrer"
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void handleDownloadProtectedAsset(asset);
+                    }}
                     className="rounded-[10px] border border-[#d1d5db] px-3 py-2 text-[11px] font-semibold text-[#374151]"
                   >
                     새 창으로
-                  </a>
+                  </button>
                 </div>
                 <ProtectedImage
                   src={asset.downloadUrl}
@@ -147,8 +170,9 @@ export const StudentWrongAnswerSetPage = () => {
           getStudentWrongAnswerSetDetail(setId),
         ]);
         if (cancelled) return;
-        setUserName(String(profilePayload?.name || "사용자"));
-        setUserPoint(parsePoint(profilePayload?.point));
+        const profile = extractProfile(profilePayload);
+        setUserName(String(profile?.name || "사용자"));
+        setUserPoint(parsePoint(profile?.point));
         setProfileImageUrl(getMyProfileImageUrl());
         setCourses(Array.isArray(coursesPayload) ? coursesPayload : []);
         setWrongSet(setPayload);
@@ -436,7 +460,7 @@ export const StudentWrongAnswerSetPage = () => {
         <PointChargeSuccessModal onClose={() => setShowPointChargeSuccessModal(false)} />
       ) : null}
       {showLogoutModal ? (
-        <div className="fixed inset-0 z-70 flex items-center justify-center bg-black/35 px-4">
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/35 px-4">
           <div className="w-full max-w-[420px] rounded-[16px] border border-[#d9d9d9] bg-white p-5">
             <p className="text-[15px] font-medium text-[#252525]">
               정말 로그아웃 하시겠습니까?

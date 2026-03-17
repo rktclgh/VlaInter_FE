@@ -18,17 +18,6 @@ export const BrowserSessionGuard = ({ children }) => {
     let cancelled = false;
 
     const guard = async () => {
-      if (!hasAuthenticatedBrowserSession()) {
-        clearAuthenticatedBrowserSession();
-        if (!cancelled) {
-          navigate("/login", {
-            replace: true,
-            state: { redirectedFrom: location.pathname },
-          });
-        }
-        return;
-      }
-
       try {
         await getMyProfile();
         markAuthenticatedBrowserSession();
@@ -43,10 +32,12 @@ export const BrowserSessionGuard = ({ children }) => {
           }
           return;
         }
-        try {
-          await logout();
-        } catch {
-          // ignore logout failure and continue clearing client marker
+        if (hasAuthenticatedBrowserSession()) {
+          try {
+            await logout();
+          } catch {
+            // ignore logout failure and continue clearing client marker
+          }
         }
         clearAuthenticatedBrowserSession();
       }

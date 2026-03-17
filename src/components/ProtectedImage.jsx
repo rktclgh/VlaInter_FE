@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { fetchProtectedResource, isAuthenticationError } from "../lib/apiClient";
 
 export const ProtectedImage = ({
@@ -11,14 +11,19 @@ export const ProtectedImage = ({
 }) => {
   const [objectUrl, setObjectUrl] = useState("");
   const [failed, setFailed] = useState(false);
+  const onAuthErrorRef = useRef(onAuthError);
+
+  useEffect(() => {
+    onAuthErrorRef.current = onAuthError;
+  }, [onAuthError]);
 
   useEffect(() => {
     let active = true;
     let localObjectUrl = "";
 
     const load = async () => {
+      setObjectUrl("");
       if (!src) {
-        setObjectUrl("");
         setFailed(true);
         return;
       }
@@ -33,7 +38,7 @@ export const ProtectedImage = ({
         setObjectUrl("");
         setFailed(true);
         if (isAuthenticationError(error)) {
-          onAuthError?.(error);
+          onAuthErrorRef.current?.(error);
         }
       }
     };
@@ -45,10 +50,19 @@ export const ProtectedImage = ({
         URL.revokeObjectURL(localObjectUrl);
       }
     };
-  }, [onAuthError, src]);
+  }, [src]);
 
-  if (!objectUrl || failed) {
+  if (failed) {
     return <div aria-hidden="true" className={placeholderClassName || className} />;
+  }
+
+  if (!objectUrl) {
+    return (
+      <div
+        aria-busy="true"
+        className={`${placeholderClassName || className} animate-pulse bg-[#f3f4f6]`}
+      />
+    );
   }
 
   return <img src={objectUrl} alt={alt} className={className} onLoad={onLoad} />;

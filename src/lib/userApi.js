@@ -110,6 +110,7 @@ export async function changeMyPassword(currentPassword, newPassword) {
 export async function updateMyServiceMode(serviceMode) {
   return apiRequest("/api/users/me/service-mode", {
     method: "PATCH",
+    retryOnUnauthorized: true,
     body: {
       serviceMode,
     },
@@ -124,6 +125,7 @@ export async function updateMyAcademicProfile({
 }) {
   return apiRequest("/api/users/me/academic-profile", {
     method: "PATCH",
+    retryOnUnauthorized: true,
     body: {
       universityName,
       universityId,

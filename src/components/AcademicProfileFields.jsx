@@ -131,6 +131,7 @@ export const AcademicProfileFields = ({
                 <button
                   key={`${item.universityCode || item.universityName}-university`}
                   type="button"
+                  onClick={() => handleSelectUniversity(item)}
                   onMouseDown={(event) => {
                     event.preventDefault();
                     handleSelectUniversity(item);
@@ -176,6 +177,7 @@ export const AcademicProfileFields = ({
                 <button
                   key={`${item.departmentCode || item.departmentName}-department`}
                   type="button"
+                  onClick={() => handleSelectDepartment(item)}
                   onMouseDown={(event) => {
                     event.preventDefault();
                     handleSelectDepartment(item);

@@ -17,6 +17,7 @@ import { QuestionSetsPage } from './pages/content/QuestionSetsPage'
 import { QuestionBrowsePage } from './pages/content/QuestionBrowsePage'
 import { AdminConsolePage } from './pages/content/AdminConsolePage'
 import { PointChargeCallbackPage } from './pages/content/PointChargeCallbackPage'
+import { PointChargePage } from './pages/content/PointChargePage'
 import { FileUploadPage } from './pages/content/FileUploadPage'
 import { MyPage } from './pages/content/MyPage'
 import { ContentEntryPage } from './pages/content/ContentEntryPage'
@@ -66,7 +67,7 @@ function App() {
         <Route path="/content/question-sets" element={<QuestionSetsPage />} />
         <Route path="/content/question-browse" element={<QuestionBrowsePage />} />
         <Route path="/content/files" element={<FileUploadPage />} />
-        <Route path="/content/point-charge" element={<MyPage />} />
+        <Route path="/content/point-charge" element={<PointChargePage />} />
       </Route>
       <Route path="/content/admin" element={<BrowserSessionGuard><AdminConsolePage /></BrowserSessionGuard>} />
       <Route path="/content/mypage" element={<BrowserSessionGuard><MyPage /></BrowserSessionGuard>} />
