@@ -1,4 +1,4 @@
-import { apiRequest, refreshAuthSession } from "./apiClient";
+import { apiRequest, downloadProtectedResource, refreshAuthSession } from "./apiClient";
 import defaultProfileImage from "../assets/icon/temp.png";
 import { extractProfile } from "./profileUtils";
 
@@ -245,6 +245,22 @@ export async function getStudentCourseMaterialDownloadUrl(courseId, materialId) 
 export async function analyzeStudentCourseMaterial(courseId, materialId) {
   return apiRequest(`/api/student/courses/${courseId}/materials/${materialId}/analyze`, {
     method: "POST",
+  });
+}
+
+export async function createStudentCourseSummaryDocument(courseId, {
+  selectedMaterialIds,
+  format = "DOCX",
+}) {
+  return downloadProtectedResource(`/api/student/courses/${courseId}/summary-documents`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      selectedMaterialIds,
+      format,
+    }),
   });
 }
 

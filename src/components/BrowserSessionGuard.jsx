@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import {
   clearAuthenticatedBrowserSession,
+  hasAuthenticatedBrowserSession,
   markAuthenticatedBrowserSession,
 } from "../lib/authSessionMarker";
 import { isAuthenticationError } from "../lib/apiClient";
@@ -17,6 +18,17 @@ export const BrowserSessionGuard = ({ children }) => {
     let cancelled = false;
 
     const guard = async () => {
+      if (!hasAuthenticatedBrowserSession()) {
+        clearAuthenticatedBrowserSession();
+        if (!cancelled) {
+          navigate("/login", {
+            replace: true,
+            state: { redirectedFrom: location.pathname },
+          });
+        }
+        return;
+      }
+
       try {
         await getMyProfile();
         markAuthenticatedBrowserSession();

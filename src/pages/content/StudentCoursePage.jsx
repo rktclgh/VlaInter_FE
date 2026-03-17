@@ -14,6 +14,7 @@ import { extractProfile, formatPoint, parsePoint } from "../../lib/profileUtils"
 import { getStudentMyMenuItems, getStudentSidebarActiveKey, getStudentSidebarSections } from "../../lib/studentNavigation";
 import {
   analyzeStudentCourseMaterial,
+  createStudentCourseSummaryDocument,
   createStudentCourseSession,
   createStudentWrongAnswerRetest,
   deleteStudentCourseMaterial,
@@ -74,6 +75,25 @@ const AnalysisLockOverlay = ({ open, fileName, pendingRequest }) => {
         </p>
         <p className="mt-4 text-[12px] font-medium tracking-[0.01em] text-[#cbd5e1]">
           한 번에 한 개의 문서만 분석할 수 있습니다. 분석 중에는 다른 자료 분석 요청과 페이지 내 조작이 잠시 잠깁니다.
+        </p>
+      </div>
+    </div>
+  );
+};
+
+const SummaryGenerationOverlay = ({ open, format, count }) => {
+  if (!open) return null;
+  return (
+    <div className="fixed inset-0 z-[170] flex items-center justify-center bg-[#0f172acc] px-6">
+      <div className="w-full max-w-[440px] rounded-[28px] border border-white/15 bg-[#111827] px-6 py-7 text-center text-white shadow-[0_28px_100px_rgba(15,23,42,0.45)]">
+        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full border border-white/15 bg-white/5">
+          <div className="h-7 w-7 animate-spin rounded-full border-[3px] border-white/25 border-t-white" />
+        </div>
+        <p className="mt-5 text-[22px] font-semibold">요약본 생성 중</p>
+        <p className="mt-3 text-[14px] leading-[1.8] text-white/80">
+          선택한 강의자료 {count}개를 바탕으로 요약본을 생성하고 있습니다.
+          <br />
+          완료되면 {format === "PDF" ? "PDF" : "DOCX"} 파일 다운로드가 바로 시작됩니다.
         </p>
       </div>
     </div>
@@ -251,12 +271,15 @@ export const StudentCoursePage = () => {
   const [downloadingMaterialId, setDownloadingMaterialId] = useState(null);
   const [deletingMaterialId, setDeletingMaterialId] = useState(null);
   const [creatingSessionCount, setCreatingSessionCount] = useState(null);
+  const [creatingSummaryFormat, setCreatingSummaryFormat] = useState(null);
   const [deletingSessionId, setDeletingSessionId] = useState(null);
   const [creatingRetestSetId, setCreatingRetestSetId] = useState(null);
   const [sessionGenerationMode, setSessionGenerationMode] = useState("STANDARD");
   const [sessionQuestionCount, setSessionQuestionCount] = useState(5);
   const [sessionDifficultyLevel, setSessionDifficultyLevel] = useState(3);
   const [sessionQuestionStyles, setSessionQuestionStyles] = useState([]);
+  const [summaryFormat, setSummaryFormat] = useState("DOCX");
+  const [selectedSummaryMaterialIds, setSelectedSummaryMaterialIds] = useState([]);
   const [selectedPastExamMaterialIds, setSelectedPastExamMaterialIds] = useState([]);
 
   const [materialDeleteTarget, setMaterialDeleteTarget] = useState(null);
@@ -330,6 +353,10 @@ export const StudentCoursePage = () => {
     () => materials.filter((material) => material?.materialKind !== "PAST_EXAM" && material?.ingested).length,
     [materials]
   );
+  const readyLectureMaterials = useMemo(
+    () => materials.filter((material) => material?.materialKind !== "PAST_EXAM" && material?.ingested),
+    [materials]
+  );
   const lectureMaterials = useMemo(
     () => materials.filter((material) => material?.materialKind !== "PAST_EXAM"),
     [materials]
@@ -361,6 +388,15 @@ export const StudentCoursePage = () => {
     [materials]
   );
   const isAnalysisLocked = analyzingMaterialId !== null || hasOngoingMaterialIngestion;
+
+  useEffect(() => {
+    const readyIds = readyLectureMaterials.map((material) => material.materialId);
+    setSelectedSummaryMaterialIds((prev) => {
+      const preserved = prev.filter((id) => readyIds.includes(id));
+      if (preserved.length > 0) return preserved;
+      return readyIds;
+    });
+  }, [readyLectureMaterials]);
 
   useEffect(() => {
     const readyIds = readyPastExamMaterials.map((material) => material.materialId);
@@ -483,6 +519,40 @@ export const StudentCoursePage = () => {
       setSessionErrorMessage(error?.message || "모의고사 생성에 실패했습니다.");
     } finally {
       setCreatingSessionCount(null);
+    }
+  };
+
+  const toggleSummaryMaterialSelection = (materialId) => {
+    setSelectedSummaryMaterialIds((prev) => (
+      prev.includes(materialId)
+        ? prev.filter((id) => id !== materialId)
+        : [...prev, materialId]
+    ));
+  };
+
+  const handleCreateSummaryDocument = async () => {
+    if (!course || creatingSummaryFormat || selectedSummaryMaterialIds.length === 0) return;
+    setCreatingSummaryFormat(summaryFormat);
+    setSessionMessage("");
+    setSessionErrorMessage("");
+    try {
+      const payload = await createStudentCourseSummaryDocument(course.courseId, {
+        selectedMaterialIds: selectedSummaryMaterialIds,
+        format: summaryFormat,
+      });
+      const objectUrl = URL.createObjectURL(payload.blob);
+      const anchor = document.createElement("a");
+      anchor.href = objectUrl;
+      anchor.download = payload.fileName || `${course.courseName}_요약본.${summaryFormat === "PDF" ? "pdf" : "docx"}`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+      setSessionMessage(`강의자료 요약본 ${summaryFormat} 파일을 생성했습니다.`);
+    } catch (error) {
+      setSessionErrorMessage(error?.message || "요약본 생성에 실패했습니다.");
+    } finally {
+      setCreatingSummaryFormat(null);
     }
   };
 
@@ -801,6 +871,84 @@ export const StudentCoursePage = () => {
                         </div>
                       );
                     })}
+                  </div>
+                </section>
+
+                <section className="mt-6 rounded-[20px] border border-[#e6e9f2] bg-[#fbfcfe] p-5">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <p className="text-[18px] font-semibold text-[#111827]">강의자료 요약본</p>
+                      <p className="mt-1 text-[12px] text-[#6b7280]">
+                        분석 완료된 강의자료를 여러 개 선택해 요약본을 만들고, DOCX 또는 PDF로 바로 다운로드할 수 있습니다.
+                      </p>
+                    </div>
+                    <p className="text-[12px] font-semibold text-[#4b5563]">{selectedSummaryMaterialIds.length}개 선택</p>
+                  </div>
+                  <div className="mt-4 rounded-[16px] border border-[#e5e7eb] bg-white p-4">
+                    <div className="flex flex-wrap items-center gap-2">
+                      {[
+                        { key: "DOCX", label: "DOCX" },
+                        { key: "PDF", label: "PDF" },
+                      ].map((option) => (
+                        <button
+                          key={option.key}
+                          type="button"
+                          onClick={() => setSummaryFormat(option.key)}
+                          disabled={Boolean(creatingSummaryFormat)}
+                          className={`rounded-[10px] border px-3 py-2 text-[11px] font-semibold ${
+                            summaryFormat === option.key
+                              ? "border-[#111827] bg-[#111827] text-white"
+                              : "border-[#d1d5db] bg-white text-[#4b5563]"
+                          } disabled:opacity-55`}
+                        >
+                          {option.label}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="mt-4 grid gap-2">
+                      {readyLectureMaterials.length === 0 ? (
+                        <p className="text-[12px] text-[#7c8497]">요약에 사용할 분석 완료 강의자료가 없습니다.</p>
+                      ) : (
+                        readyLectureMaterials.map((material) => (
+                          <label
+                            key={material.materialId}
+                            className={`flex cursor-pointer items-center justify-between gap-3 rounded-[12px] border px-3 py-3 transition ${
+                              selectedSummaryMaterialIds.includes(material.materialId)
+                                ? "border-[#111827] bg-[#eef2ff] shadow-[0_10px_24px_rgba(17,24,39,0.08)]"
+                                : "border-[#e5e7eb] bg-[#fcfcfd]"
+                            }`}
+                          >
+                            <div className="min-w-0">
+                              <p className="truncate text-[12px] font-semibold text-[#111827]">{material.fileName}</p>
+                              <p className="mt-1 text-[10px] text-[#7c8497]">{new Date(material.createdAt).toLocaleDateString("ko-KR")}</p>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              {selectedSummaryMaterialIds.includes(material.materialId) ? (
+                                <span className="rounded-full bg-[#111827] px-2 py-1 text-[10px] font-semibold text-white">
+                                  선택됨
+                                </span>
+                              ) : null}
+                              <input
+                                type="checkbox"
+                                checked={selectedSummaryMaterialIds.includes(material.materialId)}
+                                onChange={() => toggleSummaryMaterialSelection(material.materialId)}
+                                className="h-4 w-4 accent-[#111827]"
+                              />
+                            </div>
+                          </label>
+                        ))
+                      )}
+                    </div>
+                    <div className="mt-4 flex justify-end">
+                      <button
+                        type="button"
+                        disabled={Boolean(creatingSummaryFormat) || selectedSummaryMaterialIds.length === 0}
+                        onClick={() => void handleCreateSummaryDocument()}
+                        className="rounded-[12px] bg-[#111827] px-4 py-3 text-[12px] font-semibold text-white disabled:opacity-55"
+                      >
+                        {creatingSummaryFormat ? "요약본 생성 중..." : `${summaryFormat} 요약본 생성`}
+                      </button>
+                    </div>
                   </div>
                 </section>
 
@@ -1151,6 +1299,11 @@ export const StudentCoursePage = () => {
         open={isAnalysisLocked}
         fileName={activeIngestionMaterial?.fileName}
         pendingRequest={analyzingMaterialId !== null && !activeIngestionMaterial}
+      />
+      <SummaryGenerationOverlay
+        open={Boolean(creatingSummaryFormat)}
+        format={creatingSummaryFormat}
+        count={selectedSummaryMaterialIds.length}
       />
       <VisualAssetModal
         open={Boolean(visualAssetViewer)}

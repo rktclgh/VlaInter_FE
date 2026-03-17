@@ -75,6 +75,16 @@ async function executeRawRequest(path, options = {}) {
   });
 }
 
+function parseErrorMessage(raw) {
+  if (!raw) return "";
+  try {
+    const data = JSON.parse(raw);
+    return String(data?.message || "").trim();
+  } catch {
+    return "";
+  }
+}
+
 export async function refreshAuthSession() {
   if (refreshPromise) return refreshPromise;
 
@@ -145,7 +155,7 @@ export async function apiRequest(path, options = {}) {
   return data;
 }
 
-export async function fetchProtectedResource(path, options = {}) {
+async function executeProtectedRequest(path, options = {}) {
   const retryOnUnauthorizedOption = options.retryOnUnauthorized;
   const requestMethod = String(options.method || "GET").trim().toUpperCase();
   const safeRetryMethods = new Set(["GET", "HEAD", "OPTIONS"]);
@@ -174,8 +184,39 @@ export async function fetchProtectedResource(path, options = {}) {
   }
 
   if (!response.ok) {
-    throw new ApiError("리소스를 불러오지 못했습니다.", response.status);
+    const raw = await response.text();
+    const message = parseErrorMessage(raw) || "리소스를 불러오지 못했습니다.";
+    throw new ApiError(message, response.status);
   }
 
+  return response;
+}
+
+export async function fetchProtectedResource(path, options = {}) {
+  const response = await executeProtectedRequest(path, options)
   return response.blob();
+}
+
+function extractDownloadFileName(contentDisposition) {
+  const utf8Match = /filename\*=UTF-8''([^;]+)/i.exec(contentDisposition || "");
+  if (utf8Match?.[1]) {
+    try {
+      return decodeURIComponent(utf8Match[1]);
+    } catch {
+      return utf8Match[1];
+    }
+  }
+  const quotedMatch = /filename="([^"]+)"/i.exec(contentDisposition || "");
+  if (quotedMatch?.[1]) return quotedMatch[1];
+  const plainMatch = /filename=([^;]+)/i.exec(contentDisposition || "");
+  return plainMatch?.[1]?.trim() || "";
+}
+
+export async function downloadProtectedResource(path, options = {}) {
+  const response = await executeProtectedRequest(path, options);
+  return {
+    blob: await response.blob(),
+    fileName: extractDownloadFileName(response.headers.get("content-disposition")),
+    contentType: response.headers.get("content-type") || "",
+  };
 }
