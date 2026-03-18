@@ -533,9 +533,12 @@ export const StudentHomePage = () => {
                     >
                       <button
                         type="button"
-                        onClick={() => setDeleteTargetCourse(course)}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setDeleteTargetCourse(course);
+                        }}
                         aria-label={`${course.courseName} 삭제`}
-                        className="absolute right-4 top-4 inline-flex h-8 w-8 items-center justify-center rounded-full border border-[#fecaca] bg-[#fff5f5] text-[18px] font-semibold leading-none text-[#dc2626]"
+                        className="absolute right-4 top-4 z-10 inline-flex h-8 w-8 items-center justify-center rounded-full border border-[#fecaca] bg-[#fff5f5] text-[18px] font-semibold leading-none text-[#dc2626]"
                       >
                         ×
                       </button>

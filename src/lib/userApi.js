@@ -187,6 +187,7 @@ export async function createStudentCourse({ courseName, professorName, descripti
 export async function deleteStudentCourse(courseId) {
   return apiRequest(`/api/student/courses/${courseId}`, {
     method: "DELETE",
+    retryOnUnauthorized: true,
   });
 }
 
