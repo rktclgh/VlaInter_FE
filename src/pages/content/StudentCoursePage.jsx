@@ -8,6 +8,7 @@ import { PointChargeSuccessModal } from "../../components/PointChargeSuccessModa
 import { ProtectedImage } from "../../components/ProtectedImage";
 import { Sidebar } from "../../components/Sidebar";
 import tempProfileImage from "../../assets/icon/temp.png";
+import { isAuthenticationError } from "../../lib/apiClient";
 import { logout } from "../../lib/authApi";
 import { consumePointChargeSuccessResult } from "../../lib/pointChargeFlow";
 import { extractProfile, formatPoint, parsePoint } from "../../lib/profileUtils";
@@ -18,15 +19,18 @@ import {
   createStudentCourseSession,
   createStudentWrongAnswerRetest,
   deleteStudentCourseMaterial,
+  downloadStudentCourseMaterialContent,
   deleteStudentExamSession,
   getMyProfile,
   getMyProfileImageUrl,
   getMyStudentCourses,
   getStudentCourseMaterials,
   getStudentCourseSessions,
+  getStudentCourseYoutubeMaterialJobs,
   getStudentCourseWrongAnswerSets,
-  getStudentCourseMaterialDownloadUrl,
   uploadStudentCourseMaterial,
+  previewStudentCourseSummary,
+  uploadStudentCourseYoutubeMaterial,
 } from "../../lib/userApi";
 
 const ConfirmModal = ({ open, title, description, pending, confirmLabel = "삭제", onCancel, onConfirm }) => {
@@ -100,6 +104,190 @@ const SummaryGenerationOverlay = ({ open, format, count }) => {
   );
 };
 
+const SummaryPreviewModal = ({ open, preview, downloadPendingFormat = null, onDownloadDocx, onDownloadPdf, onClose }) => {
+  if (!open || !preview) return null;
+  return (
+    <div className="fixed inset-0 z-[180] bg-black/60 px-4 py-6">
+      <div className="mx-auto flex h-full w-full max-w-[1080px] flex-col rounded-[24px] bg-white shadow-[0_24px_80px_rgba(15,23,42,0.32)]">
+        <div className="flex items-start justify-between gap-4 border-b border-[#e5e7eb] px-5 py-4">
+          <div className="min-w-0">
+            <p className="text-[20px] font-semibold text-[#111827]">{preview.title}</p>
+            <p className="mt-1 text-[12px] text-[#6b7280]">
+              참고 자료 {Array.isArray(preview.sourceFileNames) ? preview.sourceFileNames.length : 0}개를 바탕으로 생성한 구조화 노트입니다.
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <button
+              type="button"
+              onClick={onDownloadDocx}
+              disabled={Boolean(downloadPendingFormat)}
+              className="rounded-[10px] border border-[#111827] bg-[#111827] px-3 py-2 text-[12px] font-semibold text-white disabled:opacity-55"
+            >
+              {downloadPendingFormat === "DOCX" ? "DOCX 생성 중..." : "DOCX 다운로드"}
+            </button>
+            <button
+              type="button"
+              onClick={onDownloadPdf}
+              disabled={Boolean(downloadPendingFormat)}
+              className="rounded-[10px] border border-[#d1d5db] bg-white px-3 py-2 text-[12px] font-semibold text-[#374151] disabled:opacity-55"
+            >
+              {downloadPendingFormat === "PDF" ? "PDF 생성 중..." : "PDF 다운로드"}
+            </button>
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-[10px] border border-[#d1d5db] px-3 py-2 text-[12px] font-semibold text-[#374151]"
+            >
+              닫기
+            </button>
+          </div>
+        </div>
+        <div className="flex-1 overflow-y-auto px-5 py-5">
+          <section className="rounded-[18px] border border-[#e5e7eb] bg-[#fafbff] p-5">
+            <p className="text-[12px] font-semibold tracking-[0.08em] text-[#6b7280]">OVERVIEW</p>
+            <p className="mt-3 text-[14px] leading-[1.9] text-[#374151]">{preview.overview}</p>
+          </section>
+
+          {!!preview.coreTakeaways?.length && (
+            <section className="mt-4 rounded-[18px] border border-[#dbe4ff] bg-[#f5f8ff] p-5">
+              <p className="text-[12px] font-semibold tracking-[0.08em] text-[#3151d3]">KEY TAKEAWAYS</p>
+              <ul className="mt-3 space-y-2">
+                {(preview.coreTakeaways || []).map((takeaway, takeawayIndex) => (
+                  <li key={`takeaway-${takeawayIndex}`} className="flex gap-2 text-[13px] leading-[1.8] text-[#1f2937]">
+                    <span className="mt-[2px] text-[#3151d3]">•</span>
+                    <span>{takeaway}</span>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+
+          <section className="mt-4 rounded-[18px] border border-[#e5e7eb] bg-white p-5">
+            <p className="text-[12px] font-semibold tracking-[0.08em] text-[#6b7280]">SOURCE MATERIALS</p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {(preview.sourceFileNames || []).map((fileName) => (
+                <span
+                  key={fileName}
+                  className="rounded-full border border-[#dbe4ff] bg-[#eef2ff] px-3 py-1.5 text-[11px] font-semibold text-[#4338ca]"
+                >
+                  {fileName}
+                </span>
+              ))}
+            </div>
+          </section>
+
+          <div className="mt-4 space-y-4">
+            {(preview.majorTopics || []).map((topic, topicIndex) => (
+              <section key={`${topic.title}-${topicIndex}`} className="rounded-[20px] border border-[#dfe5f2] bg-[#fbfcfe] p-5">
+                <div className="flex items-start gap-3">
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#111827] text-[12px] font-semibold text-white">
+                    {topicIndex + 1}
+                  </span>
+                  <div className="min-w-0">
+                    <p className="text-[18px] font-semibold text-[#111827]">{topic.title}</p>
+                    <p className="mt-2 text-[13px] leading-[1.8] text-[#4b5563]">{topic.summary}</p>
+                  </div>
+                </div>
+
+                <div className="mt-4 grid gap-3">
+                  {(topic.subtopics || []).map((subtopic, subtopicIndex) => (
+                    <article key={`${subtopic.title}-${subtopicIndex}`} className="rounded-[16px] border border-[#e5e7eb] bg-white p-4">
+                      <p className="text-[14px] font-semibold text-[#111827]">{subtopic.title}</p>
+                      <p className="mt-2 text-[12px] leading-[1.8] text-[#5b6475]">{subtopic.summary}</p>
+                      <ul className="mt-3 space-y-2">
+                        {(subtopic.keyPoints || []).map((point, pointIndex) => (
+                          <li key={`${subtopic.title}-point-${pointIndex}`} className="flex gap-2 text-[12px] leading-[1.8] text-[#374151]">
+                            <span className="mt-[2px] text-[#4158c7]">•</span>
+                            <span>{point}</span>
+                          </li>
+                        ))}
+                      </ul>
+                      {!!subtopic.supplementaryNotes?.length && (
+                        <div className="mt-3 rounded-[14px] border border-[#dbe4ff] bg-[#f5f8ff] p-3">
+                          <p className="text-[11px] font-semibold tracking-[0.08em] text-[#3151d3]">보충 설명</p>
+                          <div className="mt-2 space-y-2">
+                            {(subtopic.supplementaryNotes || []).map((note, noteIndex) => (
+                              <p key={`${subtopic.title}-note-${noteIndex}`} className="text-[12px] leading-[1.8] text-[#374151]">
+                                {note}
+                              </p>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </article>
+                  ))}
+                </div>
+              </section>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const YoutubeMaterialModal = ({ open, youtubeUrl, format, submitting, onChange, onFormatChange, onClose, onSubmit }) => {
+  if (!open) return null;
+  return (
+    <div className="fixed inset-0 z-[175] flex items-center justify-center bg-black/45 px-4">
+      <div className="w-full max-w-[520px] rounded-[24px] border border-[#dfe3ee] bg-white p-6 shadow-[0_24px_80px_rgba(15,23,42,0.22)]">
+        <h2 className="text-[22px] font-semibold text-[#111827]">유튜브 강의 요약본 만들기</h2>
+        <p className="mt-3 text-[14px] leading-[1.8] text-[#5b6475]">
+          자막이 있는 유튜브 영상 링크를 넣으면 자동 생성 자막을 문맥 기준으로 후보정한 뒤 핵심 요약본을 만들어 강의자료에 추가합니다.
+        </p>
+        <label className="mt-5 block">
+          <span className="text-[12px] font-semibold text-[#4b5563]">유튜브 링크</span>
+          <input
+            type="url"
+            value={youtubeUrl}
+            onChange={(event) => onChange(event.target.value)}
+            placeholder="https://youtu.be/... 또는 https://www.youtube.com/watch?v=..."
+            className="mt-2 w-full rounded-[14px] border border-[#d1d5db] px-4 py-3 text-[13px] text-[#111827] outline-none transition focus:border-[#111827]"
+          />
+        </label>
+        <p className="mt-3 text-[11px] leading-[1.7] text-[#7c8497]">
+          자막이 없는 영상은 처리할 수 없습니다. 긴 영상은 자막 정리와 분석에 시간이 조금 더 걸릴 수 있습니다.
+        </p>
+        <div className="mt-4 flex gap-2">
+          {["DOCX", "PDF"].map((option) => (
+            <button
+              key={option}
+              type="button"
+              onClick={() => onFormatChange(option)}
+              disabled={submitting}
+              className={`rounded-[10px] border px-3 py-2 text-[11px] font-semibold ${
+                format === option
+                  ? "border-[#111827] bg-[#111827] text-white"
+                  : "border-[#d1d5db] bg-white text-[#4b5563]"
+              } disabled:opacity-55`}
+            >
+              {option} 요약본
+            </button>
+          ))}
+        </div>
+        <div className="mt-6 flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={submitting}
+            className="rounded-[12px] border border-[#d1d5db] px-4 py-2.5 text-[13px] font-semibold text-[#4b5563] disabled:opacity-60"
+          >
+            취소
+          </button>
+          <button
+            type="button"
+            onClick={onSubmit}
+            disabled={submitting || !String(youtubeUrl || "").trim()}
+            className="rounded-[12px] bg-[#111827] px-4 py-2.5 text-[13px] font-semibold text-white disabled:opacity-60"
+          >
+            {submitting ? "요약본 생성 요청 중..." : "요약본 만들기"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const VisualAssetModal = ({ open, title, assets, onClose }) => {
   if (!open) return null;
   return (
@@ -145,6 +333,7 @@ const VisualAssetModal = ({ open, title, assets, onClose }) => {
 };
 
 const materialStatusLabel = (material) => {
+  if (material?.sourceType === "AI_GENERATED_SUMMARY") return "요약본 생성 완료";
   if (material?.ingested) return "분석 완료";
   if (material?.ingestionStatus === "QUEUED") return "분석 대기";
   if (material?.ingestionStatus === "PROCESSING") return "분석 중";
@@ -153,6 +342,7 @@ const materialStatusLabel = (material) => {
 };
 
 const isMaterialAnalysisDisabled = (material, analyzingMaterialId, uploading, hasOngoingMaterialIngestion) => {
+  if (material?.sourceType === "AI_GENERATED_SUMMARY") return true;
   if (uploading) return true;
   if (analyzingMaterialId !== null) return true;
   if (hasOngoingMaterialIngestion) return true;
@@ -162,10 +352,20 @@ const isMaterialAnalysisDisabled = (material, analyzingMaterialId, uploading, ha
 
 const materialAnalyzeButtonLabel = (material, analyzingMaterialId) => {
   if (analyzingMaterialId === material?.materialId) return "분석 요청 중...";
+  if (material?.sourceType === "AI_GENERATED_SUMMARY") return "요약본";
   if (material?.ingested) return "분석 완료";
   if (material?.ingestionStatus === "QUEUED") return "분석 대기";
   if (material?.ingestionStatus === "PROCESSING") return "분석 중";
   return "AI 분석";
+};
+
+const youtubeSummaryStatusLabel = (job) => {
+  if (job?.status === "FETCHING_CAPTIONS") return "자막 추출 중";
+  if (job?.status === "REFINING_TRANSCRIPT") return "자막 후보정 중";
+  if (job?.status === "GENERATING_SUMMARY") return "요약본 생성 중";
+  if (job?.status === "READY") return "완료";
+  if (job?.status === "FAILED") return "실패";
+  return "대기 중";
 };
 
 const materialKindMeta = (materialKind) => {
@@ -257,6 +457,7 @@ export const StudentCoursePage = () => {
   const [courses, setCourses] = useState([]);
   const [course, setCourse] = useState(null);
   const [materials, setMaterials] = useState([]);
+  const [youtubeSummaryJobs, setYoutubeSummaryJobs] = useState([]);
   const [sessions, setSessions] = useState([]);
   const [wrongAnswerSets, setWrongAnswerSets] = useState([]);
 
@@ -272,6 +473,8 @@ export const StudentCoursePage = () => {
   const [deletingMaterialId, setDeletingMaterialId] = useState(null);
   const [creatingSessionCount, setCreatingSessionCount] = useState(null);
   const [creatingSummaryFormat, setCreatingSummaryFormat] = useState(null);
+  const [creatingSummaryPreview, setCreatingSummaryPreview] = useState(false);
+  const [creatingYoutubeMaterial, setCreatingYoutubeMaterial] = useState(false);
   const [deletingSessionId, setDeletingSessionId] = useState(null);
   const [creatingRetestSetId, setCreatingRetestSetId] = useState(null);
   const [sessionGenerationMode, setSessionGenerationMode] = useState("STANDARD");
@@ -285,6 +488,22 @@ export const StudentCoursePage = () => {
   const [materialDeleteTarget, setMaterialDeleteTarget] = useState(null);
   const [sessionDeleteTarget, setSessionDeleteTarget] = useState(null);
   const [visualAssetViewer, setVisualAssetViewer] = useState(null);
+  const [summaryPreview, setSummaryPreview] = useState(null);
+  const [showYoutubeMaterialModal, setShowYoutubeMaterialModal] = useState(false);
+  const [youtubeMaterialUrl, setYoutubeMaterialUrl] = useState("");
+  const [youtubeSummaryFormat, setYoutubeSummaryFormat] = useState("DOCX");
+
+  const handleAuthenticationFailure = useCallback((error) => {
+    if (!isAuthenticationError(error)) return false;
+    setPageErrorMessage("");
+    setMaterialErrorMessage("");
+    setSessionErrorMessage("");
+    navigate("/login", {
+      replace: true,
+      state: { redirectedFrom: location.pathname },
+    });
+    return true;
+  }, [location.pathname, navigate]);
 
   useEffect(() => {
     const charged = consumePointChargeSuccessResult();
@@ -298,17 +517,20 @@ export const StudentCoursePage = () => {
     if (!matchedCourse) {
       setCourse(null);
       setMaterials([]);
+      setYoutubeSummaryJobs([]);
       setSessions([]);
       setWrongAnswerSets([]);
       return;
     }
     setCourse(matchedCourse);
-    const [materialsPayload, sessionsPayload, wrongAnswerPayload] = await Promise.all([
+    const [materialsPayload, youtubeJobsPayload, sessionsPayload, wrongAnswerPayload] = await Promise.all([
       getStudentCourseMaterials(matchedCourse.courseId),
+      getStudentCourseYoutubeMaterialJobs(matchedCourse.courseId),
       getStudentCourseSessions(matchedCourse.courseId),
       getStudentCourseWrongAnswerSets(matchedCourse.courseId),
     ]);
     setMaterials(Array.isArray(materialsPayload) ? materialsPayload : []);
+    setYoutubeSummaryJobs(Array.isArray(youtubeJobsPayload) ? youtubeJobsPayload : []);
     setSessions(Array.isArray(sessionsPayload) ? sessionsPayload : []);
     setWrongAnswerSets(Array.isArray(wrongAnswerPayload) ? wrongAnswerPayload : []);
   }, [normalizedCourseId]);
@@ -331,7 +553,7 @@ export const StudentCoursePage = () => {
         setCourses(nextCourses);
         await loadCourseData(nextCourses);
       } catch (error) {
-        if (!cancelled) {
+        if (!cancelled && !handleAuthenticationFailure(error)) {
           setPageErrorMessage(error?.message || "과목 정보를 불러오지 못했습니다.");
         }
       } finally {
@@ -343,18 +565,18 @@ export const StudentCoursePage = () => {
     return () => {
       cancelled = true;
     };
-  }, [loadCourseData]);
+  }, [handleAuthenticationFailure, loadCourseData]);
 
   const pointSummaryText = useMemo(() => formatPoint(userPoint), [userPoint]);
   const studentMenuSections = useMemo(() => getStudentSidebarSections(courses), [courses]);
   const studentMyMenuItems = useMemo(() => getStudentMyMenuItems(), []);
   const sidebarActiveKey = useMemo(() => getStudentSidebarActiveKey(location.pathname), [location.pathname]);
   const readyMaterialCount = useMemo(
-    () => materials.filter((material) => material?.materialKind !== "PAST_EXAM" && material?.ingested).length,
+    () => materials.filter((material) => material?.materialKind !== "PAST_EXAM" && material?.sourceType !== "AI_GENERATED_SUMMARY" && material?.ingested).length,
     [materials]
   );
   const readyLectureMaterials = useMemo(
-    () => materials.filter((material) => material?.materialKind !== "PAST_EXAM" && material?.ingested),
+    () => materials.filter((material) => material?.materialKind !== "PAST_EXAM" && material?.sourceType !== "AI_GENERATED_SUMMARY" && material?.ingested),
     [materials]
   );
   const lectureMaterials = useMemo(
@@ -380,6 +602,11 @@ export const StudentCoursePage = () => {
       ),
     [materials]
   );
+  const activeYoutubeSummaryJobs = useMemo(
+    () => youtubeSummaryJobs.filter((job) => job?.status !== "READY" && job?.status !== "FAILED"),
+    [youtubeSummaryJobs]
+  );
+  const hasOngoingYoutubeSummaryJob = activeYoutubeSummaryJobs.length > 0;
   const activeIngestionMaterial = useMemo(
     () =>
       materials.find(
@@ -415,18 +642,19 @@ export const StudentCoursePage = () => {
   }, [loadCourseData]);
 
   useEffect(() => {
-    if (!hasOngoingMaterialIngestion) return undefined;
+    if (!hasOngoingMaterialIngestion && !hasOngoingYoutubeSummaryJob) return undefined;
     const timer = window.setInterval(() => {
       void (async () => {
         try {
           await refreshCourse();
         } catch (error) {
+          if (handleAuthenticationFailure(error)) return;
           console.error("student course ingestion polling failed", error);
         }
       })();
     }, 4000);
     return () => window.clearInterval(timer);
-  }, [hasOngoingMaterialIngestion, refreshCourse]);
+  }, [handleAuthenticationFailure, hasOngoingMaterialIngestion, hasOngoingYoutubeSummaryJob, refreshCourse]);
 
   const handleUploadMaterial = async (file, materialKind = "LECTURE_MATERIAL") => {
     if (!file || !course || uploading || isAnalysisLocked) return;
@@ -439,9 +667,32 @@ export const StudentCoursePage = () => {
       setMaterialMessage(`${kindMeta.successLabel}를 업로드했습니다.`);
       await refreshCourse();
     } catch (error) {
+      if (handleAuthenticationFailure(error)) return;
       setMaterialErrorMessage(error?.message || "자료 업로드에 실패했습니다.");
     } finally {
       setUploading(false);
+    }
+  };
+
+  const handleUploadYoutubeMaterial = async () => {
+    if (!course || creatingYoutubeMaterial || uploading || isAnalysisLocked) return;
+    const normalizedUrl = String(youtubeMaterialUrl || "").trim();
+    if (!normalizedUrl) return;
+    setCreatingYoutubeMaterial(true);
+    setMaterialMessage("");
+    setMaterialErrorMessage("");
+    try {
+      const payload = await uploadStudentCourseYoutubeMaterial(course.courseId, normalizedUrl, youtubeSummaryFormat);
+      setMaterialMessage(`"${payload?.videoTitle || "유튜브 강의"}" 요약본 생성을 시작했습니다.`);
+      setYoutubeMaterialUrl("");
+      setYoutubeSummaryFormat("DOCX");
+      setShowYoutubeMaterialModal(false);
+      await refreshCourse();
+    } catch (error) {
+      if (handleAuthenticationFailure(error)) return;
+      setMaterialErrorMessage(error?.message || "유튜브 요약본 생성 요청에 실패했습니다.");
+    } finally {
+      setCreatingYoutubeMaterial(false);
     }
   };
 
@@ -455,6 +706,7 @@ export const StudentCoursePage = () => {
       setMaterialMessage(`"${material.fileName}" 분석을 요청했습니다.`);
       await refreshCourse();
     } catch (error) {
+      if (handleAuthenticationFailure(error)) return;
       setMaterialErrorMessage(error?.message || "AI 분석 요청에 실패했습니다.");
     } finally {
       setAnalyzingMaterialId(null);
@@ -467,13 +719,17 @@ export const StudentCoursePage = () => {
     setMaterialMessage("");
     setMaterialErrorMessage("");
     try {
-      const payload = await getStudentCourseMaterialDownloadUrl(course.courseId, material.materialId);
-      if (!payload?.downloadUrl) {
-        setMaterialErrorMessage("다운로드 링크를 받지 못했습니다.");
-        return;
-      }
-      window.open(payload.downloadUrl, "_blank", "noopener,noreferrer");
+      const payload = await downloadStudentCourseMaterialContent(course.courseId, material.materialId);
+      const objectUrl = window.URL.createObjectURL(payload.blob);
+      const anchor = document.createElement("a");
+      anchor.href = objectUrl;
+      anchor.download = payload.fileName || material.fileName || "lecture-material";
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      window.URL.revokeObjectURL(objectUrl);
     } catch (error) {
+      if (handleAuthenticationFailure(error)) return;
       setMaterialErrorMessage(error?.message || "다운로드 링크 생성에 실패했습니다.");
     } finally {
       setDownloadingMaterialId(null);
@@ -491,6 +747,7 @@ export const StudentCoursePage = () => {
       setMaterialDeleteTarget(null);
       await refreshCourse();
     } catch (error) {
+      if (handleAuthenticationFailure(error)) return;
       setMaterialErrorMessage(error?.message || "자료 삭제에 실패했습니다.");
     } finally {
       setDeletingMaterialId(null);
@@ -516,6 +773,7 @@ export const StudentCoursePage = () => {
       setSessionMessage(`${examModeLabel(sessionGenerationMode)} ${questionCount}문항 모의고사를 생성했습니다.`);
       await refreshCourse();
     } catch (error) {
+      if (handleAuthenticationFailure(error)) return;
       setSessionErrorMessage(error?.message || "모의고사 생성에 실패했습니다.");
     } finally {
       setCreatingSessionCount(null);
@@ -530,29 +788,50 @@ export const StudentCoursePage = () => {
     ));
   };
 
-  const handleCreateSummaryDocument = async () => {
+  const handleCreateSummaryDocument = async (formatOverride = null) => {
     if (!course || creatingSummaryFormat || selectedSummaryMaterialIds.length === 0) return;
-    setCreatingSummaryFormat(summaryFormat);
+    const requestedFormat = formatOverride || summaryFormat;
+    setCreatingSummaryFormat(requestedFormat);
     setSessionMessage("");
     setSessionErrorMessage("");
     try {
       const payload = await createStudentCourseSummaryDocument(course.courseId, {
         selectedMaterialIds: selectedSummaryMaterialIds,
-        format: summaryFormat,
+        format: requestedFormat,
       });
       const objectUrl = URL.createObjectURL(payload.blob);
       const anchor = document.createElement("a");
       anchor.href = objectUrl;
-      anchor.download = payload.fileName || `${course.courseName}_요약본.${summaryFormat === "PDF" ? "pdf" : "docx"}`;
+      anchor.download = payload.fileName || `${course.courseName}_요약본.${requestedFormat === "PDF" ? "pdf" : "docx"}`;
       document.body.appendChild(anchor);
       anchor.click();
       anchor.remove();
       window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
-      setSessionMessage(`강의자료 요약본 ${summaryFormat} 파일을 생성했습니다.`);
+      setSessionMessage(`강의자료 요약본 ${requestedFormat} 파일을 생성했습니다.`);
     } catch (error) {
+      if (handleAuthenticationFailure(error)) return;
       setSessionErrorMessage(error?.message || "요약본 생성에 실패했습니다.");
     } finally {
       setCreatingSummaryFormat(null);
+    }
+  };
+
+  const handlePreviewSummary = async () => {
+    if (!course || creatingSummaryPreview || selectedSummaryMaterialIds.length === 0) return;
+    setCreatingSummaryPreview(true);
+    setSessionMessage("");
+    setSessionErrorMessage("");
+    try {
+      const payload = await previewStudentCourseSummary(course.courseId, {
+        selectedMaterialIds: selectedSummaryMaterialIds,
+      });
+      setSummaryPreview(payload);
+      setSessionMessage("구조화 노트 미리보기를 생성했습니다.");
+    } catch (error) {
+      if (handleAuthenticationFailure(error)) return;
+      setSessionErrorMessage(error?.message || "노트 미리보기에 실패했습니다.");
+    } finally {
+      setCreatingSummaryPreview(false);
     }
   };
 
@@ -586,6 +865,7 @@ export const StudentCoursePage = () => {
         navigate(`/content/student/sessions/${payload.sessionId}`);
       }
     } catch (error) {
+      if (handleAuthenticationFailure(error)) return;
       setSessionErrorMessage(error?.message || "재시험 세션 생성에 실패했습니다.");
     } finally {
       setCreatingRetestSetId(null);
@@ -603,6 +883,7 @@ export const StudentCoursePage = () => {
       setSessionDeleteTarget(null);
       await refreshCourse();
     } catch (error) {
+      if (handleAuthenticationFailure(error)) return;
       setSessionErrorMessage(error?.message || "모의고사 삭제에 실패했습니다.");
     } finally {
       setDeletingSessionId(null);
@@ -737,6 +1018,41 @@ export const StudentCoursePage = () => {
                   </div>
                   {materialMessage ? <p className="mt-3 text-[12px] text-[#1f8f55]">{materialMessage}</p> : null}
                   {materialErrorMessage ? <p className="mt-3 text-[12px] text-[#d84a4a]">{materialErrorMessage}</p> : null}
+                  {youtubeSummaryJobs.length > 0 ? (
+                    <div className="mt-4 rounded-[16px] border border-[#e5e7eb] bg-white p-4">
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                          <p className="text-[14px] font-semibold text-[#111827]">유튜브 요약본 생성 상태</p>
+                          <p className="mt-1 text-[11px] text-[#7c8497]">최근 요청한 유튜브 강의 요약본 작업입니다.</p>
+                        </div>
+                        <p className="text-[11px] font-semibold text-[#4b5563]">{youtubeSummaryJobs.length}건</p>
+                      </div>
+                      <div className="mt-3 grid gap-2">
+                        {youtubeSummaryJobs.slice(0, 5).map((job) => (
+                          <div key={job.jobId} className="flex flex-wrap items-center justify-between gap-3 rounded-[12px] border border-[#edf0f6] bg-[#fafbff] px-3 py-3">
+                            <div className="min-w-0">
+                              <p className="truncate text-[12px] font-semibold text-[#111827]">{job.summaryTitle || job.videoTitle || job.youtubeUrl}</p>
+                              <p className="mt-1 text-[10px] text-[#7c8497]">
+                                {new Date(job.createdAt).toLocaleString("ko-KR")} · {job.format}
+                              </p>
+                              {job.errorMessage ? (
+                                <p className="mt-1 text-[11px] leading-[1.6] text-[#dc2626]">{job.errorMessage}</p>
+                              ) : null}
+                            </div>
+                            <span className={`rounded-full px-2.5 py-1 text-[10px] font-semibold ${
+                              job.status === "READY"
+                                ? "bg-[#e8fff1] text-[#14804a]"
+                                : job.status === "FAILED"
+                                  ? "bg-[#fff1f1] text-[#dc2626]"
+                                  : "bg-[#eef2ff] text-[#4338ca]"
+                            }`}>
+                              {youtubeSummaryStatusLabel(job)}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
                   <div className="mt-4 grid gap-4 xl:grid-cols-2">
                     {[
                       { key: "LECTURE_MATERIAL", items: lectureMaterials },
@@ -750,24 +1066,36 @@ export const StudentCoursePage = () => {
                               <p className="text-[15px] font-semibold text-[#111827]">{meta.title}</p>
                               <p className="mt-1 text-[12px] text-[#7c8497]">{section.items.length}개 업로드됨</p>
                             </div>
-                            <label className={`cursor-pointer rounded-[10px] px-3 py-2 text-[11px] font-semibold ${uploading ? "bg-[#d1d5db] text-white" : "bg-[#111827] text-white"}`}>
-                              {uploading ? "업로드 중..." : meta.uploadLabel}
-                              <input
-                                type="file"
-                                accept={
-                                  section.key === "PAST_EXAM"
-                                    ? ".pdf,.docx,.pptx,.jpg,.jpeg,.png,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.presentationml.presentation,image/jpeg,image/png"
-                                    : ".pdf,.docx,.pptx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.presentationml.presentation"
-                                }
-                                className="hidden"
-                                disabled={uploading || isAnalysisLocked}
-                                onChange={(event) => {
-                                  const file = event.target.files?.[0];
-                                  void handleUploadMaterial(file, section.key);
-                                  event.target.value = "";
-                                }}
-                              />
-                            </label>
+                            <div className="flex flex-wrap items-center justify-end gap-2">
+                              {section.key === "LECTURE_MATERIAL" ? (
+                                <button
+                                  type="button"
+                                  onClick={() => setShowYoutubeMaterialModal(true)}
+                                  disabled={uploading || creatingYoutubeMaterial || isAnalysisLocked || hasOngoingYoutubeSummaryJob}
+                                  className="rounded-[10px] border border-[#111827] bg-white px-3 py-2 text-[11px] font-semibold text-[#111827] disabled:opacity-55"
+                                >
+                                  {creatingYoutubeMaterial ? "요청 중..." : hasOngoingYoutubeSummaryJob ? "요약본 생성 중..." : "유튜브 영상 업로드"}
+                                </button>
+                              ) : null}
+                              <label className={`cursor-pointer rounded-[10px] px-3 py-2 text-[11px] font-semibold ${uploading ? "bg-[#d1d5db] text-white" : "bg-[#111827] text-white"}`}>
+                                {uploading ? "업로드 중..." : meta.uploadLabel}
+                                <input
+                                  type="file"
+                                  accept={
+                                    section.key === "PAST_EXAM"
+                                      ? ".pdf,.docx,.pptx,.jpg,.jpeg,.png,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.presentationml.presentation,image/jpeg,image/png"
+                                      : ".pdf,.docx,.pptx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.presentationml.presentation"
+                                  }
+                                  className="hidden"
+                                  disabled={uploading || isAnalysisLocked}
+                                  onChange={(event) => {
+                                    const file = event.target.files?.[0];
+                                    void handleUploadMaterial(file, section.key);
+                                    event.target.value = "";
+                                  }}
+                                />
+                              </label>
+                            </div>
                           </div>
                           <div className="mt-4">
                             {section.items.length === 0 ? (
@@ -777,9 +1105,16 @@ export const StudentCoursePage = () => {
                                 {section.items.map((material) => (
                                   <div key={material.materialId} className="rounded-[14px] border border-[#e5e7eb] bg-[#fcfcfd] p-3">
                                     <div className="flex items-start justify-between gap-2">
-                                      <span className={`rounded-full px-2.5 py-1 text-[10px] font-semibold ${meta.toneClass}`}>
-                                        {meta.title}
-                                      </span>
+                                      <div className="flex flex-wrap gap-1.5">
+                                        <span className={`rounded-full px-2.5 py-1 text-[10px] font-semibold ${meta.toneClass}`}>
+                                          {meta.title}
+                                        </span>
+                                        {material?.sourceType === "AI_GENERATED_SUMMARY" ? (
+                                          <span className="rounded-full bg-[#111827] px-2.5 py-1 text-[10px] font-semibold text-white">
+                                            AI 요약본
+                                          </span>
+                                        ) : null}
+                                      </div>
                                       <span className={`rounded-full px-2.5 py-1 text-[10px] font-semibold ${
                                         material?.ingested
                                           ? "bg-[#e8fff1] text-[#14804a]"
@@ -879,7 +1214,7 @@ export const StudentCoursePage = () => {
                     <div>
                       <p className="text-[18px] font-semibold text-[#111827]">강의자료 요약본</p>
                       <p className="mt-1 text-[12px] text-[#6b7280]">
-                        분석 완료된 강의자료를 여러 개 선택해 요약본을 만들고, DOCX 또는 PDF로 바로 다운로드할 수 있습니다.
+                        분석 완료된 강의자료를 여러 개 선택해 구조화 노트를 미리 보고, DOCX 또는 PDF로 바로 다운로드할 수 있습니다.
                       </p>
                     </div>
                     <p className="text-[12px] font-semibold text-[#4b5563]">{selectedSummaryMaterialIds.length}개 선택</p>
@@ -939,10 +1274,18 @@ export const StudentCoursePage = () => {
                         ))
                       )}
                     </div>
-                    <div className="mt-4 flex justify-end">
+                    <div className="mt-4 flex flex-wrap justify-end gap-2">
                       <button
                         type="button"
-                        disabled={Boolean(creatingSummaryFormat) || selectedSummaryMaterialIds.length === 0}
+                        disabled={creatingSummaryPreview || Boolean(creatingSummaryFormat) || selectedSummaryMaterialIds.length === 0}
+                        onClick={() => void handlePreviewSummary()}
+                        className="rounded-[12px] border border-[#111827] bg-white px-4 py-3 text-[12px] font-semibold text-[#111827] disabled:opacity-55"
+                      >
+                        {creatingSummaryPreview ? "노트 생성 중..." : "구조화 노트 미리보기"}
+                      </button>
+                      <button
+                        type="button"
+                        disabled={creatingSummaryPreview || Boolean(creatingSummaryFormat) || selectedSummaryMaterialIds.length === 0}
                         onClick={() => void handleCreateSummaryDocument()}
                         className="rounded-[12px] bg-[#111827] px-4 py-3 text-[12px] font-semibold text-white disabled:opacity-55"
                       >
@@ -1310,6 +1653,27 @@ export const StudentCoursePage = () => {
         title={visualAssetViewer ? `${visualAssetViewer.title} 원문 이미지` : ""}
         assets={Array.isArray(visualAssetViewer?.assets) ? visualAssetViewer.assets : []}
         onClose={() => setVisualAssetViewer(null)}
+      />
+      <YoutubeMaterialModal
+        open={showYoutubeMaterialModal}
+        youtubeUrl={youtubeMaterialUrl}
+        format={youtubeSummaryFormat}
+        submitting={creatingYoutubeMaterial}
+        onChange={setYoutubeMaterialUrl}
+        onFormatChange={setYoutubeSummaryFormat}
+        onClose={() => {
+          if (creatingYoutubeMaterial) return;
+          setShowYoutubeMaterialModal(false);
+        }}
+        onSubmit={() => void handleUploadYoutubeMaterial()}
+      />
+      <SummaryPreviewModal
+        open={Boolean(summaryPreview)}
+        preview={summaryPreview}
+        downloadPendingFormat={creatingSummaryFormat}
+        onDownloadDocx={() => void handleCreateSummaryDocument("DOCX")}
+        onDownloadPdf={() => void handleCreateSummaryDocument("PDF")}
+        onClose={() => setSummaryPreview(null)}
       />
     </>
   );

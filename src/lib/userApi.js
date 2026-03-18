@@ -232,9 +232,27 @@ export async function uploadStudentCourseMaterial(courseId, file, materialKind =
   return data;
 }
 
+export async function uploadStudentCourseYoutubeMaterial(courseId, youtubeUrl, format = "DOCX") {
+  return apiRequest(`/api/student/courses/${courseId}/youtube-materials`, {
+    method: "POST",
+    retryOnUnauthorized: true,
+    body: {
+      youtubeUrl,
+      format,
+    },
+  });
+}
+
+export async function getStudentCourseYoutubeMaterialJobs(courseId) {
+  return apiRequest(`/api/student/courses/${courseId}/youtube-materials`, {
+    method: "GET",
+  });
+}
+
 export async function deleteStudentCourseMaterial(courseId, materialId) {
   return apiRequest(`/api/student/courses/${courseId}/materials/${materialId}`, {
     method: "DELETE",
+    retryOnUnauthorized: true,
   });
 }
 
@@ -244,9 +262,16 @@ export async function getStudentCourseMaterialDownloadUrl(courseId, materialId) 
   });
 }
 
+export async function downloadStudentCourseMaterialContent(courseId, materialId) {
+  return downloadProtectedResource(`/api/student/courses/${courseId}/materials/${materialId}/content`, {
+    method: "GET",
+  });
+}
+
 export async function analyzeStudentCourseMaterial(courseId, materialId) {
   return apiRequest(`/api/student/courses/${courseId}/materials/${materialId}/analyze`, {
     method: "POST",
+    retryOnUnauthorized: true,
   });
 }
 
@@ -256,6 +281,7 @@ export async function createStudentCourseSummaryDocument(courseId, {
 }) {
   return downloadProtectedResource(`/api/student/courses/${courseId}/summary-documents`, {
     method: "POST",
+    retryOnUnauthorized: true,
     headers: {
       "Content-Type": "application/json",
     },
@@ -263,6 +289,16 @@ export async function createStudentCourseSummaryDocument(courseId, {
       selectedMaterialIds,
       format,
     }),
+  });
+}
+
+export async function previewStudentCourseSummary(courseId, { selectedMaterialIds }) {
+  return apiRequest(`/api/student/courses/${courseId}/summary-preview`, {
+    method: "POST",
+    retryOnUnauthorized: true,
+    body: {
+      selectedMaterialIds,
+    },
   });
 }
 
@@ -287,6 +323,7 @@ export async function getStudentWrongAnswerSetDetail(setId) {
 export async function createStudentWrongAnswerRetest(setId) {
   return apiRequest(`/api/student/courses/wrong-answer-sets/${setId}/retest`, {
     method: "POST",
+    retryOnUnauthorized: true,
   });
 }
 
@@ -299,6 +336,7 @@ export async function createStudentCourseSession(courseId, {
 }) {
   return apiRequest(`/api/student/courses/${courseId}/sessions`, {
     method: "POST",
+    retryOnUnauthorized: true,
     body: {
       questionCount,
       generationMode,
@@ -318,6 +356,7 @@ export async function getStudentExamSessionDetail(sessionId) {
 export async function deleteStudentExamSession(sessionId) {
   return apiRequest(`/api/student/courses/sessions/${sessionId}`, {
     method: "DELETE",
+    retryOnUnauthorized: true,
   });
 }
 
