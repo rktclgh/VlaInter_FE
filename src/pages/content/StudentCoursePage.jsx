@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
+import { AcademicProfileRequiredModal } from "../../components/AcademicProfileRequiredModal";
 import { StarRatingInput } from "../../components/DifficultyStars";
 import { ContentTopNav } from "../../components/ContentTopNav";
 import { MobileSidebarDrawer } from "../../components/MobileSidebarDrawer";
@@ -14,6 +15,7 @@ import { logout } from "../../lib/authApi";
 import { getInterviewLanguageLabel, INTERVIEW_LANGUAGE_OPTIONS, normalizeInterviewLanguage } from "../../lib/interviewLanguage";
 import { consumePointChargeSuccessResult } from "../../lib/pointChargeFlow";
 import { extractProfile, formatPoint, parsePoint } from "../../lib/profileUtils";
+import { hasAcademicProfile } from "../../lib/serviceMode";
 import { getStudentMyMenuItems, getStudentSidebarActiveKey, getStudentSidebarSections } from "../../lib/studentNavigation";
 import {
   analyzeStudentCourseMaterial,
@@ -486,6 +488,7 @@ export const StudentCoursePage = () => {
   const [wrongAnswerSets, setWrongAnswerSets] = useState([]);
 
   const [pageErrorMessage, setPageErrorMessage] = useState("");
+  const [requiresAcademicProfile, setRequiresAcademicProfile] = useState(false);
   const [, setMaterialMessage] = useState("");
   const [, setMaterialErrorMessage] = useState("");
   const [, setSessionMessage] = useState("");
@@ -568,16 +571,26 @@ export const StudentCoursePage = () => {
 
     const load = async () => {
       try {
-        const [profilePayload, coursesPayload] = await Promise.all([
-          getMyProfile(),
-          getMyStudentCourses(),
-        ]);
+        const profilePayload = await getMyProfile();
         if (cancelled) return;
         const profile = extractProfile(profilePayload);
         setUserName(String(profile?.name || "사용자"));
         setIsAdmin(profile?.role === "ADMIN");
         setUserPoint(parsePoint(profile?.point));
         setProfileImageUrl(getMyProfileImageUrl());
+        const profileReady = hasAcademicProfile(profile);
+        setRequiresAcademicProfile(!profileReady);
+        if (!profileReady) {
+          setCourses([]);
+          setCourse(null);
+          setMaterials([]);
+          setYoutubeSummaryJobs([]);
+          setSessions([]);
+          setWrongAnswerSets([]);
+          return;
+        }
+        const coursesPayload = await getMyStudentCourses();
+        if (cancelled) return;
         const nextCourses = Array.isArray(coursesPayload) ? coursesPayload : [];
         setCourses(nextCourses);
         await loadCourseData(nextCourses);
@@ -1818,6 +1831,10 @@ export const StudentCoursePage = () => {
           setShowYoutubeMaterialModal(false);
         }}
         onSubmit={() => void handleUploadYoutubeMaterial()}
+      />
+      <AcademicProfileRequiredModal
+        open={requiresAcademicProfile}
+        onMoveToMyPage={() => navigate("/content/student/mypage")}
       />
       <SummaryPreviewModal
         open={Boolean(summaryPreview)}

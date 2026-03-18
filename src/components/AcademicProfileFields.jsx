@@ -25,6 +25,7 @@ export const AcademicProfileFields = ({
 
   const normalizedUniversityName = String(universityName || "").trim();
   const normalizedDepartmentName = String(departmentName || "").trim();
+  const departmentInputDisabled = disabled || !selectedUniversityId;
 
   useEffect(() => {
     if (disabled || normalizedUniversityName.length < 2) {
@@ -53,7 +54,7 @@ export const AcademicProfileFields = ({
   }, [disabled, normalizedUniversityName]);
 
   useEffect(() => {
-    if (disabled || normalizedUniversityName.length < 2 || normalizedDepartmentName.length < 2) {
+    if (departmentInputDisabled || normalizedUniversityName.length < 2 || normalizedDepartmentName.length < 2) {
       setDepartmentResults([]);
       setLoadingDepartmentResults(false);
       return;
@@ -76,7 +77,7 @@ export const AcademicProfileFields = ({
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [disabled, normalizedDepartmentName, normalizedUniversityName, selectedUniversityId]);
+  }, [departmentInputDisabled, normalizedDepartmentName, normalizedUniversityName, selectedUniversityId]);
 
   const showUniversityResults = useMemo(
     () => universityFocused && normalizedUniversityName.length >= 2 && universityResults.length > 0,
@@ -145,7 +146,7 @@ export const AcademicProfileFields = ({
           ) : null}
         </div>
         <p className={`mt-1 text-[11px] ${universitySelected ? "text-[#1f8f55]" : "text-[#7c8497]"}`}>
-          {universitySelected ? "검색 결과에서 선택된 대학교입니다." : "검색 결과가 없으면 입력한 대학교명으로 저장됩니다."}
+          {universitySelected ? "검색 결과에서 선택된 대학교입니다." : "반드시 검색 결과에서 대학교를 선택해 주세요."}
         </p>
       </label>
 
@@ -162,9 +163,9 @@ export const AcademicProfileFields = ({
                 setDepartmentFocused(false);
               }, 120);
             }}
-            disabled={disabled}
+            disabled={departmentInputDisabled}
             className="h-11 w-full rounded-[12px] border border-[#d7dbe7] px-3 text-[14px] text-[#111827] disabled:bg-[#f3f4f6] disabled:text-[#9ca3af]"
-            placeholder="예: 컴퓨터공학과"
+            placeholder={selectedUniversityId ? "예: 컴퓨터공학과" : "대학교를 먼저 검색 결과에서 선택해 주세요"}
           />
           {loadingDepartmentResults ? (
             <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[11px] text-[#7c8497]">
@@ -191,12 +192,12 @@ export const AcademicProfileFields = ({
           ) : null}
         </div>
         <p className={`mt-1 text-[11px] ${departmentSelected ? "text-[#1f8f55]" : "text-[#7c8497]"}`}>
-          {departmentSelected ? "검색 결과에서 선택된 학과입니다." : "검색 결과가 없으면 입력한 학과명으로 저장됩니다."}
+          {departmentSelected ? "검색 결과에서 선택된 학과입니다." : "반드시 검색 결과에서 학과를 선택해 주세요."}
         </p>
       </label>
 
       <p className="text-[11px] leading-[1.7] text-[#7c8497]">
-        API 검색 결과가 있으면 그 값을 우선 사용하고, 결과가 없으면 입력한 대학교/학과가 저장되어 다음부터 자동완성에 재사용됩니다.
+        대학생 모드의 학교 정보는 자유 입력으로 저장되지 않으며, 검색 결과에서 선택한 대학교와 학과만 저장할 수 있습니다.
       </p>
     </div>
   );

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
+import { AcademicProfileRequiredModal } from "../../components/AcademicProfileRequiredModal";
 import { ContentTopNav } from "../../components/ContentTopNav";
 import { MobileSidebarDrawer } from "../../components/MobileSidebarDrawer";
 import { PointChargeModal } from "../../components/PointChargeModal";
@@ -13,6 +14,7 @@ import { logout } from "../../lib/authApi";
 import { getInterviewLanguageLabel } from "../../lib/interviewLanguage";
 import { consumePointChargeSuccessResult } from "../../lib/pointChargeFlow";
 import { extractProfile, formatPoint, parsePoint } from "../../lib/profileUtils";
+import { hasAcademicProfile } from "../../lib/serviceMode";
 import { getStudentMyMenuItems, getStudentSidebarSections } from "../../lib/studentNavigation";
 import {
   createStudentWrongAnswerSet,
@@ -226,6 +228,7 @@ export const StudentExamSessionPage = () => {
   const [deleting, setDeleting] = useState(false);
   const [courses, setCourses] = useState([]);
   const [sourceAssetViewer, setSourceAssetViewer] = useState(null);
+  const [requiresAcademicProfile, setRequiresAcademicProfile] = useState(false);
 
   useEffect(() => {
     const charged = consumePointChargeSuccessResult();
@@ -239,17 +242,26 @@ export const StudentExamSessionPage = () => {
 
     const load = async () => {
       try {
-        const [profilePayload, sessionPayload, coursesPayload] = await Promise.all([
-          getMyProfile(),
-          getStudentExamSessionDetail(sessionId),
-          getMyStudentCourses(),
-        ]);
+        const profilePayload = await getMyProfile();
         if (cancelled) return;
         const profile = extractProfile(profilePayload);
         setUserName(String(profile?.name || "사용자"));
         setIsAdmin(profile?.role === "ADMIN");
         setUserPoint(parsePoint(profile?.point));
         setProfileImageUrl(getMyProfileImageUrl());
+        const profileReady = hasAcademicProfile(profile);
+        setRequiresAcademicProfile(!profileReady);
+        if (!profileReady) {
+          setCourses([]);
+          setSession(null);
+          setAnswers({});
+          return;
+        }
+        const [sessionPayload, coursesPayload] = await Promise.all([
+          getStudentExamSessionDetail(sessionId),
+          getMyStudentCourses(),
+        ]);
+        if (cancelled) return;
         setSession(sessionPayload);
         setCourses(Array.isArray(coursesPayload) ? coursesPayload : []);
         setAnswers(
@@ -835,6 +847,10 @@ export const StudentExamSessionPage = () => {
           setShowDeleteModal(false);
         }}
         onConfirm={() => void handleDeleteSession()}
+      />
+      <AcademicProfileRequiredModal
+        open={requiresAcademicProfile}
+        onMoveToMyPage={() => navigate("/content/student/mypage")}
       />
       <VisualAssetModal
         open={Boolean(sourceAssetViewer)}

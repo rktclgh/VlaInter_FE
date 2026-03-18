@@ -32,7 +32,7 @@ const StudentProfileModal = ({
   onSelectDepartment,
   universitySelected,
   departmentSelected,
-  onClose,
+  onMoveToMyPage,
   onSubmit,
   pending,
   errorMessage,
@@ -65,18 +65,18 @@ const StudentProfileModal = ({
 
         {errorMessage ? <p className="mt-3 text-[13px] text-[#d84a4a]">{errorMessage}</p> : null}
 
-        <div className="mt-6 flex justify-end gap-2">
+        <div className="mt-6 flex flex-wrap justify-end gap-2">
           <button
             type="button"
-            onClick={onClose}
+            onClick={onMoveToMyPage}
             className="rounded-[12px] border border-[#d1d5db] px-4 py-2.5 text-[13px] font-semibold text-[#4b5563]"
           >
-            닫기
+            마이페이지에서 설정
           </button>
           <button
             type="button"
-            disabled={pending || !universitySelected || !String(departmentName || "").trim()}
-            aria-disabled={pending || !universitySelected || !String(departmentName || "").trim()}
+            disabled={pending || !universitySelected || !departmentSelected}
+            aria-disabled={pending || !universitySelected || !departmentSelected}
             onClick={onSubmit}
             className="rounded-[12px] bg-[#111827] px-4 py-2.5 text-[13px] font-semibold text-white disabled:cursor-not-allowed disabled:opacity-55"
           >
@@ -238,8 +238,8 @@ export const StudentHomePage = () => {
 
   const handleSaveAcademicProfile = async () => {
     if (savingAcademicProfile) return;
-    if (!selectedUniversityId || !String(departmentName || "").trim()) {
-      setAcademicProfileError("대학교는 검색 결과에서 선택하고, 학과는 입력해 주세요.");
+    if (!selectedUniversityId || !selectedDepartmentId) {
+      setAcademicProfileError("대학교와 학과를 모두 검색 결과에서 선택해 주세요.");
       return;
     }
     setSavingAcademicProfile(true);
@@ -613,7 +613,7 @@ export const StudentHomePage = () => {
         selectedUniversityId={selectedUniversityId}
         universitySelected={Boolean(selectedUniversityId)}
         departmentSelected={Boolean(selectedDepartmentId)}
-        onClose={() => setModalOpen(false)}
+        onMoveToMyPage={() => navigate("/content/student/mypage")}
         onSubmit={handleSaveAcademicProfile}
         pending={savingAcademicProfile}
         errorMessage={academicProfileError}

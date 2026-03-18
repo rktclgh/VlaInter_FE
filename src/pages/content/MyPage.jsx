@@ -749,7 +749,11 @@ export const MyPage = () => {
   const studentMyMenuItems = useMemo(() => getStudentMyMenuItems(), []);
   const trimmedUniversityName = String(universityName || "").trim();
   const trimmedDepartmentName = String(departmentName || "").trim();
-  const canSaveAcademicProfile = !academicProfileSubmitting && Boolean(trimmedUniversityName) && Boolean(trimmedDepartmentName);
+  const canSaveAcademicProfile = !academicProfileSubmitting &&
+    Boolean(trimmedUniversityName) &&
+    Boolean(trimmedDepartmentName) &&
+    Boolean(selectedUniversityId) &&
+    Boolean(selectedDepartmentId);
   const academicProfileLabel = useMemo(() => {
     if (!trimmedUniversityName || !trimmedDepartmentName) return "미등록";
     return `${trimmedUniversityName} · ${trimmedDepartmentName}`;
@@ -804,8 +808,8 @@ export const MyPage = () => {
   const handleSaveAcademicProfile = async () => {
     if (academicProfileSubmitting) return;
     if (!canSaveAcademicProfile) {
-      setServiceModeErrorMessage("대학교와 학과를 모두 입력해 주세요.");
-      showToast("대학교와 학과를 모두 입력해 주세요.", { type: "error" });
+      setServiceModeErrorMessage("대학교와 학과를 모두 검색 결과에서 선택해 주세요.");
+      showToast("대학교와 학과를 모두 검색 결과에서 선택해 주세요.", { type: "error" });
       return;
     }
     setAcademicProfileSubmitting(true);

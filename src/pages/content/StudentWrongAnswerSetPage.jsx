@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
+import { AcademicProfileRequiredModal } from "../../components/AcademicProfileRequiredModal";
 import { ContentTopNav } from "../../components/ContentTopNav";
 import { MobileSidebarDrawer } from "../../components/MobileSidebarDrawer";
 import { PointChargeModal } from "../../components/PointChargeModal";
@@ -12,6 +13,7 @@ import { downloadProtectedResource } from "../../lib/apiClient";
 import { logout } from "../../lib/authApi";
 import { consumePointChargeSuccessResult } from "../../lib/pointChargeFlow";
 import { extractProfile, formatPoint, parsePoint } from "../../lib/profileUtils";
+import { hasAcademicProfile } from "../../lib/serviceMode";
 import { getStudentMyMenuItems, getStudentSidebarSections } from "../../lib/studentNavigation";
 import {
   createStudentWrongAnswerRetest,
@@ -154,6 +156,7 @@ export const StudentWrongAnswerSetPage = () => {
   const [creatingRetest, setCreatingRetest] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [sourceAssetViewer, setSourceAssetViewer] = useState(null);
+  const [requiresAcademicProfile, setRequiresAcademicProfile] = useState(false);
 
   useEffect(() => {
     const charged = consumePointChargeSuccessResult();
@@ -167,17 +170,25 @@ export const StudentWrongAnswerSetPage = () => {
 
     const load = async () => {
       try {
-        const [profilePayload, coursesPayload, setPayload] = await Promise.all([
-          getMyProfile(),
-          getMyStudentCourses(),
-          getStudentWrongAnswerSetDetail(setId),
-        ]);
+        const profilePayload = await getMyProfile();
         if (cancelled) return;
         const profile = extractProfile(profilePayload);
         setUserName(String(profile?.name || "사용자"));
         setIsAdmin(profile?.role === "ADMIN");
         setUserPoint(parsePoint(profile?.point));
         setProfileImageUrl(getMyProfileImageUrl());
+        const profileReady = hasAcademicProfile(profile);
+        setRequiresAcademicProfile(!profileReady);
+        if (!profileReady) {
+          setCourses([]);
+          setWrongSet(null);
+          return;
+        }
+        const [coursesPayload, setPayload] = await Promise.all([
+          getMyStudentCourses(),
+          getStudentWrongAnswerSetDetail(setId),
+        ]);
+        if (cancelled) return;
         setCourses(Array.isArray(coursesPayload) ? coursesPayload : []);
         setWrongSet(setPayload);
       } catch (error) {
@@ -490,6 +501,10 @@ export const StudentWrongAnswerSetPage = () => {
           </div>
         </div>
       ) : null}
+      <AcademicProfileRequiredModal
+        open={requiresAcademicProfile}
+        onMoveToMyPage={() => navigate("/content/student/mypage")}
+      />
       <VisualAssetModal
         open={Boolean(sourceAssetViewer)}
         title={sourceAssetViewer?.title || "원문 이미지"}
