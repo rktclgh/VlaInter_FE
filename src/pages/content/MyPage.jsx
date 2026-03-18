@@ -378,6 +378,7 @@ export const MyPage = () => {
   const [userEmail, setUserEmail] = useState("-");
   const [userPoint, setUserPoint] = useState(0);
   const [serviceMode, setServiceMode] = useState(null);
+  const [studentModePendingSetup, setStudentModePendingSetup] = useState(false);
   const [universityName, setUniversityName] = useState("");
   const [selectedUniversityId, setSelectedUniversityId] = useState(null);
   const [departmentName, setDepartmentName] = useState("");
@@ -493,14 +494,17 @@ export const MyPage = () => {
         setUserEmail(profile?.email || "-");
         setIsAdmin(profile?.role === "ADMIN");
         setUserPoint(parsePoint(profile?.point));
-        setServiceMode(normalizeServiceMode(profile?.serviceMode));
+        const normalizedMode = normalizeServiceMode(profile?.serviceMode);
+        setServiceMode(normalizedMode);
+        setStudentModePendingSetup(false);
         setUniversityName(String(profile?.universityName || ""));
         setSelectedUniversityId((current) => normalizeOptionalId(profile?.universityId) ?? current);
         setDepartmentName(String(profile?.departmentName || ""));
         setSelectedDepartmentId((current) => normalizeOptionalId(profile?.departmentId) ?? current);
         setHasGeminiApiKey(Boolean(profile?.hasGeminiApiKey));
         setProfileImageUrl(getMyProfileImageUrl());
-        if (normalizeServiceMode(profile?.serviceMode) === SERVICE_MODE.STUDENT) {
+        const hasStudentAcademicProfile = hasAcademicProfile(profile);
+        if (normalizedMode === SERVICE_MODE.STUDENT && hasStudentAcademicProfile) {
           const coursesPayload = await getMyStudentCourses();
           setStudentCourses(Array.isArray(coursesPayload) ? coursesPayload : []);
         } else {
@@ -749,6 +753,7 @@ export const MyPage = () => {
   const studentMyMenuItems = useMemo(() => getStudentMyMenuItems(), []);
   const trimmedUniversityName = String(universityName || "").trim();
   const trimmedDepartmentName = String(departmentName || "").trim();
+  const shouldShowStudentAcademicFields = serviceMode === SERVICE_MODE.STUDENT || studentModePendingSetup;
   const canSaveAcademicProfile = !academicProfileSubmitting &&
     Boolean(trimmedUniversityName) &&
     Boolean(trimmedDepartmentName) &&
@@ -767,7 +772,21 @@ export const MyPage = () => {
   }, [isStudentRoute, location.pathname]);
 
   const handleUpdateServiceMode = async (nextServiceMode) => {
-    if (serviceModeSubmitting || nextServiceMode === serviceMode) return;
+    if (serviceModeSubmitting) return;
+    if (nextServiceMode === SERVICE_MODE.STUDENT && serviceMode !== SERVICE_MODE.STUDENT) {
+      setStudentModePendingSetup(true);
+      setServiceModeMessage("");
+      setServiceModeErrorMessage("");
+      showToast("대학교와 학과를 저장하면 대학생 모드로 전환됩니다.", { type: "info" });
+      return;
+    }
+    if (nextServiceMode === SERVICE_MODE.JOB_SEEKER && studentModePendingSetup && serviceMode === SERVICE_MODE.JOB_SEEKER) {
+      setStudentModePendingSetup(false);
+      setServiceModeMessage("대학생 모드 전환 예약을 취소했습니다.");
+      setServiceModeErrorMessage("");
+      return;
+    }
+    if (nextServiceMode === serviceMode && !studentModePendingSetup) return;
     setServiceModeSubmitting(true);
     setServiceModeMessage("");
     setServiceModeErrorMessage("");
@@ -777,11 +796,13 @@ export const MyPage = () => {
       setIsAdmin(profile?.role === "ADMIN");
       const normalizedMode = normalizeServiceMode(profile?.serviceMode);
       setServiceMode(normalizedMode);
+      setStudentModePendingSetup(false);
       setUniversityName(String(profile?.universityName || ""));
       setSelectedUniversityId((current) => normalizeOptionalId(profile?.universityId) ?? current);
       setDepartmentName(String(profile?.departmentName || ""));
       setSelectedDepartmentId((current) => normalizeOptionalId(profile?.departmentId) ?? current);
-      if (normalizedMode === SERVICE_MODE.STUDENT) {
+      const hasStudentAcademicProfile = hasAcademicProfile(profile);
+      if (normalizedMode === SERVICE_MODE.STUDENT && hasStudentAcademicProfile) {
         try {
           const coursesPayload = await getMyStudentCourses();
           setStudentCourses(Array.isArray(coursesPayload) ? coursesPayload : []);
@@ -791,12 +812,15 @@ export const MyPage = () => {
       } else {
         setStudentCourses([]);
       }
-      setServiceModeMessage(nextServiceMode === SERVICE_MODE.STUDENT ? "대학생 모드로 전환했습니다." : "취준생 모드로 전환했습니다.");
-      showToast(nextServiceMode === SERVICE_MODE.STUDENT ? "대학생 모드로 전환했습니다." : "취준생 모드로 전환했습니다.", { type: "success" });
-      navigate(
-        nextServiceMode === SERVICE_MODE.STUDENT ? "/content/student" : "/content/interview",
-        { replace: true }
-      );
+      if (nextServiceMode === SERVICE_MODE.STUDENT) {
+        setServiceModeMessage("대학생 모드로 전환했습니다.");
+        showToast("대학생 모드로 전환했습니다.", { type: "success" });
+        navigate("/content/student", { replace: true });
+      } else {
+        setServiceModeMessage("취준생 모드로 전환했습니다.");
+        showToast("취준생 모드로 전환했습니다.", { type: "success" });
+        navigate("/content/interview", { replace: true });
+      }
     } catch (error) {
       setServiceModeErrorMessage(error?.message || "서비스 모드 변경에 실패했습니다.");
       showToast(error?.message || "서비스 모드 변경에 실패했습니다.", { type: "error" });
@@ -822,14 +846,37 @@ export const MyPage = () => {
         departmentName: trimmedDepartmentName,
         departmentId: selectedDepartmentId || null,
       });
-      const profile = extractProfile(payload);
+      let profile = extractProfile(payload);
+      const shouldActivateStudentMode = serviceMode !== SERVICE_MODE.STUDENT && studentModePendingSetup;
+
+      if (shouldActivateStudentMode && hasAcademicProfile(profile)) {
+        const modePayload = await updateMyServiceMode(SERVICE_MODE.STUDENT);
+        profile = extractProfile(modePayload);
+      }
+
+      const hasStudentAcademicProfile = hasAcademicProfile(profile);
+      const normalizedMode = normalizeServiceMode(profile?.serviceMode);
       setIsAdmin(profile?.role === "ADMIN");
+      setServiceMode(normalizedMode);
+      setStudentModePendingSetup(false);
       setUniversityName(String(profile?.universityName || ""));
       setSelectedUniversityId((current) => normalizeOptionalId(profile?.universityId) ?? current);
       setDepartmentName(String(profile?.departmentName || ""));
       setSelectedDepartmentId((current) => normalizeOptionalId(profile?.departmentId) ?? current);
-      setServiceModeMessage(hasAcademicProfile(profile) ? "대학교 / 학과 정보를 저장했습니다." : "대학교 / 학과 정보를 비웠습니다.");
-      showToast(hasAcademicProfile(profile) ? "대학교 / 학과 정보를 저장했습니다." : "대학교 / 학과 정보를 비웠습니다.", { type: "success" });
+      if (normalizedMode === SERVICE_MODE.STUDENT && hasStudentAcademicProfile) {
+        try {
+          const coursesPayload = await getMyStudentCourses();
+          setStudentCourses(Array.isArray(coursesPayload) ? coursesPayload : []);
+        } catch {
+          setStudentCourses([]);
+        }
+        setServiceModeMessage(shouldActivateStudentMode ? "대학교 / 학과 정보를 저장했고 대학생 모드로 전환했습니다." : "대학교 / 학과 정보를 저장했습니다. 학생 페이지로 이동합니다.");
+        showToast(shouldActivateStudentMode ? "대학생 모드로 전환했습니다." : "대학교 / 학과 정보를 저장했습니다.", { type: "success" });
+        navigate("/content/student", { replace: true });
+      } else {
+        setServiceModeMessage(hasStudentAcademicProfile ? "대학교 / 학과 정보를 저장했습니다." : "대학교 / 학과 정보를 비웠습니다.");
+        showToast(hasStudentAcademicProfile ? "대학교 / 학과 정보를 저장했습니다." : "대학교 / 학과 정보를 비웠습니다.", { type: "success" });
+      }
     } catch (error) {
       setServiceModeErrorMessage(error?.message || "대학교 / 학과 저장에 실패했습니다.");
       showToast(error?.message || "대학교 / 학과 저장에 실패했습니다.", { type: "error" });
@@ -924,7 +971,7 @@ export const MyPage = () => {
               <div className="mt-4 rounded-[16px] border border-[#e0e0e0] bg-white p-6">
                 <h2 className="text-[18px] font-medium text-[#1f1f1f]">서비스 모드</h2>
                 <p className="mt-1 text-[12px] leading-[1.6] text-[#7a7a7a]">
-                  취준생 모드와 대학생 모드는 같은 계정에서 전환할 수 있습니다. 대학생 모드는 대학교와 학과를 함께 등록해야 합니다.
+                  취준생 모드와 대학생 모드는 같은 계정에서 전환할 수 있습니다. 대학생 모드로 바꾼 뒤 학생 페이지에서 대학교와 학과를 등록해 학습을 시작할 수 있습니다.
                 </p>
                 <div className="mt-4 flex flex-wrap items-center gap-2">
                   <button
@@ -932,7 +979,7 @@ export const MyPage = () => {
                     onClick={() => handleUpdateServiceMode(SERVICE_MODE.JOB_SEEKER)}
                     disabled={serviceModeSubmitting}
                     className={`rounded-[10px] border px-4 py-2 text-[12px] font-semibold ${
-                      serviceMode === SERVICE_MODE.JOB_SEEKER
+                      serviceMode === SERVICE_MODE.JOB_SEEKER && !studentModePendingSetup
                         ? "border-[#111827] bg-[#111827] text-white"
                         : "border-[#d7dbe7] bg-white text-[#374151]"
                     } disabled:opacity-60`}
@@ -944,16 +991,16 @@ export const MyPage = () => {
                     onClick={() => handleUpdateServiceMode(SERVICE_MODE.STUDENT)}
                     disabled={serviceModeSubmitting}
                     className={`rounded-[10px] border px-4 py-2 text-[12px] font-semibold ${
-                      serviceMode === SERVICE_MODE.STUDENT
+                      serviceMode === SERVICE_MODE.STUDENT || studentModePendingSetup
                         ? "border-[#111827] bg-[#111827] text-white"
                         : "border-[#d7dbe7] bg-white text-[#374151]"
                     } disabled:opacity-60`}
                   >
-                    {serviceModeSubmitting && serviceMode !== SERVICE_MODE.STUDENT ? "전환 중..." : "대학생 모드"}
+                    {serviceModeSubmitting && serviceMode !== SERVICE_MODE.STUDENT ? "전환 중..." : studentModePendingSetup ? "학적 입력 중..." : "대학생 모드"}
                   </button>
                 </div>
 
-                {serviceMode === SERVICE_MODE.STUDENT ? (
+                {shouldShowStudentAcademicFields ? (
                   <>
                     <div className="mt-5">
                       <AcademicProfileFields

@@ -19,13 +19,15 @@ import {
   getMyProfileImageUrl,
   getMyStudentCourses,
   updateMyAcademicProfile,
+  updateMyServiceMode,
 } from "../../lib/userApi";
-import { hasAcademicProfile } from "../../lib/serviceMode";
+import { hasAcademicProfile, normalizeServiceMode, SERVICE_MODE } from "../../lib/serviceMode";
 
 const StudentProfileModal = ({
   open,
   universityName,
   departmentName,
+  selectedUniversityId,
   onChangeUniversityName,
   onChangeDepartmentName,
   onSelectUniversity,
@@ -53,6 +55,7 @@ const StudentProfileModal = ({
           <AcademicProfileFields
             universityName={universityName}
             departmentName={departmentName}
+            selectedUniversityId={selectedUniversityId}
             onChangeUniversityName={onChangeUniversityName}
             onChangeDepartmentName={onChangeDepartmentName}
             onSelectUniversity={onSelectUniversity}
@@ -185,16 +188,18 @@ export const StudentHomePage = () => {
         const payload = await getMyProfile();
         if (cancelled) return;
         const nextProfile = extractProfile(payload);
+        const normalizedMode = normalizeServiceMode(nextProfile?.serviceMode);
+        const hasProfile = hasAcademicProfile(nextProfile);
         setProfile(nextProfile);
         setUserName(String(nextProfile?.name || "사용자"));
         setUserPoint(parsePoint(nextProfile?.point));
         setProfileImageUrl(getMyProfileImageUrl());
         setUniversityName(String(nextProfile?.universityName || ""));
-        setSelectedUniversityId(null);
+        setSelectedUniversityId(Number.isFinite(Number(nextProfile?.universityId)) ? Number(nextProfile.universityId) : null);
         setDepartmentName(String(nextProfile?.departmentName || ""));
-        setSelectedDepartmentId(null);
-        setModalOpen(!hasAcademicProfile(nextProfile));
-        if (hasAcademicProfile(nextProfile)) {
+        setSelectedDepartmentId(Number.isFinite(Number(nextProfile?.departmentId)) ? Number(nextProfile.departmentId) : null);
+        setModalOpen(!hasProfile || normalizedMode !== SERVICE_MODE.STUDENT);
+        if (hasProfile && normalizedMode === SERVICE_MODE.STUDENT) {
           try {
             const coursesPayload = await getMyStudentCourses();
             const nextCourses = Array.isArray(coursesPayload) ? coursesPayload : [];
@@ -251,16 +256,25 @@ export const StudentHomePage = () => {
         departmentName,
         departmentId: selectedDepartmentId || null,
       });
-      const nextProfile = extractProfile(payload);
-      setProfile(nextProfile);
-      setSelectedUniversityId(null);
-      setSelectedDepartmentId(null);
+      let nextProfile = extractProfile(payload);
+      if (hasAcademicProfile(nextProfile) && normalizeServiceMode(nextProfile?.serviceMode) !== SERVICE_MODE.STUDENT) {
+        const modePayload = await updateMyServiceMode(SERVICE_MODE.STUDENT);
+        nextProfile = extractProfile(modePayload);
+      }
+
+      const normalizedMode = normalizeServiceMode(nextProfile?.serviceMode);
       const hasProfile = hasAcademicProfile(nextProfile);
-      setModalOpen(!hasProfile);
-      if (hasProfile) {
+      setProfile(nextProfile);
+      setUniversityName(String(nextProfile?.universityName || ""));
+      setSelectedUniversityId(Number.isFinite(Number(nextProfile?.universityId)) ? Number(nextProfile.universityId) : null);
+      setDepartmentName(String(nextProfile?.departmentName || ""));
+      setSelectedDepartmentId(Number.isFinite(Number(nextProfile?.departmentId)) ? Number(nextProfile.departmentId) : null);
+      setModalOpen(!hasProfile || normalizedMode !== SERVICE_MODE.STUDENT);
+      if (hasProfile && normalizedMode === SERVICE_MODE.STUDENT) {
         const refreshedCourses = await getMyStudentCourses();
         const nextCourses = Array.isArray(refreshedCourses) ? refreshedCourses : [];
         setCourses(nextCourses);
+        showToast("대학생 모드로 전환했고 학적 정보를 저장했습니다.", { type: "success" });
       } else {
         setCourses([]);
       }
@@ -418,15 +432,15 @@ export const StudentHomePage = () => {
               <p className="text-[12px] font-semibold tracking-[0.12em] text-[#7c8497]">STUDENT MODE</p>
               <h1 className="mt-3 text-[30px] font-semibold text-[#111827] sm:text-[36px]">대학생 학습 모드</h1>
               <p className="mt-3 max-w-[760px] text-[14px] leading-[1.8] text-[#5b6475]">
-                과목별 자료 업로드, 자료 기반 시험문제 생성, 오답노트 흐름을 여기에 연결할 예정입니다.
-                현재는 진입 구조와 기본 프로필 저장부터 먼저 고정했습니다.
+                과목별 학습 자료를 정리하고, 자료 기반 모의고사를 만들고, 오답노트를 누적 관리할 수 있는 공간입니다.
+                대학교와 학과를 등록한 뒤 과목을 추가해 학습을 시작해 주세요.
               </p>
             </div>
           </div>
 
           <div className="mt-8 grid gap-4 md:grid-cols-[1.2fr,0.8fr]">
             <section className="rounded-[22px] border border-[#e6e9f2] bg-[#fbfcfe] p-5">
-              <h2 className="text-[18px] font-semibold text-[#111827]">기본 학습 컨텍스트</h2>
+              <h2 className="text-[18px] font-semibold text-[#111827]">학습 기본 정보</h2>
               <p className="mt-3 text-[14px] text-[#4b5563]">현재 등록: {academicProfileLabel}</p>
               <button
                 type="button"
@@ -590,6 +604,7 @@ export const StudentHomePage = () => {
         open={modalOpen}
         universityName={universityName}
         departmentName={departmentName}
+        selectedUniversityId={selectedUniversityId}
         onChangeUniversityName={(value) => {
           setUniversityName(value);
           setSelectedUniversityId(null);
@@ -610,7 +625,6 @@ export const StudentHomePage = () => {
           setDepartmentName(String(item?.departmentName || ""));
           setSelectedDepartmentId(Number.isFinite(Number(item?.departmentId)) ? Number(item.departmentId) : null);
         }}
-        selectedUniversityId={selectedUniversityId}
         universitySelected={Boolean(selectedUniversityId)}
         departmentSelected={Boolean(selectedDepartmentId)}
         onMoveToMyPage={() => navigate("/content/student/mypage")}
