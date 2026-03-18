@@ -730,12 +730,13 @@ export const MyPage = () => {
   const isStudentRoute = location.pathname.startsWith("/content/student");
   const studentMenuSections = useMemo(() => getStudentSidebarSections(studentCourses), [studentCourses]);
   const studentMyMenuItems = useMemo(() => getStudentMyMenuItems(), []);
+  const trimmedUniversityName = String(universityName || "").trim();
+  const trimmedDepartmentName = String(departmentName || "").trim();
+  const canSaveAcademicProfile = !academicProfileSubmitting && Boolean(trimmedUniversityName) && Boolean(trimmedDepartmentName);
   const academicProfileLabel = useMemo(() => {
-    const normalizedUniversity = universityName.trim();
-    const normalizedDepartment = departmentName.trim();
-    if (!normalizedUniversity || !normalizedDepartment) return "미등록";
-    return `${normalizedUniversity} · ${normalizedDepartment}`;
-  }, [departmentName, universityName]);
+    if (!trimmedUniversityName || !trimmedDepartmentName) return "미등록";
+    return `${trimmedUniversityName} · ${trimmedDepartmentName}`;
+  }, [trimmedDepartmentName, trimmedUniversityName]);
   const sidebarActiveKey = useMemo(() => {
     if (isStudentRoute) return getStudentSidebarActiveKey(location.pathname);
     if (location.pathname.startsWith("/content/files")) return "file_upload";
@@ -782,8 +783,8 @@ export const MyPage = () => {
 
   const handleSaveAcademicProfile = async () => {
     if (academicProfileSubmitting) return;
-    if (!selectedUniversityId || !String(departmentName || "").trim()) {
-      setServiceModeErrorMessage("대학교는 검색 결과에서 선택하고, 학과는 입력해 주세요.");
+    if (!canSaveAcademicProfile) {
+      setServiceModeErrorMessage("대학교와 학과를 모두 입력해 주세요.");
       return;
     }
     setAcademicProfileSubmitting(true);
@@ -791,9 +792,9 @@ export const MyPage = () => {
     setServiceModeErrorMessage("");
     try {
       const payload = await updateMyAcademicProfile({
-        universityName,
+        universityName: trimmedUniversityName,
         universityId: selectedUniversityId,
-        departmentName,
+        departmentName: trimmedDepartmentName,
         departmentId: selectedDepartmentId || null,
       });
       const profile = extractProfile(payload);
@@ -961,7 +962,7 @@ export const MyPage = () => {
                       <button
                         type="button"
                         onClick={handleSaveAcademicProfile}
-                        disabled={academicProfileSubmitting || !selectedUniversityId || !String(departmentName || "").trim()}
+                        disabled={!canSaveAcademicProfile}
                         className="rounded-[10px] border border-[#111827] bg-[#111827] px-4 py-2 text-[12px] font-semibold text-white disabled:opacity-60"
                       >
                         {academicProfileSubmitting ? "저장 중..." : "대학교 / 학과 저장"}
