@@ -376,6 +376,7 @@ export async function deleteStudentExamSession(sessionId) {
 export async function submitStudentExamAnswers(sessionId, answers) {
   return apiRequest(`/api/student/courses/sessions/${sessionId}/submit`, {
     method: "POST",
+    retryOnUnauthorized: true,
     body: {
       answers,
     },
@@ -385,6 +386,7 @@ export async function submitStudentExamAnswers(sessionId, answers) {
 export async function createStudentWrongAnswerSet(sessionId, { title, questionIds }) {
   return apiRequest(`/api/student/courses/sessions/${sessionId}/wrong-answer-set`, {
     method: "POST",
+    retryOnUnauthorized: true,
     body: {
       title,
       questionIds,
