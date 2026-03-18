@@ -1,4 +1,4 @@
-import { apiRequest, refreshAuthSession } from "./apiClient";
+import { apiRequest, downloadProtectedResource, refreshAuthSession } from "./apiClient";
 import defaultProfileImage from "../assets/icon/temp.png";
 import { extractProfile } from "./profileUtils";
 
@@ -103,6 +103,239 @@ export async function changeMyPassword(currentPassword, newPassword) {
     body: {
       currentPassword,
       newPassword,
+    },
+  });
+}
+
+export async function updateMyServiceMode(serviceMode) {
+  return apiRequest("/api/users/me/service-mode", {
+    method: "PATCH",
+    retryOnUnauthorized: true,
+    body: {
+      serviceMode,
+    },
+  });
+}
+
+export async function updateMyAcademicProfile({
+  universityName,
+  universityId,
+  departmentName,
+  departmentId,
+}) {
+  return apiRequest("/api/users/me/academic-profile", {
+    method: "PATCH",
+    retryOnUnauthorized: true,
+    body: {
+      universityName,
+      universityId,
+      departmentName,
+      departmentId,
+    },
+  });
+}
+
+export async function searchUniversities(keyword) {
+  const params = new URLSearchParams({
+    keyword: String(keyword || "").trim(),
+  });
+  return apiRequest(`/api/academics/universities/search?${params.toString()}`, {
+    method: "GET",
+  });
+}
+
+export async function searchDepartments(universityId, universityName, keyword) {
+  const params = new URLSearchParams({
+    universityName: String(universityName || "").trim(),
+    keyword: String(keyword || "").trim(),
+  });
+  if (Number.isFinite(Number(universityId))) {
+    params.set("universityId", String(universityId));
+  }
+  return apiRequest(`/api/academics/departments/search?${params.toString()}`, {
+    method: "GET",
+  });
+}
+
+export async function getMyStudentCourses() {
+  return apiRequest("/api/student/courses", {
+    method: "GET",
+  });
+}
+
+export async function getStudentCourse(courseId) {
+  const courses = await getMyStudentCourses();
+  const normalizedCourses = Array.isArray(courses) ? courses : [];
+  const matchedCourse = normalizedCourses.find((course) => String(course?.courseId) === String(courseId));
+  if (!matchedCourse) {
+    throw new Error("과목을 찾을 수 없습니다.");
+  }
+  return matchedCourse;
+}
+
+export async function createStudentCourse({ courseName, professorName, description }) {
+  return apiRequest("/api/student/courses", {
+    method: "POST",
+    body: {
+      courseName,
+      professorName,
+      description,
+    },
+  });
+}
+
+export async function deleteStudentCourse(courseId) {
+  return apiRequest(`/api/student/courses/${courseId}`, {
+    method: "DELETE",
+  });
+}
+
+export async function getStudentCourseMaterials(courseId) {
+  return apiRequest(`/api/student/courses/${courseId}/materials`, {
+    method: "GET",
+  });
+}
+
+export async function uploadStudentCourseMaterial(courseId, file, materialKind = "LECTURE_MATERIAL") {
+  const formData = new FormData();
+  formData.append("file", file);
+  formData.append("materialKind", materialKind);
+
+  const doUpload = () => fetch(`${API_BASE_URL}/api/student/courses/${courseId}/materials`, {
+    method: "POST",
+    credentials: "include",
+    body: formData,
+  });
+
+  let response = await doUpload();
+  if (response.status === 401) {
+    const refreshed = await refreshAuthSession();
+    if (refreshed) {
+      response = await doUpload();
+    }
+  }
+
+  const raw = await response.text();
+  let data = null;
+  if (raw) {
+    try {
+      data = JSON.parse(raw);
+    } catch {
+      data = null;
+    }
+  }
+
+  if (!response.ok) {
+    throw new Error(data?.message || "과목 자료 업로드에 실패했습니다.");
+  }
+
+  return data;
+}
+
+export async function deleteStudentCourseMaterial(courseId, materialId) {
+  return apiRequest(`/api/student/courses/${courseId}/materials/${materialId}`, {
+    method: "DELETE",
+  });
+}
+
+export async function getStudentCourseMaterialDownloadUrl(courseId, materialId) {
+  return apiRequest(`/api/student/courses/${courseId}/materials/${materialId}/download`, {
+    method: "GET",
+  });
+}
+
+export async function analyzeStudentCourseMaterial(courseId, materialId) {
+  return apiRequest(`/api/student/courses/${courseId}/materials/${materialId}/analyze`, {
+    method: "POST",
+  });
+}
+
+export async function createStudentCourseSummaryDocument(courseId, {
+  selectedMaterialIds,
+  format = "DOCX",
+}) {
+  return downloadProtectedResource(`/api/student/courses/${courseId}/summary-documents`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      selectedMaterialIds,
+      format,
+    }),
+  });
+}
+
+export async function getStudentCourseSessions(courseId) {
+  return apiRequest(`/api/student/courses/${courseId}/sessions`, {
+    method: "GET",
+  });
+}
+
+export async function getStudentCourseWrongAnswerSets(courseId) {
+  return apiRequest(`/api/student/courses/${courseId}/wrong-answer-sets`, {
+    method: "GET",
+  });
+}
+
+export async function getStudentWrongAnswerSetDetail(setId) {
+  return apiRequest(`/api/student/courses/wrong-answer-sets/${setId}`, {
+    method: "GET",
+  });
+}
+
+export async function createStudentWrongAnswerRetest(setId) {
+  return apiRequest(`/api/student/courses/wrong-answer-sets/${setId}/retest`, {
+    method: "POST",
+  });
+}
+
+export async function createStudentCourseSession(courseId, {
+  questionCount,
+  generationMode = "STANDARD",
+  difficultyLevel = null,
+  questionStyles = [],
+  selectedPastExamMaterialIds = [],
+}) {
+  return apiRequest(`/api/student/courses/${courseId}/sessions`, {
+    method: "POST",
+    body: {
+      questionCount,
+      generationMode,
+      difficultyLevel,
+      questionStyles,
+      selectedPastExamMaterialIds,
+    },
+  });
+}
+
+export async function getStudentExamSessionDetail(sessionId) {
+  return apiRequest(`/api/student/courses/sessions/${sessionId}`, {
+    method: "GET",
+  });
+}
+
+export async function deleteStudentExamSession(sessionId) {
+  return apiRequest(`/api/student/courses/sessions/${sessionId}`, {
+    method: "DELETE",
+  });
+}
+
+export async function submitStudentExamAnswers(sessionId, answers) {
+  return apiRequest(`/api/student/courses/sessions/${sessionId}/submit`, {
+    method: "POST",
+    body: {
+      answers,
+    },
+  });
+}
+
+export async function createStudentWrongAnswerSet(sessionId, { title, questionIds }) {
+  return apiRequest(`/api/student/courses/sessions/${sessionId}/wrong-answer-set`, {
+    method: "POST",
+    body: {
+      title,
+      questionIds,
     },
   });
 }

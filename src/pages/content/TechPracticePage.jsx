@@ -401,7 +401,7 @@ export const TechPracticePage = () => {
       });
       const displayName = (created?.name || jobQuery.trim()).trim();
       await loadCatalog({ preferredBranchName: selectedBranch?.name || "", preferredJobName: displayName });
-      setJobQuery(displayName);
+      setJobQuery("");
       setCategoryQuery("");
       setSelectedSkillId("");
     } catch (error) {
@@ -422,7 +422,7 @@ export const TechPracticePage = () => {
       });
       const displayName = (created?.name || branchQuery.trim()).trim();
       await loadCatalog({ preferredBranchName: displayName });
-      setBranchQuery(displayName);
+      setBranchQuery("");
       setJobQuery("");
       setCategoryQuery("");
       setSelectedSkillId("");

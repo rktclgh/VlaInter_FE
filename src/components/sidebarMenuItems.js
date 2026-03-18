@@ -23,6 +23,19 @@ export const MAIN_MENU_SECTIONS = [
   },
 ];
 
+export const STUDENT_MENU_SECTIONS = [
+  {
+    title: "대학생 모드",
+    items: [
+      { key: "student_home", label: "과목 홈", path: "/content/student" },
+    ],
+  },
+];
+
+export const STUDENT_MY_MENU_ITEMS = [
+  { key: "student_mypage", label: "마이페이지", path: "/content/student/mypage" },
+];
+
 export const ADMIN_MENU_ITEMS = [
   { key: "admin_console", label: "관리자 콘솔", path: "/content/admin" },
 ];
@@ -31,6 +44,21 @@ export const MY_MENU_ITEMS = [
   { key: "file_upload", label: "이력서 및 자기소개서 업로드", path: "/content/files" },
   { key: "mypage", label: "마이페이지", path: "/content/mypage" },
 ];
+
+export const buildStudentMenuSections = (courses = []) => {
+  const normalizedCourses = Array.isArray(courses) ? courses : [];
+  return [
+    ...STUDENT_MENU_SECTIONS,
+    {
+      title: "내 과목",
+      items: normalizedCourses.map((course) => ({
+        key: `student_course_${course.courseId}`,
+        label: course.courseName,
+        path: `/content/student/courses/${course.courseId}`,
+      })),
+    },
+  ].filter((section) => section.items.length > 0);
+};
 
 export const getMainMenuItems = ({ isAdmin = false } = {}) => {
   const mainItems = MAIN_MENU_SECTIONS.flatMap((section) => section.items);

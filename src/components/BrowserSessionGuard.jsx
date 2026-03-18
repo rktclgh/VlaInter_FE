@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import {
   clearAuthenticatedBrowserSession,
+  hasAuthenticatedBrowserSession,
   markAuthenticatedBrowserSession,
 } from "../lib/authSessionMarker";
 import { isAuthenticationError } from "../lib/apiClient";
@@ -31,10 +32,12 @@ export const BrowserSessionGuard = ({ children }) => {
           }
           return;
         }
-        try {
-          await logout();
-        } catch {
-          // ignore logout failure and continue clearing client marker
+        if (hasAuthenticatedBrowserSession()) {
+          try {
+            await logout();
+          } catch {
+            // ignore logout failure and continue clearing client marker
+          }
         }
         clearAuthenticatedBrowserSession();
       }

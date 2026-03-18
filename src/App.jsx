@@ -17,8 +17,15 @@ import { QuestionSetsPage } from './pages/content/QuestionSetsPage'
 import { QuestionBrowsePage } from './pages/content/QuestionBrowsePage'
 import { AdminConsolePage } from './pages/content/AdminConsolePage'
 import { PointChargeCallbackPage } from './pages/content/PointChargeCallbackPage'
+import { PointChargePage } from './pages/content/PointChargePage'
 import { FileUploadPage } from './pages/content/FileUploadPage'
 import { MyPage } from './pages/content/MyPage'
+import { ContentEntryPage } from './pages/content/ContentEntryPage'
+import { ServiceModePage } from './pages/content/ServiceModePage'
+import { StudentHomePage } from './pages/content/StudentHomePage'
+import { StudentCoursePage } from './pages/content/StudentCoursePage'
+import { StudentExamSessionPage } from './pages/content/StudentExamSessionPage'
+import { StudentWrongAnswerSetPage } from './pages/content/StudentWrongAnswerSetPage'
 import { ErrorPage } from './pages/ErrorPage'
 import { GeminiApiKeyGuard } from './components/GeminiApiKeyGuard'
 import { BrowserSessionGuard } from './components/BrowserSessionGuard'
@@ -43,6 +50,13 @@ function App() {
       <Route path="/privacy" element={<PrivacyPolicyPage />} />
       <Route path="/about" element={<ServiceIntroPage />} />
       <Route path="/auth/kakao/callback" element={<KakaoCallback />} />
+      <Route path="/content" element={<BrowserSessionGuard><ContentEntryPage /></BrowserSessionGuard>} />
+      <Route path="/content/service-mode" element={<BrowserSessionGuard><ServiceModePage /></BrowserSessionGuard>} />
+      <Route path="/content/student" element={<BrowserSessionGuard><StudentHomePage /></BrowserSessionGuard>} />
+      <Route path="/content/student/courses/:courseId" element={<BrowserSessionGuard><StudentCoursePage /></BrowserSessionGuard>} />
+      <Route path="/content/student/sessions/:sessionId" element={<BrowserSessionGuard><StudentExamSessionPage /></BrowserSessionGuard>} />
+      <Route path="/content/student/wrong-answer-sets/:setId" element={<BrowserSessionGuard><StudentWrongAnswerSetPage /></BrowserSessionGuard>} />
+      <Route path="/content/student/mypage" element={<BrowserSessionGuard><MyPage /></BrowserSessionGuard>} />
       <Route element={<GuardedContentRoutes />}>
         <Route path="/content/interview" element={<InterviewStartPage />} />
         <Route path="/content/tech-practice" element={<TechPracticePage />} />
@@ -53,7 +67,7 @@ function App() {
         <Route path="/content/question-sets" element={<QuestionSetsPage />} />
         <Route path="/content/question-browse" element={<QuestionBrowsePage />} />
         <Route path="/content/files" element={<FileUploadPage />} />
-        <Route path="/content/point-charge" element={<MyPage />} />
+        <Route path="/content/point-charge" element={<PointChargePage />} />
       </Route>
       <Route path="/content/admin" element={<BrowserSessionGuard><AdminConsolePage /></BrowserSessionGuard>} />
       <Route path="/content/mypage" element={<BrowserSessionGuard><MyPage /></BrowserSessionGuard>} />

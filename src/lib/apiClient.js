@@ -60,6 +60,31 @@ async function executeJsonRequest(path, options = {}) {
   });
 }
 
+function resolveRequestUrl(path) {
+  if (/^https?:\/\//i.test(path)) return path;
+  return `${API_BASE_URL}${path}`;
+}
+
+async function executeRawRequest(path, options = {}) {
+  const { method = "GET", headers = {}, credentials = "include", body } = options;
+  return fetch(resolveRequestUrl(path), {
+    method,
+    credentials,
+    headers,
+    body,
+  });
+}
+
+function parseErrorMessage(raw) {
+  if (!raw) return "";
+  try {
+    const data = JSON.parse(raw);
+    return String(data?.message || "").trim();
+  } catch {
+    return "";
+  }
+}
+
 export async function refreshAuthSession() {
   if (refreshPromise) return refreshPromise;
 
@@ -128,4 +153,70 @@ export async function apiRequest(path, options = {}) {
   }
 
   return data;
+}
+
+async function executeProtectedRequest(path, options = {}) {
+  const retryOnUnauthorizedOption = options.retryOnUnauthorized;
+  const requestMethod = String(options.method || "GET").trim().toUpperCase();
+  const safeRetryMethods = new Set(["GET", "HEAD", "OPTIONS"]);
+  const retryOnUnauthorized = retryOnUnauthorizedOption !== false;
+  const canRetryUnauthorized = retryOnUnauthorizedOption === true || safeRetryMethods.has(requestMethod);
+  const requestStartedAt = Date.now();
+
+  let response = await executeRawRequest(path, options);
+  if (
+    response.status === 401 &&
+    retryOnUnauthorized &&
+    canRetryUnauthorized &&
+    String(path) !== "/api/auth/refresh"
+  ) {
+    const alreadyRefreshedBeforeRetry = getKnownLastSuccessfulRefreshAt() > requestStartedAt;
+    const refreshed = alreadyRefreshedBeforeRetry
+      ? true
+      : await refreshAuthSession();
+    const refreshedAfterRetryAttempt = refreshed || getKnownLastSuccessfulRefreshAt() > requestStartedAt;
+    if (refreshedAfterRetryAttempt) {
+      response = await executeRawRequest(path, {
+        ...options,
+        retryOnUnauthorized: false,
+      });
+    }
+  }
+
+  if (!response.ok) {
+    const raw = await response.text();
+    const message = parseErrorMessage(raw) || "리소스를 불러오지 못했습니다.";
+    throw new ApiError(message, response.status);
+  }
+
+  return response;
+}
+
+export async function fetchProtectedResource(path, options = {}) {
+  const response = await executeProtectedRequest(path, options);
+  return response.blob();
+}
+
+function extractDownloadFileName(contentDisposition) {
+  const utf8Match = /filename\*=UTF-8''([^;]+)/i.exec(contentDisposition || "");
+  if (utf8Match?.[1]) {
+    try {
+      return decodeURIComponent(utf8Match[1]);
+    } catch {
+      return utf8Match[1];
+    }
+  }
+  const quotedMatch = /filename="([^"]+)"/i.exec(contentDisposition || "");
+  if (quotedMatch?.[1]) return quotedMatch[1];
+  const plainMatch = /filename=([^;]+)/i.exec(contentDisposition || "");
+  return plainMatch?.[1]?.trim() || "";
+}
+
+export async function downloadProtectedResource(path, options = {}) {
+  const response = await executeProtectedRequest(path, options);
+  return {
+    blob: await response.blob(),
+    fileName: extractDownloadFileName(response.headers.get("content-disposition")),
+    contentType: response.headers.get("content-type") || "",
+  };
 }
