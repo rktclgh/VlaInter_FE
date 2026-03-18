@@ -277,6 +277,7 @@ export async function analyzeStudentCourseMaterial(courseId, materialId) {
 
 export async function createStudentCourseSummaryDocument(courseId, {
   selectedMaterialIds,
+  language = "KO",
   format = "DOCX",
 }) {
   return downloadProtectedResource(`/api/student/courses/${courseId}/summary-documents`, {
@@ -287,17 +288,19 @@ export async function createStudentCourseSummaryDocument(courseId, {
     },
     body: JSON.stringify({
       selectedMaterialIds,
+      language,
       format,
     }),
   });
 }
 
-export async function previewStudentCourseSummary(courseId, { selectedMaterialIds }) {
+export async function previewStudentCourseSummary(courseId, { selectedMaterialIds, language = "KO" }) {
   return apiRequest(`/api/student/courses/${courseId}/summary-preview`, {
     method: "POST",
     retryOnUnauthorized: true,
     body: {
       selectedMaterialIds,
+      language,
     },
   });
 }
@@ -333,6 +336,7 @@ export async function createStudentCourseSession(courseId, {
   difficultyLevel = null,
   questionStyles = [],
   selectedPastExamMaterialIds = [],
+  language = "KO",
 }) {
   return apiRequest(`/api/student/courses/${courseId}/sessions`, {
     method: "POST",
@@ -343,6 +347,7 @@ export async function createStudentCourseSession(courseId, {
       difficultyLevel,
       questionStyles,
       selectedPastExamMaterialIds,
+      language,
     },
   });
 }

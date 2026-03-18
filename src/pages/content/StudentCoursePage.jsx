@@ -10,6 +10,7 @@ import { Sidebar } from "../../components/Sidebar";
 import tempProfileImage from "../../assets/icon/temp.png";
 import { isAuthenticationError } from "../../lib/apiClient";
 import { logout } from "../../lib/authApi";
+import { getInterviewLanguageLabel, INTERVIEW_LANGUAGE_OPTIONS, normalizeInterviewLanguage } from "../../lib/interviewLanguage";
 import { consumePointChargeSuccessResult } from "../../lib/pointChargeFlow";
 import { extractProfile, formatPoint, parsePoint } from "../../lib/profileUtils";
 import { getStudentMyMenuItems, getStudentSidebarActiveKey, getStudentSidebarSections } from "../../lib/studentNavigation";
@@ -484,6 +485,8 @@ export const StudentCoursePage = () => {
   const [sessionDifficultyLevel, setSessionDifficultyLevel] = useState(3);
   const [sessionQuestionStyles, setSessionQuestionStyles] = useState([]);
   const [summaryFormat, setSummaryFormat] = useState("DOCX");
+  const [summaryLanguage, setSummaryLanguage] = useState("KO");
+  const [sessionLanguage, setSessionLanguage] = useState("KO");
   const [selectedSummaryMaterialIds, setSelectedSummaryMaterialIds] = useState([]);
   const [selectedPastExamMaterialIds, setSelectedPastExamMaterialIds] = useState([]);
 
@@ -776,8 +779,9 @@ export const StudentCoursePage = () => {
           sessionGenerationMode === "PAST_EXAM" || sessionGenerationMode === "PAST_EXAM_PRACTICE"
             ? selectedPastExamMaterialIds
             : [],
+        language: normalizeInterviewLanguage(sessionLanguage),
       });
-      setSessionMessage(`${examModeLabel(sessionGenerationMode)} ${questionCount}문항 모의고사를 생성했습니다.`);
+      setSessionMessage(`${examModeLabel(sessionGenerationMode)} ${questionCount}문항 모의고사를 ${getInterviewLanguageLabel(sessionLanguage)}로 생성했습니다.`);
       await refreshCourse();
     } catch (error) {
       if (handleAuthenticationFailure(error)) return;
@@ -804,6 +808,7 @@ export const StudentCoursePage = () => {
     try {
       const payload = await createStudentCourseSummaryDocument(course.courseId, {
         selectedMaterialIds: selectedSummaryMaterialIds,
+        language: normalizeInterviewLanguage(summaryLanguage),
         format: requestedFormat,
       });
       const objectUrl = URL.createObjectURL(payload.blob);
@@ -831,6 +836,7 @@ export const StudentCoursePage = () => {
     try {
       const payload = await previewStudentCourseSummary(course.courseId, {
         selectedMaterialIds: selectedSummaryMaterialIds,
+        language: normalizeInterviewLanguage(summaryLanguage),
       });
       setSummaryPreview(payload);
       setSessionMessage("구조화 노트 미리보기를 생성했습니다.");
@@ -1228,6 +1234,23 @@ export const StudentCoursePage = () => {
                   </div>
                   <div className="mt-4 rounded-[16px] border border-[#e5e7eb] bg-white p-4">
                     <div className="flex flex-wrap items-center gap-2">
+                      <div className="flex rounded-[12px] border border-[#d1d5db] bg-white p-1">
+                        {INTERVIEW_LANGUAGE_OPTIONS.map((option) => (
+                          <button
+                            key={option.value}
+                            type="button"
+                            onClick={() => setSummaryLanguage(option.value)}
+                            disabled={Boolean(creatingSummaryFormat) || creatingSummaryPreview}
+                            className={`rounded-[10px] px-3 py-2 text-[11px] font-semibold ${
+                              summaryLanguage === option.value
+                                ? "bg-[#111827] text-white"
+                                : "text-[#4b5563]"
+                            } disabled:opacity-55`}
+                          >
+                            {option.label}
+                          </button>
+                        ))}
+                      </div>
                       {[
                         { key: "DOCX", label: "DOCX" },
                         { key: "PDF", label: "PDF" },
@@ -1299,6 +1322,7 @@ export const StudentCoursePage = () => {
                         {creatingSummaryFormat ? "요약본 생성 중..." : `${summaryFormat} 요약본 생성`}
                       </button>
                     </div>
+                    <p className="mt-3 text-[11px] text-[#7c8497]">현재 요약본 언어: {getInterviewLanguageLabel(summaryLanguage)}</p>
                   </div>
                 </section>
 
@@ -1316,6 +1340,23 @@ export const StudentCoursePage = () => {
                   </div>
                   <div className="mt-4 rounded-[16px] border border-[#e5e7eb] bg-white p-4">
                     <div className="flex flex-wrap items-center gap-2">
+                      <div className="flex rounded-[12px] border border-[#d1d5db] bg-white p-1">
+                        {INTERVIEW_LANGUAGE_OPTIONS.map((option) => (
+                          <button
+                            key={option.value}
+                            type="button"
+                            onClick={() => setSessionLanguage(option.value)}
+                            disabled={Boolean(creatingSessionCount)}
+                            className={`rounded-[10px] px-3 py-1.5 text-[11px] font-semibold ${
+                              sessionLanguage === option.value
+                                ? "bg-[#111827] text-white"
+                                : "text-[#4b5563]"
+                            } disabled:opacity-55`}
+                          >
+                            {option.label}
+                          </button>
+                        ))}
+                      </div>
                       <div className="flex rounded-[12px] border border-[#d1d5db] bg-white p-1">
                         {[
                           { key: "STANDARD", label: "일반형" },
@@ -1483,6 +1524,7 @@ export const StudentCoursePage = () => {
                         {creatingSessionCount ? "세션 생성 중..." : `${examModeLabel(sessionGenerationMode)} 세션 생성`}
                       </button>
                     </div>
+                    <p className="mt-3 text-[11px] text-[#7c8497]">현재 모의고사 언어: {getInterviewLanguageLabel(sessionLanguage)}</p>
                   </div>
                   {sessionMessage ? <p className="mt-3 text-[12px] text-[#1f8f55]">{sessionMessage}</p> : null}
                   {sessionErrorMessage ? <p className="mt-3 text-[12px] text-[#d84a4a]">{sessionErrorMessage}</p> : null}
@@ -1501,6 +1543,9 @@ export const StudentCoursePage = () => {
                               <div className="mt-2 flex flex-wrap gap-2">
                                 <span className="rounded-full bg-[#eef2ff] px-2.5 py-1 text-[10px] font-semibold text-[#4338ca]">
                                   {examModeLabel(session.generationMode)}
+                                </span>
+                                <span className="rounded-full bg-[#ecfeff] px-2.5 py-1 text-[10px] font-semibold text-[#0f766e]">
+                                  {getInterviewLanguageLabel(session.language)}
                                 </span>
                                 {session.difficultyLevel ? (
                                   <span className="rounded-full bg-[#fff8e8] px-2.5 py-1 text-[10px] font-semibold text-[#8a5a00]">

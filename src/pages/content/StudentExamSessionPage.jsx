@@ -9,6 +9,7 @@ import { Sidebar } from "../../components/Sidebar";
 import { StarIcons } from "../../components/DifficultyStars";
 import tempProfileImage from "../../assets/icon/temp.png";
 import { logout } from "../../lib/authApi";
+import { getInterviewLanguageLabel } from "../../lib/interviewLanguage";
 import { consumePointChargeSuccessResult } from "../../lib/pointChargeFlow";
 import { extractProfile, formatPoint, parsePoint } from "../../lib/profileUtils";
 import { getStudentMyMenuItems, getStudentSidebarSections } from "../../lib/studentNavigation";
@@ -63,6 +64,8 @@ const DeleteSessionConfirmModal = ({ open, pending, onCancel, onConfirm }) => {
 
 const examModeLabel = (mode) => {
   switch (mode) {
+    case "FAST_REVIEW":
+      return "패스트 모의고사";
     case "PAST_EXAM":
       return "족보형";
     case "PAST_EXAM_PRACTICE":
@@ -454,6 +457,9 @@ export const StudentExamSessionPage = () => {
                       <div className="mt-3 flex flex-wrap gap-2">
                         <span className="rounded-full bg-[#eef2ff] px-3 py-1 text-[11px] font-semibold text-[#4338ca]">
                           {examModeLabel(session.generationMode)}
+                        </span>
+                        <span className="rounded-full bg-[#ecfeff] px-3 py-1 text-[11px] font-semibold text-[#0f766e]">
+                          {getInterviewLanguageLabel(session.language)}
                         </span>
                         {session.difficultyLevel ? (
                           <span className="inline-flex items-center gap-2 rounded-full bg-[#fff8e8] px-3 py-1 text-[11px] font-semibold text-[#8a5a00]">
