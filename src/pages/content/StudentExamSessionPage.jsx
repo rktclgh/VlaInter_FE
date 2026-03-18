@@ -315,6 +315,7 @@ export const StudentExamSessionPage = () => {
       );
       setSession(payload);
       setSelectedQuestionIds(buildInitialSelectedQuestionIds(payload?.questions));
+      setActiveQuestionIndex(0);
       setSuccessMessage("답안이 제출되고 채점 결과가 저장되었습니다.");
     } catch (error) {
       setErrorMessage(error?.message || "답안 제출에 실패했습니다.");
