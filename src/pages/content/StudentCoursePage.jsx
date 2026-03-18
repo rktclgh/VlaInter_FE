@@ -743,12 +743,12 @@ export const StudentCoursePage = () => {
   };
 
   const handleDeleteYoutubeSummaryJob = async (job) => {
-    if (!job?.jobId || job?.status !== "READY") return;
+    if (!job?.jobId) return;
     try {
       setDeletingYoutubeSummaryJobId(job.jobId);
       await deleteStudentCourseYoutubeMaterialJob(normalizedCourseId, job.jobId);
       setYoutubeSummaryJobs((prev) => prev.filter((item) => item.jobId !== job.jobId));
-      showToast("완료된 유튜브 요약본 상태를 목록에서 삭제했습니다.", { type: "success" });
+      showToast("유튜브 요약본 상태를 목록에서 삭제했습니다.", { type: "success" });
     } catch (error) {
       if (handleAuthenticationFailure(error)) return;
       showToast(error.message || "유튜브 요약본 상태를 삭제하지 못했습니다.", { type: "error" });
@@ -1131,16 +1131,14 @@ export const StudentCoursePage = () => {
                               }`}>
                                 {youtubeSummaryStatusLabel(job)}
                               </span>
-                              {job.status === "READY" ? (
-                                <button
-                                  type="button"
-                                  onClick={() => handleDeleteYoutubeSummaryJob(job)}
-                                  disabled={deletingYoutubeSummaryJobId === job.jobId}
-                                  className="rounded-[8px] border border-[#d1d5db] bg-white px-2.5 py-1 text-[10px] font-semibold text-[#4b5563] disabled:opacity-55"
-                                >
-                                  {deletingYoutubeSummaryJobId === job.jobId ? "삭제 중..." : "삭제"}
-                                </button>
-                              ) : null}
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteYoutubeSummaryJob(job)}
+                                disabled={deletingYoutubeSummaryJobId === job.jobId}
+                                className="rounded-[8px] border border-[#d1d5db] bg-white px-2.5 py-1 text-[10px] font-semibold text-[#4b5563] disabled:opacity-55"
+                              >
+                                {deletingYoutubeSummaryJobId === job.jobId ? "삭제 중..." : "삭제"}
+                              </button>
                             </div>
                           </div>
                         ))}

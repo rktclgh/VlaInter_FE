@@ -772,8 +772,9 @@ export const MyPage = () => {
   }, [isStudentRoute, location.pathname]);
 
   const handleUpdateServiceMode = async (nextServiceMode) => {
+    const hasSavedAcademicProfile = Boolean(trimmedUniversityName && trimmedDepartmentName);
     if (serviceModeSubmitting) return;
-    if (nextServiceMode === SERVICE_MODE.STUDENT && serviceMode !== SERVICE_MODE.STUDENT) {
+    if (nextServiceMode === SERVICE_MODE.STUDENT && serviceMode !== SERVICE_MODE.STUDENT && !hasSavedAcademicProfile) {
       setStudentModePendingSetup(true);
       setServiceModeMessage("");
       setServiceModeErrorMessage("");
