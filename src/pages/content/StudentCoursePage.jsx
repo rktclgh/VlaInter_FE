@@ -428,6 +428,8 @@ const examStyleLabel = (style) => {
 
 const examModeLabel = (mode) => {
   switch (mode) {
+    case "FAST_REVIEW":
+      return "패스트 모의고사";
     case "PAST_EXAM":
       return "족보형";
     case "PAST_EXAM_PRACTICE":
@@ -763,7 +765,12 @@ export const StudentCoursePage = () => {
       await createStudentCourseSession(course.courseId, {
         questionCount,
         generationMode: sessionGenerationMode,
-        difficultyLevel: sessionGenerationMode === "PAST_EXAM" || sessionGenerationMode === "PAST_EXAM_PRACTICE" ? null : sessionDifficultyLevel,
+        difficultyLevel:
+          sessionGenerationMode === "PAST_EXAM" || sessionGenerationMode === "PAST_EXAM_PRACTICE"
+            ? null
+            : sessionGenerationMode === "FAST_REVIEW"
+              ? 1
+              : sessionDifficultyLevel,
         questionStyles: sessionGenerationMode === "STANDARD" ? sessionQuestionStyles : [],
         selectedPastExamMaterialIds:
           sessionGenerationMode === "PAST_EXAM" || sessionGenerationMode === "PAST_EXAM_PRACTICE"
@@ -1301,6 +1308,7 @@ export const StudentCoursePage = () => {
                       <p className="text-[18px] font-semibold text-[#111827]">모의고사 세션</p>
                       <p className="mt-1 text-[12px] text-[#6b7280]">
                         강의자료 {readyMaterialCount}개를 기반으로 실제 대학 시험 스타일 문제를 생성합니다.
+                        {sessionGenerationMode === "FAST_REVIEW" ? " 패스트 모의고사는 매우 쉬운 개념 암기형 문제만 빠르게 생성합니다." : ""}
                         {sessionGenerationMode === "PAST_EXAM" ? ` 선택한 족보 ${selectedPastExamMaterialIds.length || readyPastExamCount}개로 난이도와 출제 경향을 맞춥니다.` : ""}
                         {sessionGenerationMode === "PAST_EXAM_PRACTICE" ? ` 선택한 족보 ${selectedPastExamMaterialIds.length || readyPastExamCount}개를 바탕으로 실제 문제를 그대로 복원 연습합니다.` : ""}
                       </p>
@@ -1311,6 +1319,7 @@ export const StudentCoursePage = () => {
                       <div className="flex rounded-[12px] border border-[#d1d5db] bg-white p-1">
                         {[
                           { key: "STANDARD", label: "일반형" },
+                          { key: "FAST_REVIEW", label: "패스트 모의고사" },
                           { key: "PAST_EXAM", label: "족보형" },
                           { key: "PAST_EXAM_PRACTICE", label: "족보 그대로 연습" },
                         ].map((mode) => (
@@ -1372,6 +1381,11 @@ export const StudentCoursePage = () => {
                           문제 스타일을 1개 이상 직접 선택해 주세요. 코딩형만 원하면 코딩형만 선택해야 합니다.
                         </p>
                       </>
+                    ) : sessionGenerationMode === "FAST_REVIEW" ? (
+                      <div className="mt-4 rounded-[12px] border border-[#dbe4ff] bg-[#f5f8ff] px-4 py-3 text-[12px] leading-[1.7] text-[#44506a]">
+                        패스트 모의고사는 강의자료 전 범위를 넓게 훑는 암기 점검용 모드입니다. 난이도는 매우 쉬움으로 고정되고,
+                        정의형 개념 확인 문제만 짧게 생성됩니다.
+                      </div>
                     ) : (
                       <>
                         <div className="mt-4 rounded-[12px] border border-[#e5e7eb] bg-[#f8fafc] px-4 py-3 text-[12px] leading-[1.7] text-[#5b6475]">
@@ -1438,6 +1452,10 @@ export const StudentCoursePage = () => {
                         <span className="text-[12px] font-semibold text-[#8a5a00]">난이도</span>
                         <StarRatingInput value={sessionDifficultyLevel} onChange={setSessionDifficultyLevel} />
                         <span className="text-[12px] font-semibold text-[#8a5a00]">{sessionDifficultyLevel} / 5</span>
+                      </div>
+                    ) : sessionGenerationMode === "FAST_REVIEW" ? (
+                      <div className="mt-4 rounded-[12px] border border-[#dcfce7] bg-[#f0fdf4] px-4 py-3 text-[12px] leading-[1.7] text-[#166534]">
+                        패스트 모의고사는 난이도 1/5로 고정됩니다. OX 퀴즈처럼 빠르게 핵심 개념을 떠올릴 수 있는 짧은 서술형 문제만 출제합니다.
                       </div>
                     ) : sessionGenerationMode === "PAST_EXAM_PRACTICE" ? (
                       <div className="mt-4 rounded-[12px] border border-[#dbe4ff] bg-[#f5f8ff] px-4 py-3 text-[12px] leading-[1.7] text-[#44506a]">
