@@ -56,7 +56,7 @@ const buildSelectedDocumentMeta = (file, type) => {
   };
 };
 const LogoutConfirmModal = ({ onCancel, onConfirm }) => (
-  <div className="fixed inset-0 z-70 flex items-center justify-center bg-black/35 px-4">
+  <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/35 px-4">
     <div
       role="dialog"
       aria-modal="true"
@@ -626,7 +626,7 @@ export const InterviewStartPage = () => {
       setJobFilter(matched?.categoryId ? String(matched.categoryId) : "");
       setSelectedCategoryIds([]);
       setSkillQuery("");
-      setJobQuery(displayName);
+      setJobQuery("");
     } catch (error) {
       setPageErrorMessage(error?.message || "직무 생성에 실패했습니다.");
     } finally {
@@ -655,7 +655,7 @@ export const InterviewStartPage = () => {
       setSelectedCategoryIds([]);
       setJobQuery("");
       setSkillQuery("");
-      setBranchQuery(displayName);
+      setBranchQuery("");
     } catch (error) {
       setPageErrorMessage(error?.message || "계열 생성에 실패했습니다.");
     } finally {

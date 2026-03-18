@@ -5,10 +5,14 @@ import { Sidebar } from "../../components/Sidebar";
 import { MobileSidebarDrawer } from "../../components/MobileSidebarDrawer";
 import { PointChargeModal } from "../../components/PointChargeModal";
 import { PointChargeSuccessModal } from "../../components/PointChargeSuccessModal";
+import { AcademicProfileFields } from "../../components/AcademicProfileFields";
 import tempProfileImage from "../../assets/icon/temp.png";
 import { isAuthenticationError } from "../../lib/apiClient";
 import { logout } from "../../lib/authApi";
 import { consumePointChargeSuccessResult } from "../../lib/pointChargeFlow";
+import { extractProfile } from "../../lib/profileUtils";
+import { hasAcademicProfile, normalizeServiceMode, SERVICE_MODE } from "../../lib/serviceMode";
+import { getStudentMyMenuItems, getStudentSidebarActiveKey, getStudentSidebarSections } from "../../lib/studentNavigation";
 import {
   getPointLedgerHistory,
   getPointPaymentHistory,
@@ -22,11 +26,20 @@ import {
   getMyFiles,
   getMyProfile,
   getMyProfileImageUrl,
+  getMyStudentCourses,
+  updateMyAcademicProfile,
   updateMyGeminiApiKey,
+  updateMyServiceMode,
   uploadMyFile,
 } from "../../lib/userApi";
 
 const PAGE_SIZE = 10;
+
+const normalizeOptionalId = (value) => {
+  if (value === null || value === undefined || value === "") return null;
+  const numericValue = Number(value);
+  return Number.isFinite(numericValue) ? numericValue : null;
+};
 
 const formatPoint = (value) => {
   const safeNumber = Number.isFinite(Number(value)) ? Math.max(0, Number(value)) : 0;
@@ -56,14 +69,6 @@ const parsePoint = (rawValue) => {
 };
 
 const extractFileId = (file) => file?.fileId ?? file?.file_id ?? null;
-
-const extractProfile = (payload) => {
-  if (!payload || typeof payload !== "object") return {};
-  if (payload.data && typeof payload.data === "object" && !Array.isArray(payload.data)) return payload.data;
-  if (payload.result && typeof payload.result === "object" && !Array.isArray(payload.result)) return payload.result;
-  if (payload.user && typeof payload.user === "object" && !Array.isArray(payload.user)) return payload.user;
-  return payload;
-};
 
 const extractFileList = (payload) => {
   if (Array.isArray(payload)) return payload;
@@ -370,7 +375,17 @@ export const MyPage = () => {
   const [userName, setUserName] = useState("사용자");
   const [userEmail, setUserEmail] = useState("-");
   const [userPoint, setUserPoint] = useState(0);
+  const [serviceMode, setServiceMode] = useState(null);
+  const [universityName, setUniversityName] = useState("");
+  const [selectedUniversityId, setSelectedUniversityId] = useState(null);
+  const [departmentName, setDepartmentName] = useState("");
+  const [selectedDepartmentId, setSelectedDepartmentId] = useState(null);
+  const [serviceModeSubmitting, setServiceModeSubmitting] = useState(false);
+  const [academicProfileSubmitting, setAcademicProfileSubmitting] = useState(false);
+  const [serviceModeMessage, setServiceModeMessage] = useState("");
+  const [serviceModeErrorMessage, setServiceModeErrorMessage] = useState("");
   const [profileImageUrl, setProfileImageUrl] = useState(tempProfileImage);
+  const [studentCourses, setStudentCourses] = useState([]);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [showPointChargeModal, setShowPointChargeModal] = useState(false);
   const [showPointChargeSuccessModal, setShowPointChargeSuccessModal] = useState(false);
@@ -474,8 +489,19 @@ export const MyPage = () => {
         setUserName(profile?.name || "사용자");
         setUserEmail(profile?.email || "-");
         setUserPoint(parsePoint(profile?.point));
+        setServiceMode(normalizeServiceMode(profile?.serviceMode));
+        setUniversityName(String(profile?.universityName || ""));
+        setSelectedUniversityId((current) => normalizeOptionalId(profile?.universityId) ?? current);
+        setDepartmentName(String(profile?.departmentName || ""));
+        setSelectedDepartmentId((current) => normalizeOptionalId(profile?.departmentId) ?? current);
         setHasGeminiApiKey(Boolean(profile?.hasGeminiApiKey));
         setProfileImageUrl(getMyProfileImageUrl());
+        if (normalizeServiceMode(profile?.serviceMode) === SERVICE_MODE.STUDENT) {
+          const coursesPayload = await getMyStudentCourses();
+          setStudentCourses(Array.isArray(coursesPayload) ? coursesPayload : []);
+        } else {
+          setStudentCourses([]);
+        }
       } catch (error) {
         if (isAuthenticationError(error)) {
           navigate("/login", { replace: true });
@@ -701,12 +727,87 @@ export const MyPage = () => {
   };
 
   const pointSummaryText = useMemo(() => formatPoint(userPoint), [userPoint]);
+  const isStudentRoute = location.pathname.startsWith("/content/student");
+  const studentMenuSections = useMemo(() => getStudentSidebarSections(studentCourses), [studentCourses]);
+  const studentMyMenuItems = useMemo(() => getStudentMyMenuItems(), []);
+  const academicProfileLabel = useMemo(() => {
+    const normalizedUniversity = universityName.trim();
+    const normalizedDepartment = departmentName.trim();
+    if (!normalizedUniversity || !normalizedDepartment) return "미등록";
+    return `${normalizedUniversity} · ${normalizedDepartment}`;
+  }, [departmentName, universityName]);
   const sidebarActiveKey = useMemo(() => {
+    if (isStudentRoute) return getStudentSidebarActiveKey(location.pathname);
     if (location.pathname.startsWith("/content/files")) return "file_upload";
     if (location.pathname.startsWith("/content/point-charge")) return "mypage";
     if (location.pathname.startsWith("/content/mypage")) return "mypage";
     return "mypage";
-  }, [location.pathname]);
+  }, [isStudentRoute, location.pathname]);
+
+  const handleUpdateServiceMode = async (nextServiceMode) => {
+    if (serviceModeSubmitting || nextServiceMode === serviceMode) return;
+    setServiceModeSubmitting(true);
+    setServiceModeMessage("");
+    setServiceModeErrorMessage("");
+    try {
+      const payload = await updateMyServiceMode(nextServiceMode);
+      const profile = extractProfile(payload);
+      const normalizedMode = normalizeServiceMode(profile?.serviceMode);
+      setServiceMode(normalizedMode);
+      setUniversityName(String(profile?.universityName || ""));
+      setSelectedUniversityId((current) => normalizeOptionalId(profile?.universityId) ?? current);
+      setDepartmentName(String(profile?.departmentName || ""));
+      setSelectedDepartmentId((current) => normalizeOptionalId(profile?.departmentId) ?? current);
+      if (normalizedMode === SERVICE_MODE.STUDENT) {
+        try {
+          const coursesPayload = await getMyStudentCourses();
+          setStudentCourses(Array.isArray(coursesPayload) ? coursesPayload : []);
+        } catch {
+          setStudentCourses([]);
+        }
+      } else {
+        setStudentCourses([]);
+      }
+      setServiceModeMessage(nextServiceMode === SERVICE_MODE.STUDENT ? "대학생 모드로 전환했습니다." : "취준생 모드로 전환했습니다.");
+      navigate(
+        nextServiceMode === SERVICE_MODE.STUDENT ? "/content/student" : "/content/interview",
+        { replace: true }
+      );
+    } catch (error) {
+      setServiceModeErrorMessage(error?.message || "서비스 모드 변경에 실패했습니다.");
+    } finally {
+      setServiceModeSubmitting(false);
+    }
+  };
+
+  const handleSaveAcademicProfile = async () => {
+    if (academicProfileSubmitting) return;
+    if (!selectedUniversityId || !String(departmentName || "").trim()) {
+      setServiceModeErrorMessage("대학교는 검색 결과에서 선택하고, 학과는 입력해 주세요.");
+      return;
+    }
+    setAcademicProfileSubmitting(true);
+    setServiceModeMessage("");
+    setServiceModeErrorMessage("");
+    try {
+      const payload = await updateMyAcademicProfile({
+        universityName,
+        universityId: selectedUniversityId,
+        departmentName,
+        departmentId: selectedDepartmentId || null,
+      });
+      const profile = extractProfile(payload);
+      setUniversityName(String(profile?.universityName || ""));
+      setSelectedUniversityId((current) => normalizeOptionalId(profile?.universityId) ?? current);
+      setDepartmentName(String(profile?.departmentName || ""));
+      setSelectedDepartmentId((current) => normalizeOptionalId(profile?.departmentId) ?? current);
+      setServiceModeMessage(hasAcademicProfile(profile) ? "대학교 / 학과 정보를 저장했습니다." : "대학교 / 학과 정보를 비웠습니다.");
+    } catch (error) {
+      setServiceModeErrorMessage(error?.message || "대학교 / 학과 저장에 실패했습니다.");
+    } finally {
+      setAcademicProfileSubmitting(false);
+    }
+  };
 
   return (
     <div className="min-h-screen overflow-x-hidden bg-white pt-[3.75rem]">
@@ -729,6 +830,8 @@ export const MyPage = () => {
           setIsMobileMenuOpen(false);
           requestLogout();
         }}
+        menuSectionsOverride={isStudentRoute ? studentMenuSections : null}
+        myMenuItemsOverride={isStudentRoute ? studentMyMenuItems : null}
       />
 
       <div className="flex min-h-[calc(100vh-3.75rem)]">
@@ -739,6 +842,8 @@ export const MyPage = () => {
             userName={userName}
             profileImageUrl={profileImageUrl}
             onLogout={requestLogout}
+            menuSectionsOverride={isStudentRoute ? studentMenuSections : null}
+            myMenuItemsOverride={isStudentRoute ? studentMyMenuItems : null}
           />
         </div>
 
@@ -786,6 +891,87 @@ export const MyPage = () => {
                   </div>
                 </div>
                 {profileUploadErrorMessage ? <p className="mt-3 text-[12px] text-[#d84a4a]">{profileUploadErrorMessage}</p> : null}
+              </div>
+
+              <div className="mt-4 rounded-[16px] border border-[#e0e0e0] bg-white p-6">
+                <h2 className="text-[18px] font-medium text-[#1f1f1f]">서비스 모드</h2>
+                <p className="mt-1 text-[12px] leading-[1.6] text-[#7a7a7a]">
+                  취준생 모드와 대학생 모드는 같은 계정에서 전환할 수 있습니다. 대학생 모드는 대학교와 학과를 함께 등록해야 합니다.
+                </p>
+                <div className="mt-4 flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleUpdateServiceMode(SERVICE_MODE.JOB_SEEKER)}
+                    disabled={serviceModeSubmitting}
+                    className={`rounded-[10px] border px-4 py-2 text-[12px] font-semibold ${
+                      serviceMode === SERVICE_MODE.JOB_SEEKER
+                        ? "border-[#111827] bg-[#111827] text-white"
+                        : "border-[#d7dbe7] bg-white text-[#374151]"
+                    } disabled:opacity-60`}
+                  >
+                    {serviceModeSubmitting && serviceMode !== SERVICE_MODE.JOB_SEEKER ? "전환 중..." : "취준생 모드"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleUpdateServiceMode(SERVICE_MODE.STUDENT)}
+                    disabled={serviceModeSubmitting}
+                    className={`rounded-[10px] border px-4 py-2 text-[12px] font-semibold ${
+                      serviceMode === SERVICE_MODE.STUDENT
+                        ? "border-[#111827] bg-[#111827] text-white"
+                        : "border-[#d7dbe7] bg-white text-[#374151]"
+                    } disabled:opacity-60`}
+                  >
+                    {serviceModeSubmitting && serviceMode !== SERVICE_MODE.STUDENT ? "전환 중..." : "대학생 모드"}
+                  </button>
+                </div>
+
+                {serviceMode === SERVICE_MODE.STUDENT ? (
+                  <>
+                    <div className="mt-5">
+                      <AcademicProfileFields
+                        universityName={universityName}
+                        departmentName={departmentName}
+                        onChangeUniversityName={(value) => {
+                          setUniversityName(value);
+                          setSelectedUniversityId(null);
+                          setDepartmentName("");
+                          setSelectedDepartmentId(null);
+                        }}
+                        onChangeDepartmentName={(value) => {
+                          setDepartmentName(value);
+                          setSelectedDepartmentId(null);
+                        }}
+                        onSelectUniversity={(item) => {
+                          setUniversityName(String(item?.universityName || ""));
+                          setSelectedUniversityId(Number.isFinite(Number(item?.universityId)) ? Number(item.universityId) : null);
+                          setDepartmentName("");
+                          setSelectedDepartmentId(null);
+                        }}
+                        onSelectDepartment={(item) => {
+                          setDepartmentName(String(item?.departmentName || ""));
+                          setSelectedDepartmentId(Number.isFinite(Number(item?.departmentId)) ? Number(item.departmentId) : null);
+                        }}
+                        selectedUniversityId={selectedUniversityId}
+                        universitySelected={Boolean(selectedUniversityId)}
+                        departmentSelected={Boolean(selectedDepartmentId)}
+                        disabled={academicProfileSubmitting}
+                      />
+                    </div>
+                    <div className="mt-4 flex flex-wrap items-center gap-3">
+                      <button
+                        type="button"
+                        onClick={handleSaveAcademicProfile}
+                        disabled={academicProfileSubmitting || !selectedUniversityId || !String(departmentName || "").trim()}
+                        className="rounded-[10px] border border-[#111827] bg-[#111827] px-4 py-2 text-[12px] font-semibold text-white disabled:opacity-60"
+                      >
+                        {academicProfileSubmitting ? "저장 중..." : "대학교 / 학과 저장"}
+                      </button>
+                      <p className="text-[12px] text-[#666]">현재 등록: {academicProfileLabel}</p>
+                    </div>
+                  </>
+                ) : null}
+                {serviceModeMessage ? <p className="mt-2 text-[12px] text-[#1f8f55]">{serviceModeMessage}</p> : null}
+                {serviceModeErrorMessage ? <p className="mt-2 text-[12px] text-[#d84a4a]">{serviceModeErrorMessage}</p> : null}
               </div>
 
               <div className="mt-4 rounded-[16px] border border-[#e0e0e0] bg-white p-6">

@@ -11,12 +11,21 @@ export const Sidebar = ({
   isAdmin = null,
   onLogout,
   variant = "default",
+  menuSectionsOverride = null,
+  myMenuItemsOverride = null,
 }) => {
   const resolvedIsAdmin = useAdminStatus(isAdmin);
   const hasProfileImage = typeof profileImageUrl === "string" && profileImageUrl.trim().length > 0;
   const isMockStart = variant !== "legacy";
 
-  const mainMenuSections = useMemo(() => getMainMenuSections({ isAdmin: resolvedIsAdmin }), [resolvedIsAdmin]);
+  const mainMenuSections = useMemo(
+    () => menuSectionsOverride || getMainMenuSections({ isAdmin: resolvedIsAdmin }),
+    [menuSectionsOverride, resolvedIsAdmin]
+  );
+  const myMenuItems = useMemo(
+    () => myMenuItemsOverride || MY_MENU_ITEMS,
+    [myMenuItemsOverride]
+  );
 
   const renderMenuButton = (item) => {
     const active = item.key === activeKey;
@@ -55,7 +64,7 @@ export const Sidebar = ({
 
         <div className={isMockStart ? "pt-0" : "pt-2"}>
           <p className={`font-medium ${isMockStart ? "mb-2 px-2 text-[13px] tracking-[0.02em] text-[#B2B2B2]" : "mb-2 text-[12px] text-[#b1b1b1]"}`}>마이페이지</p>
-          <div className="space-y-1">{MY_MENU_ITEMS.map(renderMenuButton)}</div>
+          <div className="space-y-1">{myMenuItems.map(renderMenuButton)}</div>
         </div>
       </div>
 

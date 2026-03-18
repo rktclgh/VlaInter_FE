@@ -71,7 +71,7 @@ export const Login = () => {
         email: loginId.trim(),
         password,
       });
-      navigate("/content/interview");
+      navigate("/content");
     } catch (error) {
       setErrorMessage(error.message);
     } finally {

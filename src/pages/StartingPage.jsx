@@ -249,7 +249,7 @@ export const StartingPage = () => {
       try {
         await getMyProfile();
         if (!unmounted) {
-          navigate("/content/interview", { replace: true });
+          navigate("/content", { replace: true });
         }
       } catch {
         // ignore: unauthenticated users should stay on the starting page
