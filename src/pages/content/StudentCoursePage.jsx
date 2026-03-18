@@ -1269,7 +1269,7 @@ export const StudentCoursePage = () => {
         <PointChargeSuccessModal onClose={() => setShowPointChargeSuccessModal(false)} />
       ) : null}
       {showLogoutModal ? (
-        <div className="fixed inset-0 z-70 flex items-center justify-center bg-black/35 px-4">
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/35 px-4">
           <div className="w-full max-w-[420px] rounded-[16px] border border-[#d9d9d9] bg-white p-5">
             <p className="text-[15px] font-medium text-[#252525]">
               정말 로그아웃 하시겠습니까?

@@ -168,7 +168,7 @@ async function executeProtectedRequest(path, options = {}) {
     response.status === 401 &&
     retryOnUnauthorized &&
     canRetryUnauthorized &&
-    !String(path).includes("/api/auth/refresh")
+    String(path) !== "/api/auth/refresh"
   ) {
     const alreadyRefreshedBeforeRetry = getKnownLastSuccessfulRefreshAt() > requestStartedAt;
     const refreshed = alreadyRefreshedBeforeRetry
@@ -193,7 +193,7 @@ async function executeProtectedRequest(path, options = {}) {
 }
 
 export async function fetchProtectedResource(path, options = {}) {
-  const response = await executeProtectedRequest(path, options)
+  const response = await executeProtectedRequest(path, options);
   return response.blob();
 }
 

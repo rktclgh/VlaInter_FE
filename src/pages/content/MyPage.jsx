@@ -35,6 +35,12 @@ import {
 
 const PAGE_SIZE = 10;
 
+const normalizeOptionalId = (value) => {
+  if (value === null || value === undefined || value === "") return null;
+  const numericValue = Number(value);
+  return Number.isFinite(numericValue) ? numericValue : null;
+};
+
 const formatPoint = (value) => {
   const safeNumber = Number.isFinite(Number(value)) ? Math.max(0, Number(value)) : 0;
   return `${new Intl.NumberFormat("ko-KR").format(safeNumber)}P`;
@@ -485,9 +491,9 @@ export const MyPage = () => {
         setUserPoint(parsePoint(profile?.point));
         setServiceMode(normalizeServiceMode(profile?.serviceMode));
         setUniversityName(String(profile?.universityName || ""));
-        setSelectedUniversityId(null);
+        setSelectedUniversityId((current) => normalizeOptionalId(profile?.universityId) ?? current);
         setDepartmentName(String(profile?.departmentName || ""));
-        setSelectedDepartmentId(null);
+        setSelectedDepartmentId((current) => normalizeOptionalId(profile?.departmentId) ?? current);
         setHasGeminiApiKey(Boolean(profile?.hasGeminiApiKey));
         setProfileImageUrl(getMyProfileImageUrl());
         if (normalizeServiceMode(profile?.serviceMode) === SERVICE_MODE.STUDENT) {
@@ -749,9 +755,9 @@ export const MyPage = () => {
       const normalizedMode = normalizeServiceMode(profile?.serviceMode);
       setServiceMode(normalizedMode);
       setUniversityName(String(profile?.universityName || ""));
-      setSelectedUniversityId(null);
+      setSelectedUniversityId((current) => normalizeOptionalId(profile?.universityId) ?? current);
       setDepartmentName(String(profile?.departmentName || ""));
-      setSelectedDepartmentId(null);
+      setSelectedDepartmentId((current) => normalizeOptionalId(profile?.departmentId) ?? current);
       if (normalizedMode === SERVICE_MODE.STUDENT) {
         try {
           const coursesPayload = await getMyStudentCourses();
@@ -792,9 +798,9 @@ export const MyPage = () => {
       });
       const profile = extractProfile(payload);
       setUniversityName(String(profile?.universityName || ""));
-      setSelectedUniversityId(null);
+      setSelectedUniversityId((current) => normalizeOptionalId(profile?.universityId) ?? current);
       setDepartmentName(String(profile?.departmentName || ""));
-      setSelectedDepartmentId(null);
+      setSelectedDepartmentId((current) => normalizeOptionalId(profile?.departmentId) ?? current);
       setServiceModeMessage(hasAcademicProfile(profile) ? "대학교 / 학과 정보를 저장했습니다." : "대학교 / 학과 정보를 비웠습니다.");
     } catch (error) {
       setServiceModeErrorMessage(error?.message || "대학교 / 학과 저장에 실패했습니다.");

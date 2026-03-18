@@ -7,7 +7,7 @@ export const getStudentMyMenuItems = () => STUDENT_MY_MENU_ITEMS;
 export const getStudentSidebarActiveKey = (pathname) => {
   const currentPath = String(pathname || "");
   if (currentPath.startsWith("/content/student/mypage")) return "student_mypage";
-  const matchedCourse = currentPath.match(/^\/content\/student\/courses\/(\d+)/);
+  const matchedCourse = currentPath.match(/^\/content\/student\/courses\/([^/]+)/);
   if (matchedCourse) {
     return `student_course_${matchedCourse[1]}`;
   }

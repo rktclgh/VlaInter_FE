@@ -208,6 +208,13 @@ export const StudentHomePage = () => {
           setCourses([]);
           setCoursesLoading(false);
         }
+      } catch (error) {
+        if (cancelled) return;
+        setProfile({});
+        setUserName("사용자");
+        setCourseErrorMessage(error?.message || "프로필을 불러오지 못했습니다.");
+        setCourses([]);
+        setCoursesLoading(false);
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -263,12 +270,19 @@ export const StudentHomePage = () => {
 
   const handleCreateCourse = async () => {
     if (courseSubmitting) return;
+    const normalizedCourseName = String(courseName || "").trim();
+    if (!normalizedCourseName) {
+      setCourseErrorMessage("과목명을 입력해 주세요.");
+      setCourseMessage("");
+      setCourseSubmitting(false);
+      return;
+    }
     setCourseSubmitting(true);
     setCourseErrorMessage("");
     setCourseMessage("");
     try {
       const payload = await createStudentCourse({
-        courseName,
+        courseName: normalizedCourseName,
         professorName,
         description: courseDescription,
       });
@@ -586,7 +600,7 @@ export const StudentHomePage = () => {
         <PointChargeSuccessModal onClose={() => setShowPointChargeSuccessModal(false)} />
       ) : null}
       {showLogoutModal ? (
-        <div className="fixed inset-0 z-70 flex items-center justify-center bg-black/35 px-4">
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/35 px-4">
           <div className="w-full max-w-[420px] rounded-[16px] border border-[#d9d9d9] bg-white p-5">
             <p className="text-[15px] font-medium text-[#252525]">
               정말 로그아웃 하시겠습니까?
