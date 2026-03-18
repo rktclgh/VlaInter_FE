@@ -440,7 +440,7 @@ const examModeLabel = (mode) => {
     case "WRONG_ANSWER_RETEST":
       return "오답노트 재시험";
     default:
-      return "일반형";
+      return "모의고사";
   }
 };
 
@@ -1409,7 +1409,7 @@ export const StudentCoursePage = () => {
                       </div>
                       <div className="flex rounded-[12px] border border-[#d1d5db] bg-white p-1">
                         {[
-                          { key: "STANDARD", label: "일반형" },
+                          { key: "STANDARD", label: "모의고사" },
                           { key: "FAST_REVIEW", label: "패스트 모의고사" },
                           { key: "PAST_EXAM", label: "족보형" },
                           { key: "PAST_EXAM_PRACTICE", label: "족보 그대로 연습" },

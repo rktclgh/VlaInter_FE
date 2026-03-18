@@ -74,7 +74,7 @@ const examModeLabel = (mode) => {
     case "WRONG_ANSWER_RETEST":
       return "오답노트 재시험";
     default:
-      return "일반형";
+      return "모의고사";
   }
 };
 
