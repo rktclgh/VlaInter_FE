@@ -6,6 +6,7 @@ import { MobileSidebarDrawer } from "../../components/MobileSidebarDrawer";
 import { PointChargeModal } from "../../components/PointChargeModal";
 import { PointChargeSuccessModal } from "../../components/PointChargeSuccessModal";
 import { Sidebar } from "../../components/Sidebar";
+import { useToast } from "../../hooks/useToast";
 import tempProfileImage from "../../assets/icon/temp.png";
 import { logout } from "../../lib/authApi";
 import { consumePointChargeSuccessResult } from "../../lib/pointChargeFlow";
@@ -140,6 +141,7 @@ export const StudentHomePage = () => {
   const COURSE_PAGE_SIZE = 5;
   const navigate = useNavigate();
   const location = useLocation();
+  const { showToast } = useToast();
   const [profile, setProfile] = useState({});
   const [loading, setLoading] = useState(true);
   const [userName, setUserName] = useState("사용자");
@@ -163,8 +165,8 @@ export const StudentHomePage = () => {
   const [professorName, setProfessorName] = useState("");
   const [courseDescription, setCourseDescription] = useState("");
   const [courseSubmitting, setCourseSubmitting] = useState(false);
-  const [courseErrorMessage, setCourseErrorMessage] = useState("");
-  const [courseMessage, setCourseMessage] = useState("");
+  const [, setCourseErrorMessage] = useState("");
+  const [, setCourseMessage] = useState("");
   const [deleteTargetCourse, setDeleteTargetCourse] = useState(null);
   const [courseDeleting, setCourseDeleting] = useState(false);
   const [coursePage, setCoursePage] = useState(0);
@@ -294,8 +296,10 @@ export const StudentHomePage = () => {
       setProfessorName("");
       setCourseDescription("");
       setCourseMessage("과목이 등록되었습니다.");
+      showToast("과목이 등록되었습니다.", { type: "success" });
     } catch (error) {
       setCourseErrorMessage(error?.message || "과목 등록에 실패했습니다.");
+      showToast(error?.message || "과목 등록에 실패했습니다.", { type: "error" });
     } finally {
       setCourseSubmitting(false);
     }
@@ -311,9 +315,11 @@ export const StudentHomePage = () => {
       await deleteStudentCourse(targetCourseId);
       setCourses((prev) => prev.filter((course) => course.courseId !== targetCourseId));
       setCourseMessage(`과목 "${deleteTargetCourse.courseName}"을 삭제했습니다.`);
+      showToast(`과목 "${deleteTargetCourse.courseName}"을 삭제했습니다.`, { type: "success" });
       setDeleteTargetCourse(null);
     } catch (error) {
       setCourseErrorMessage(error?.message || "과목 삭제에 실패했습니다.");
+      showToast(error?.message || "과목 삭제에 실패했습니다.", { type: "error" });
     } finally {
       setCourseDeleting(false);
     }
@@ -493,8 +499,6 @@ export const StudentHomePage = () => {
                 >
                   {courseSubmitting ? "등록 중..." : "과목 등록"}
                 </button>
-                {courseMessage ? <p className="text-[12px] text-[#1f8f55]">{courseMessage}</p> : null}
-                {courseErrorMessage ? <p className="text-[12px] text-[#d84a4a]">{courseErrorMessage}</p> : null}
               </div>
             </section>
           </div>

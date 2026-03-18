@@ -7,6 +7,7 @@ import { PointChargeModal } from "../../components/PointChargeModal";
 import { PointChargeSuccessModal } from "../../components/PointChargeSuccessModal";
 import { ProtectedImage } from "../../components/ProtectedImage";
 import { Sidebar } from "../../components/Sidebar";
+import { useToast } from "../../hooks/useToast";
 import tempProfileImage from "../../assets/icon/temp.png";
 import { isAuthenticationError } from "../../lib/apiClient";
 import { logout } from "../../lib/authApi";
@@ -447,6 +448,7 @@ export const StudentCoursePage = () => {
   const location = useLocation();
   const { courseId } = useParams();
   const normalizedCourseId = Number(courseId);
+  const { showToast } = useToast();
 
   const [loading, setLoading] = useState(true);
   const [userName, setUserName] = useState("사용자");
@@ -466,10 +468,10 @@ export const StudentCoursePage = () => {
   const [wrongAnswerSets, setWrongAnswerSets] = useState([]);
 
   const [pageErrorMessage, setPageErrorMessage] = useState("");
-  const [materialMessage, setMaterialMessage] = useState("");
-  const [materialErrorMessage, setMaterialErrorMessage] = useState("");
-  const [sessionMessage, setSessionMessage] = useState("");
-  const [sessionErrorMessage, setSessionErrorMessage] = useState("");
+  const [, setMaterialMessage] = useState("");
+  const [, setMaterialErrorMessage] = useState("");
+  const [, setSessionMessage] = useState("");
+  const [, setSessionErrorMessage] = useState("");
 
   const [uploading, setUploading] = useState(false);
   const [analyzingMaterialId, setAnalyzingMaterialId] = useState(null);
@@ -672,10 +674,12 @@ export const StudentCoursePage = () => {
       await uploadStudentCourseMaterial(course.courseId, file, materialKind);
       const kindMeta = materialKindMeta(materialKind);
       setMaterialMessage(`${kindMeta.successLabel}를 업로드했습니다.`);
+      showToast(`${kindMeta.successLabel}를 업로드했습니다.`, { type: "success" });
       await refreshCourse();
     } catch (error) {
       if (handleAuthenticationFailure(error)) return;
       setMaterialErrorMessage(error?.message || "자료 업로드에 실패했습니다.");
+      showToast(error?.message || "자료 업로드에 실패했습니다.", { type: "error" });
     } finally {
       setUploading(false);
     }
@@ -691,6 +695,7 @@ export const StudentCoursePage = () => {
     try {
       const payload = await uploadStudentCourseYoutubeMaterial(course.courseId, normalizedUrl, youtubeSummaryFormat);
       setMaterialMessage(`"${payload?.videoTitle || "유튜브 강의"}" 요약본 생성을 시작했습니다.`);
+      showToast(`"${payload?.videoTitle || "유튜브 강의"}" 요약본 생성을 시작했습니다.`, { type: "success" });
       setYoutubeMaterialUrl("");
       setYoutubeSummaryFormat("DOCX");
       setShowYoutubeMaterialModal(false);
@@ -698,6 +703,7 @@ export const StudentCoursePage = () => {
     } catch (error) {
       if (handleAuthenticationFailure(error)) return;
       setMaterialErrorMessage(error?.message || "유튜브 요약본 생성 요청에 실패했습니다.");
+      showToast(error?.message || "유튜브 요약본 생성 요청에 실패했습니다.", { type: "error" });
     } finally {
       setCreatingYoutubeMaterial(false);
     }
@@ -711,10 +717,12 @@ export const StudentCoursePage = () => {
     try {
       await analyzeStudentCourseMaterial(course.courseId, material.materialId);
       setMaterialMessage(`"${material.fileName}" 분석을 요청했습니다.`);
+      showToast(`"${material.fileName}" 분석을 요청했습니다.`, { type: "success" });
       await refreshCourse();
     } catch (error) {
       if (handleAuthenticationFailure(error)) return;
       setMaterialErrorMessage(error?.message || "AI 분석 요청에 실패했습니다.");
+      showToast(error?.message || "AI 분석 요청에 실패했습니다.", { type: "error" });
     } finally {
       setAnalyzingMaterialId(null);
     }
@@ -738,6 +746,7 @@ export const StudentCoursePage = () => {
     } catch (error) {
       if (handleAuthenticationFailure(error)) return;
       setMaterialErrorMessage(error?.message || "다운로드 링크 생성에 실패했습니다.");
+      showToast(error?.message || "다운로드 링크 생성에 실패했습니다.", { type: "error" });
     } finally {
       setDownloadingMaterialId(null);
     }
@@ -751,11 +760,13 @@ export const StudentCoursePage = () => {
     try {
       await deleteStudentCourseMaterial(course.courseId, materialDeleteTarget.materialId);
       setMaterialMessage(`"${materialDeleteTarget.fileName}" 자료를 삭제했습니다.`);
+      showToast(`"${materialDeleteTarget.fileName}" 자료를 삭제했습니다.`, { type: "success" });
       setMaterialDeleteTarget(null);
       await refreshCourse();
     } catch (error) {
       if (handleAuthenticationFailure(error)) return;
       setMaterialErrorMessage(error?.message || "자료 삭제에 실패했습니다.");
+      showToast(error?.message || "자료 삭제에 실패했습니다.", { type: "error" });
     } finally {
       setDeletingMaterialId(null);
     }
@@ -784,10 +795,12 @@ export const StudentCoursePage = () => {
         language: normalizeInterviewLanguage(sessionLanguage),
       });
       setSessionMessage(`${examModeLabel(sessionGenerationMode)} ${questionCount}문항 모의고사를 ${getInterviewLanguageLabel(sessionLanguage)}로 생성했습니다.`);
+      showToast(`${examModeLabel(sessionGenerationMode)} ${questionCount}문항 모의고사를 ${getInterviewLanguageLabel(sessionLanguage)}로 생성했습니다.`, { type: "success" });
       await refreshCourse();
     } catch (error) {
       if (handleAuthenticationFailure(error)) return;
       setSessionErrorMessage(error?.message || "모의고사 생성에 실패했습니다.");
+      showToast(error?.message || "모의고사 생성에 실패했습니다.", { type: "error" });
     } finally {
       setCreatingSessionCount(null);
     }
@@ -822,9 +835,11 @@ export const StudentCoursePage = () => {
       anchor.remove();
       window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
       setSessionMessage(`강의자료 요약본 ${requestedFormat} 파일을 생성했습니다.`);
+      showToast(`강의자료 요약본 ${requestedFormat} 파일을 생성했습니다.`, { type: "success" });
     } catch (error) {
       if (handleAuthenticationFailure(error)) return;
       setSessionErrorMessage(error?.message || "요약본 생성에 실패했습니다.");
+      showToast(error?.message || "요약본 생성에 실패했습니다.", { type: "error" });
     } finally {
       setCreatingSummaryFormat(null);
     }
@@ -842,9 +857,11 @@ export const StudentCoursePage = () => {
       });
       setSummaryPreview(payload);
       setSessionMessage("구조화 노트 미리보기를 생성했습니다.");
+      showToast("구조화 노트 미리보기를 생성했습니다.", { type: "success" });
     } catch (error) {
       if (handleAuthenticationFailure(error)) return;
       setSessionErrorMessage(error?.message || "노트 미리보기에 실패했습니다.");
+      showToast(error?.message || "노트 미리보기에 실패했습니다.", { type: "error" });
     } finally {
       setCreatingSummaryPreview(false);
     }
@@ -875,6 +892,7 @@ export const StudentCoursePage = () => {
     try {
       const payload = await createStudentWrongAnswerRetest(wrongSet.setId);
       setSessionMessage(`"${wrongSet.title}" 재시험 세션을 생성했습니다.`);
+      showToast(`"${wrongSet.title}" 재시험 세션을 생성했습니다.`, { type: "success" });
       await refreshCourse();
       if (payload?.sessionId) {
         navigate(`/content/student/sessions/${payload.sessionId}`);
@@ -882,6 +900,7 @@ export const StudentCoursePage = () => {
     } catch (error) {
       if (handleAuthenticationFailure(error)) return;
       setSessionErrorMessage(error?.message || "재시험 세션 생성에 실패했습니다.");
+      showToast(error?.message || "재시험 세션 생성에 실패했습니다.", { type: "error" });
     } finally {
       setCreatingRetestSetId(null);
     }
@@ -895,11 +914,13 @@ export const StudentCoursePage = () => {
     try {
       await deleteStudentExamSession(sessionDeleteTarget.sessionId);
       setSessionMessage(`"${sessionDeleteTarget.title}" 세션을 삭제했습니다.`);
+      showToast(`"${sessionDeleteTarget.title}" 세션을 삭제했습니다.`, { type: "success" });
       setSessionDeleteTarget(null);
       await refreshCourse();
     } catch (error) {
       if (handleAuthenticationFailure(error)) return;
       setSessionErrorMessage(error?.message || "모의고사 삭제에 실패했습니다.");
+      showToast(error?.message || "모의고사 삭제에 실패했습니다.", { type: "error" });
     } finally {
       setDeletingSessionId(null);
     }
@@ -1031,8 +1052,6 @@ export const StudentCoursePage = () => {
                       <p className="mt-1 text-[12px] text-[#6b7280]">강의자료는 PDF/DOCX/PPTX, 족보는 PDF/DOCX/PPTX/JPG/JPEG/PNG 형식을 업로드할 수 있습니다.</p>
                     </div>
                   </div>
-                  {materialMessage ? <p className="mt-3 text-[12px] text-[#1f8f55]">{materialMessage}</p> : null}
-                  {materialErrorMessage ? <p className="mt-3 text-[12px] text-[#d84a4a]">{materialErrorMessage}</p> : null}
                   {youtubeSummaryJobs.length > 0 ? (
                     <div className="mt-4 rounded-[16px] border border-[#e5e7eb] bg-white p-4">
                       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -1528,8 +1547,6 @@ export const StudentCoursePage = () => {
                     </div>
                     <p className="mt-3 text-[11px] text-[#7c8497]">현재 모의고사 언어: {getInterviewLanguageLabel(sessionLanguage)}</p>
                   </div>
-                  {sessionMessage ? <p className="mt-3 text-[12px] text-[#1f8f55]">{sessionMessage}</p> : null}
-                  {sessionErrorMessage ? <p className="mt-3 text-[12px] text-[#d84a4a]">{sessionErrorMessage}</p> : null}
                   <div className="mt-4 space-y-3">
                     {sessions.length === 0 ? (
                       <p className="text-[13px] text-[#7c8497]">아직 생성된 모의고사 세션이 없습니다.</p>

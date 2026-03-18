@@ -6,6 +6,7 @@ import { MobileSidebarDrawer } from "../../components/MobileSidebarDrawer";
 import { PointChargeModal } from "../../components/PointChargeModal";
 import { PointChargeSuccessModal } from "../../components/PointChargeSuccessModal";
 import { AcademicProfileFields } from "../../components/AcademicProfileFields";
+import { useToast } from "../../hooks/useToast";
 import tempProfileImage from "../../assets/icon/temp.png";
 import { isAuthenticationError } from "../../lib/apiClient";
 import { logout } from "../../lib/authApi";
@@ -371,6 +372,7 @@ const DeleteAccountConfirmModal = ({ deleting, errorMessage, onCancel, onConfirm
 export const MyPage = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  const { showToast } = useToast();
 
   const [userName, setUserName] = useState("사용자");
   const [userEmail, setUserEmail] = useState("-");
@@ -382,8 +384,8 @@ export const MyPage = () => {
   const [selectedDepartmentId, setSelectedDepartmentId] = useState(null);
   const [serviceModeSubmitting, setServiceModeSubmitting] = useState(false);
   const [academicProfileSubmitting, setAcademicProfileSubmitting] = useState(false);
-  const [serviceModeMessage, setServiceModeMessage] = useState("");
-  const [serviceModeErrorMessage, setServiceModeErrorMessage] = useState("");
+  const [, setServiceModeMessage] = useState("");
+  const [, setServiceModeErrorMessage] = useState("");
   const [profileImageUrl, setProfileImageUrl] = useState(tempProfileImage);
   const [isAdmin, setIsAdmin] = useState(false);
   const [studentCourses, setStudentCourses] = useState([]);
@@ -405,13 +407,13 @@ export const MyPage = () => {
   const [passwordErrorMessage, setPasswordErrorMessage] = useState("");
 
   const [profileUploading, setProfileUploading] = useState(false);
-  const [profileUploadErrorMessage, setProfileUploadErrorMessage] = useState("");
+  const [, setProfileUploadErrorMessage] = useState("");
   const [hasGeminiApiKey, setHasGeminiApiKey] = useState(false);
   const [geminiApiKeyInput, setGeminiApiKeyInput] = useState("");
   const [geminiApiKeySubmitting, setGeminiApiKeySubmitting] = useState(false);
   const [removingGeminiApiKey, setRemovingGeminiApiKey] = useState(false);
-  const [geminiApiKeyMessage, setGeminiApiKeyMessage] = useState("");
-  const [geminiApiKeyErrorMessage, setGeminiApiKeyErrorMessage] = useState("");
+  const [, setGeminiApiKeyMessage] = useState("");
+  const [, setGeminiApiKeyErrorMessage] = useState("");
   const profileImageInputRef = useRef(null);
 
   const [activeHistoryTab, setActiveHistoryTab] = useState("payment");
@@ -426,7 +428,7 @@ export const MyPage = () => {
     items: [],
   });
   const [paymentLoading, setPaymentLoading] = useState(true);
-  const [paymentErrorMessage, setPaymentErrorMessage] = useState("");
+  const [, setPaymentErrorMessage] = useState("");
 
   const [ledgerPage, setLedgerPage] = useState(0);
   const [ledgerHistory, setLedgerHistory] = useState({
@@ -561,10 +563,12 @@ export const MyPage = () => {
       extension.endsWith(".webp");
     if (!isImageMime || !isImageExtension) {
       setProfileUploadErrorMessage("프로필 사진은 PNG/JPG/JPEG/WEBP 형식만 업로드할 수 있습니다.");
+      showToast("프로필 사진은 PNG/JPG/JPEG/WEBP 형식만 업로드할 수 있습니다.", { type: "error" });
       return;
     }
     if (file.size > 5 * 1024 * 1024) {
       setProfileUploadErrorMessage("프로필 사진은 5MB 이하만 업로드할 수 있습니다.");
+      showToast("프로필 사진은 5MB 이하만 업로드할 수 있습니다.", { type: "error" });
       return;
     }
 
@@ -593,8 +597,10 @@ export const MyPage = () => {
         await Promise.allSettled(staleProfileFileIds.map((fileId) => deleteMyFile(fileId)));
       }
       setProfileImageUrl(getMyProfileImageUrl());
+      showToast("프로필 사진을 변경했습니다.", { type: "success" });
     } catch (error) {
       setProfileUploadErrorMessage(error?.message || "프로필 사진 업로드에 실패했습니다.");
+      showToast(error?.message || "프로필 사진 업로드에 실패했습니다.", { type: "error" });
     } finally {
       setProfileUploading(false);
     }
@@ -646,8 +652,10 @@ export const MyPage = () => {
       setHasGeminiApiKey(Boolean(profile?.hasGeminiApiKey));
       setGeminiApiKeyInput("");
       setGeminiApiKeyMessage("Gemini API 키가 저장되었습니다.");
+      showToast("Gemini API 키가 저장되었습니다.", { type: "success" });
     } catch (error) {
       setGeminiApiKeyErrorMessage(error?.message || "Gemini API 키 저장에 실패했습니다.");
+      showToast(error?.message || "Gemini API 키 저장에 실패했습니다.", { type: "error" });
     } finally {
       setGeminiApiKeySubmitting(false);
     }
@@ -663,8 +671,10 @@ export const MyPage = () => {
       setHasGeminiApiKey(Boolean(profile?.hasGeminiApiKey));
       setGeminiApiKeyInput("");
       setGeminiApiKeyMessage("Gemini API 키가 제거되었습니다.");
+      showToast("Gemini API 키가 제거되었습니다.", { type: "success" });
     } catch (error) {
       setGeminiApiKeyErrorMessage(error?.message || "Gemini API 키 제거에 실패했습니다.");
+      showToast(error?.message || "Gemini API 키 제거에 실패했습니다.", { type: "error" });
     } finally {
       setRemovingGeminiApiKey(false);
     }
@@ -721,8 +731,10 @@ export const MyPage = () => {
       const result = await refundPointPayment(chargeId);
       setUserPoint(parsePoint(result?.currentPoint));
       await Promise.all([refreshPaymentHistory(paymentPage), refreshLedgerHistory(ledgerPage)]);
+      showToast("환불 처리되었습니다.", { type: "success" });
     } catch (error) {
       setPaymentErrorMessage(error?.message || "환불 처리에 실패했습니다.");
+      showToast(error?.message || "환불 처리에 실패했습니다.", { type: "error" });
     } finally {
       setRefundingChargeId(null);
     }
@@ -776,12 +788,14 @@ export const MyPage = () => {
         setStudentCourses([]);
       }
       setServiceModeMessage(nextServiceMode === SERVICE_MODE.STUDENT ? "대학생 모드로 전환했습니다." : "취준생 모드로 전환했습니다.");
+      showToast(nextServiceMode === SERVICE_MODE.STUDENT ? "대학생 모드로 전환했습니다." : "취준생 모드로 전환했습니다.", { type: "success" });
       navigate(
         nextServiceMode === SERVICE_MODE.STUDENT ? "/content/student" : "/content/interview",
         { replace: true }
       );
     } catch (error) {
       setServiceModeErrorMessage(error?.message || "서비스 모드 변경에 실패했습니다.");
+      showToast(error?.message || "서비스 모드 변경에 실패했습니다.", { type: "error" });
     } finally {
       setServiceModeSubmitting(false);
     }
@@ -791,6 +805,7 @@ export const MyPage = () => {
     if (academicProfileSubmitting) return;
     if (!canSaveAcademicProfile) {
       setServiceModeErrorMessage("대학교와 학과를 모두 입력해 주세요.");
+      showToast("대학교와 학과를 모두 입력해 주세요.", { type: "error" });
       return;
     }
     setAcademicProfileSubmitting(true);
@@ -810,8 +825,10 @@ export const MyPage = () => {
       setDepartmentName(String(profile?.departmentName || ""));
       setSelectedDepartmentId((current) => normalizeOptionalId(profile?.departmentId) ?? current);
       setServiceModeMessage(hasAcademicProfile(profile) ? "대학교 / 학과 정보를 저장했습니다." : "대학교 / 학과 정보를 비웠습니다.");
+      showToast(hasAcademicProfile(profile) ? "대학교 / 학과 정보를 저장했습니다." : "대학교 / 학과 정보를 비웠습니다.", { type: "success" });
     } catch (error) {
       setServiceModeErrorMessage(error?.message || "대학교 / 학과 저장에 실패했습니다.");
+      showToast(error?.message || "대학교 / 학과 저장에 실패했습니다.", { type: "error" });
     } finally {
       setAcademicProfileSubmitting(false);
     }
@@ -898,7 +915,6 @@ export const MyPage = () => {
                     </p>
                   </div>
                 </div>
-                {profileUploadErrorMessage ? <p className="mt-3 text-[12px] text-[#d84a4a]">{profileUploadErrorMessage}</p> : null}
               </div>
 
               <div className="mt-4 rounded-[16px] border border-[#e0e0e0] bg-white p-6">
@@ -978,8 +994,6 @@ export const MyPage = () => {
                     </div>
                   </>
                 ) : null}
-                {serviceModeMessage ? <p className="mt-2 text-[12px] text-[#1f8f55]">{serviceModeMessage}</p> : null}
-                {serviceModeErrorMessage ? <p className="mt-2 text-[12px] text-[#d84a4a]">{serviceModeErrorMessage}</p> : null}
               </div>
 
               <div className="mt-4 rounded-[16px] border border-[#e0e0e0] bg-white p-6">
@@ -1020,8 +1034,6 @@ export const MyPage = () => {
                 <p className="mt-2 text-[12px] text-[#4f5664]">
                   현재 상태: {hasGeminiApiKey ? "등록됨" : "미등록"}
                 </p>
-                {geminiApiKeyMessage ? <p className="mt-2 text-[12px] text-[#1f8f55]">{geminiApiKeyMessage}</p> : null}
-                {geminiApiKeyErrorMessage ? <p className="mt-2 text-[12px] text-[#d84a4a]">{geminiApiKeyErrorMessage}</p> : null}
               </div>
 
               <div className="mt-4 rounded-[16px] border border-[#e0e0e0] bg-white p-6">
@@ -1138,7 +1150,6 @@ export const MyPage = () => {
                         </table>
                       </div>
 
-                      {paymentErrorMessage ? <p className="mt-2 text-[12px] text-[#e14b4b]">{paymentErrorMessage}</p> : null}
                       <HistoryPagination
                         page={paymentPage}
                         totalPages={paymentHistory.totalPages}

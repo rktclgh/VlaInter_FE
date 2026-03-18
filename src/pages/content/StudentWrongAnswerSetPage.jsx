@@ -6,6 +6,7 @@ import { PointChargeModal } from "../../components/PointChargeModal";
 import { PointChargeSuccessModal } from "../../components/PointChargeSuccessModal";
 import { ProtectedImage } from "../../components/ProtectedImage";
 import { Sidebar } from "../../components/Sidebar";
+import { useToast } from "../../hooks/useToast";
 import tempProfileImage from "../../assets/icon/temp.png";
 import { downloadProtectedResource } from "../../lib/apiClient";
 import { logout } from "../../lib/authApi";
@@ -138,6 +139,7 @@ export const StudentWrongAnswerSetPage = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { setId } = useParams();
+  const { showToast } = useToast();
   const [loading, setLoading] = useState(true);
   const [wrongSet, setWrongSet] = useState(null);
   const [courses, setCourses] = useState([]);
@@ -225,11 +227,12 @@ export const StudentWrongAnswerSetPage = () => {
     setErrorMessage("");
     try {
       const payload = await createStudentWrongAnswerRetest(wrongSet.setId);
+      showToast("재시험 세션을 생성했습니다.", { type: "success" });
       if (payload?.sessionId) {
         navigate(`/content/student/sessions/${payload.sessionId}`);
       }
     } catch (error) {
-      setErrorMessage(error?.message || "재시험 세션 생성에 실패했습니다.");
+      showToast(error?.message || "재시험 세션 생성에 실패했습니다.", { type: "error" });
       setCreatingRetest(false);
     }
   };
@@ -331,7 +334,6 @@ export const StudentWrongAnswerSetPage = () => {
                       </button>
                     </div>
                   </div>
-                  {errorMessage ? <p className="mt-4 text-[13px] text-[#d84a4a]">{errorMessage}</p> : null}
                 </section>
 
                 <section className="rounded-[24px] border border-[#e4e6ee] bg-white px-6 py-6 shadow-[0_24px_80px_rgba(15,23,42,0.06)] sm:px-8">

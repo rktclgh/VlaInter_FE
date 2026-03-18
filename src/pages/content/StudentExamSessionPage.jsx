@@ -7,6 +7,7 @@ import { PointChargeSuccessModal } from "../../components/PointChargeSuccessModa
 import { ProtectedImage } from "../../components/ProtectedImage";
 import { Sidebar } from "../../components/Sidebar";
 import { StarIcons } from "../../components/DifficultyStars";
+import { useToast } from "../../hooks/useToast";
 import tempProfileImage from "../../assets/icon/temp.png";
 import { logout } from "../../lib/authApi";
 import { getInterviewLanguageLabel } from "../../lib/interviewLanguage";
@@ -203,6 +204,7 @@ export const StudentExamSessionPage = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { sessionId } = useParams();
+  const { showToast } = useToast();
   const [loading, setLoading] = useState(true);
   const [session, setSession] = useState(null);
   const [answers, setAnswers] = useState({});
@@ -212,7 +214,6 @@ export const StudentExamSessionPage = () => {
   const [submitting, setSubmitting] = useState(false);
   const [savingWrongAnswerSet, setSavingWrongAnswerSet] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
-  const [successMessage, setSuccessMessage] = useState("");
   const [userName, setUserName] = useState("사용자");
   const [isAdmin, setIsAdmin] = useState(false);
   const [userPoint, setUserPoint] = useState(0);
@@ -304,7 +305,6 @@ export const StudentExamSessionPage = () => {
     if (submitting || !session) return;
     setSubmitting(true);
     setErrorMessage("");
-    setSuccessMessage("");
     try {
       const payload = await submitStudentExamAnswers(
         session.sessionId,
@@ -316,9 +316,9 @@ export const StudentExamSessionPage = () => {
       setSession(payload);
       setSelectedQuestionIds(buildInitialSelectedQuestionIds(payload?.questions));
       setActiveQuestionIndex(0);
-      setSuccessMessage("답안이 제출되고 채점 결과가 저장되었습니다.");
+      showToast("답안이 제출되고 채점 결과가 저장되었습니다.", { type: "success" });
     } catch (error) {
-      setErrorMessage(error?.message || "답안 제출에 실패했습니다.");
+      showToast(error?.message || "답안 제출에 실패했습니다.", { type: "error" });
     } finally {
       setSubmitting(false);
     }
@@ -327,20 +327,19 @@ export const StudentExamSessionPage = () => {
   const handleSaveWrongAnswerSet = async () => {
     if (!session || savingWrongAnswerSet) return;
     if (selectedQuestionIds.length === 0) {
-      setErrorMessage("오답노트로 저장할 문제를 1개 이상 선택해 주세요.");
+      showToast("오답노트로 저장할 문제를 1개 이상 선택해 주세요.", { type: "error" });
       return;
     }
     setSavingWrongAnswerSet(true);
     setErrorMessage("");
-    setSuccessMessage("");
     try {
       const payload = await createStudentWrongAnswerSet(session.sessionId, {
         title: wrongAnswerSetTitle,
         questionIds: selectedQuestionIds,
       });
-      setSuccessMessage(`오답노트가 저장되었습니다. (${payload.questionCount}문항)`);
+      showToast(`오답노트가 저장되었습니다. (${payload.questionCount}문항)`, { type: "success" });
     } catch (error) {
-      setErrorMessage(error?.message || "오답노트 저장에 실패했습니다.");
+      showToast(error?.message || "오답노트 저장에 실패했습니다.", { type: "error" });
     } finally {
       setSavingWrongAnswerSet(false);
     }
@@ -350,12 +349,11 @@ export const StudentExamSessionPage = () => {
     if (!session || deleting) return;
     setDeleting(true);
     setErrorMessage("");
-    setSuccessMessage("");
     try {
       await deleteStudentExamSession(session.sessionId);
       navigate("/content/student", { replace: true });
     } catch (error) {
-      setErrorMessage(error?.message || "모의고사 세션 삭제에 실패했습니다.");
+      showToast(error?.message || "모의고사 세션 삭제에 실패했습니다.", { type: "error" });
       setDeleting(false);
       setShowDeleteModal(false);
     }
@@ -524,7 +522,6 @@ export const StudentExamSessionPage = () => {
                     </div>
                   </div>
 
-                  {successMessage ? <p className="mt-4 text-[13px] text-[#1f8f55]">{successMessage}</p> : null}
                   {errorMessage ? <p className="mt-4 text-[13px] text-[#d84a4a]">{errorMessage}</p> : null}
                 </section>
 
