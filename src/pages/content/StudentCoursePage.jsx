@@ -450,6 +450,7 @@ export const StudentCoursePage = () => {
 
   const [loading, setLoading] = useState(true);
   const [userName, setUserName] = useState("사용자");
+  const [isAdmin, setIsAdmin] = useState(false);
   const [userPoint, setUserPoint] = useState(0);
   const [profileImageUrl, setProfileImageUrl] = useState(tempProfileImage);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -552,6 +553,7 @@ export const StudentCoursePage = () => {
         if (cancelled) return;
         const profile = extractProfile(profilePayload);
         setUserName(String(profile?.name || "사용자"));
+        setIsAdmin(profile?.role === "ADMIN");
         setUserPoint(parsePoint(profile?.point));
         setProfileImageUrl(getMyProfileImageUrl());
         const nextCourses = Array.isArray(coursesPayload) ? coursesPayload : [];
@@ -573,7 +575,7 @@ export const StudentCoursePage = () => {
   }, [handleAuthenticationFailure, loadCourseData]);
 
   const pointSummaryText = useMemo(() => formatPoint(userPoint), [userPoint]);
-  const studentMenuSections = useMemo(() => getStudentSidebarSections(courses), [courses]);
+  const studentMenuSections = useMemo(() => getStudentSidebarSections(courses, { isAdmin }), [courses, isAdmin]);
   const studentMyMenuItems = useMemo(() => getStudentMyMenuItems(), []);
   const sidebarActiveKey = useMemo(() => getStudentSidebarActiveKey(location.pathname), [location.pathname]);
   const readyMaterialCount = useMemo(

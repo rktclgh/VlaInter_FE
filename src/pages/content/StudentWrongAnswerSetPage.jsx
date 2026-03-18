@@ -142,6 +142,7 @@ export const StudentWrongAnswerSetPage = () => {
   const [wrongSet, setWrongSet] = useState(null);
   const [courses, setCourses] = useState([]);
   const [userName, setUserName] = useState("사용자");
+  const [isAdmin, setIsAdmin] = useState(false);
   const [userPoint, setUserPoint] = useState(0);
   const [profileImageUrl, setProfileImageUrl] = useState(tempProfileImage);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -172,6 +173,7 @@ export const StudentWrongAnswerSetPage = () => {
         if (cancelled) return;
         const profile = extractProfile(profilePayload);
         setUserName(String(profile?.name || "사용자"));
+        setIsAdmin(profile?.role === "ADMIN");
         setUserPoint(parsePoint(profile?.point));
         setProfileImageUrl(getMyProfileImageUrl());
         setCourses(Array.isArray(coursesPayload) ? coursesPayload : []);
@@ -192,7 +194,7 @@ export const StudentWrongAnswerSetPage = () => {
   }, [setId]);
 
   const pointSummaryText = useMemo(() => formatPoint(userPoint), [userPoint]);
-  const studentMenuSections = useMemo(() => getStudentSidebarSections(courses), [courses]);
+  const studentMenuSections = useMemo(() => getStudentSidebarSections(courses, { isAdmin }), [courses, isAdmin]);
   const studentMyMenuItems = useMemo(() => getStudentMyMenuItems(), []);
   const sidebarActiveKey = useMemo(() => {
     if (Number.isFinite(Number(wrongSet?.courseId))) {

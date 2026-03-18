@@ -385,6 +385,7 @@ export const MyPage = () => {
   const [serviceModeMessage, setServiceModeMessage] = useState("");
   const [serviceModeErrorMessage, setServiceModeErrorMessage] = useState("");
   const [profileImageUrl, setProfileImageUrl] = useState(tempProfileImage);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [studentCourses, setStudentCourses] = useState([]);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [showPointChargeModal, setShowPointChargeModal] = useState(false);
@@ -488,6 +489,7 @@ export const MyPage = () => {
         const profile = extractProfile(profilePayload);
         setUserName(profile?.name || "사용자");
         setUserEmail(profile?.email || "-");
+        setIsAdmin(profile?.role === "ADMIN");
         setUserPoint(parsePoint(profile?.point));
         setServiceMode(normalizeServiceMode(profile?.serviceMode));
         setUniversityName(String(profile?.universityName || ""));
@@ -728,7 +730,10 @@ export const MyPage = () => {
 
   const pointSummaryText = useMemo(() => formatPoint(userPoint), [userPoint]);
   const isStudentRoute = location.pathname.startsWith("/content/student");
-  const studentMenuSections = useMemo(() => getStudentSidebarSections(studentCourses), [studentCourses]);
+  const studentMenuSections = useMemo(
+    () => getStudentSidebarSections(studentCourses, { isAdmin }),
+    [studentCourses, isAdmin]
+  );
   const studentMyMenuItems = useMemo(() => getStudentMyMenuItems(), []);
   const trimmedUniversityName = String(universityName || "").trim();
   const trimmedDepartmentName = String(departmentName || "").trim();
@@ -753,6 +758,7 @@ export const MyPage = () => {
     try {
       const payload = await updateMyServiceMode(nextServiceMode);
       const profile = extractProfile(payload);
+      setIsAdmin(profile?.role === "ADMIN");
       const normalizedMode = normalizeServiceMode(profile?.serviceMode);
       setServiceMode(normalizedMode);
       setUniversityName(String(profile?.universityName || ""));
@@ -798,6 +804,7 @@ export const MyPage = () => {
         departmentId: selectedDepartmentId || null,
       });
       const profile = extractProfile(payload);
+      setIsAdmin(profile?.role === "ADMIN");
       setUniversityName(String(profile?.universityName || ""));
       setSelectedUniversityId((current) => normalizeOptionalId(profile?.universityId) ?? current);
       setDepartmentName(String(profile?.departmentName || ""));

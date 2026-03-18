@@ -232,6 +232,7 @@ export const StudentHomePage = () => {
     if (!university || !department) return "미등록";
     return `${university} · ${department}`;
   }, [profile]);
+  const isAdmin = profile?.role === "ADMIN";
 
   const handleSaveAcademicProfile = async () => {
     if (savingAcademicProfile) return;
@@ -347,7 +348,7 @@ export const StudentHomePage = () => {
   };
 
   const pointSummaryText = useMemo(() => formatPoint(userPoint), [userPoint]);
-  const studentMenuSections = useMemo(() => getStudentSidebarSections(courses), [courses]);
+  const studentMenuSections = useMemo(() => getStudentSidebarSections(courses, { isAdmin }), [courses, isAdmin]);
   const studentMyMenuItems = useMemo(() => getStudentMyMenuItems(), []);
   const sidebarActiveKey = useMemo(() => getStudentSidebarActiveKey(location.pathname), [location.pathname]);
 

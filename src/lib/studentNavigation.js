@@ -1,6 +1,7 @@
 import { STUDENT_MY_MENU_ITEMS, buildStudentMenuSections } from "../components/sidebarMenuItems";
 
-export const getStudentSidebarSections = (courses) => buildStudentMenuSections(courses);
+export const getStudentSidebarSections = (courses, { isAdmin = false } = {}) =>
+  buildStudentMenuSections(courses, { isAdmin });
 
 export const getStudentMyMenuItems = () => STUDENT_MY_MENU_ITEMS;
 

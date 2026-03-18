@@ -214,6 +214,7 @@ export const StudentExamSessionPage = () => {
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
   const [userName, setUserName] = useState("사용자");
+  const [isAdmin, setIsAdmin] = useState(false);
   const [userPoint, setUserPoint] = useState(0);
   const [profileImageUrl, setProfileImageUrl] = useState(tempProfileImage);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -245,6 +246,7 @@ export const StudentExamSessionPage = () => {
         if (cancelled) return;
         const profile = extractProfile(profilePayload);
         setUserName(String(profile?.name || "사용자"));
+        setIsAdmin(profile?.role === "ADMIN");
         setUserPoint(parsePoint(profile?.point));
         setProfileImageUrl(getMyProfileImageUrl());
         setSession(sessionPayload);
@@ -282,7 +284,7 @@ export const StudentExamSessionPage = () => {
   const activeReferenceExample = normalizeReferenceExample(activeQuestion?.referenceExample);
   const isLastQuestion = activeQuestionIndex >= questions.length - 1;
   const pointSummaryText = useMemo(() => formatPoint(userPoint), [userPoint]);
-  const studentMenuSections = useMemo(() => getStudentSidebarSections(courses), [courses]);
+  const studentMenuSections = useMemo(() => getStudentSidebarSections(courses, { isAdmin }), [courses, isAdmin]);
   const studentMyMenuItems = useMemo(() => getStudentMyMenuItems(), []);
   const sidebarActiveKey = useMemo(() => {
     if (Number.isFinite(Number(session?.courseId))) {
