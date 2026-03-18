@@ -19,9 +19,8 @@ import {
   getMyProfileImageUrl,
   getMyStudentCourses,
   updateMyAcademicProfile,
-  updateMyServiceMode,
 } from "../../lib/userApi";
-import { hasAcademicProfile, SERVICE_MODE } from "../../lib/serviceMode";
+import { hasAcademicProfile } from "../../lib/serviceMode";
 
 const StudentProfileModal = ({
   open,
@@ -158,7 +157,6 @@ export const StudentHomePage = () => {
   const [selectedDepartmentId, setSelectedDepartmentId] = useState(null);
   const [savingAcademicProfile, setSavingAcademicProfile] = useState(false);
   const [academicProfileError, setAcademicProfileError] = useState("");
-  const [switchingMode, setSwitchingMode] = useState(false);
   const [courses, setCourses] = useState([]);
   const [coursesLoading, setCoursesLoading] = useState(true);
   const [courseName, setCourseName] = useState("");
@@ -325,18 +323,6 @@ export const StudentHomePage = () => {
     }
   };
 
-  const handleSwitchToJobSeeker = async () => {
-    if (switchingMode) return;
-    setSwitchingMode(true);
-    try {
-      await updateMyServiceMode(SERVICE_MODE.JOB_SEEKER);
-      navigate("/content/interview", { replace: true });
-    } catch (error) {
-      setAcademicProfileError(error?.message || "서비스 모드 전환에 실패했습니다.");
-      setSwitchingMode(false);
-    }
-  };
-
   const requestLogout = () => setShowLogoutModal(true);
 
   const confirmLogout = async () => {
@@ -436,14 +422,6 @@ export const StudentHomePage = () => {
                 현재는 진입 구조와 기본 프로필 저장부터 먼저 고정했습니다.
               </p>
             </div>
-            <button
-              type="button"
-              disabled={switchingMode}
-              onClick={handleSwitchToJobSeeker}
-              className="rounded-[14px] border border-[#d1d5db] px-4 py-2.5 text-[13px] font-semibold text-[#374151] disabled:cursor-not-allowed disabled:opacity-55"
-            >
-              {switchingMode ? "전환 중..." : "취준생 모드로 전환"}
-            </button>
           </div>
 
           <div className="mt-8 grid gap-4 md:grid-cols-[1.2fr,0.8fr]">
