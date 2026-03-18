@@ -137,6 +137,7 @@ const DeleteCourseConfirmModal = ({
 };
 
 export const StudentHomePage = () => {
+  const COURSE_PAGE_SIZE = 5;
   const navigate = useNavigate();
   const location = useLocation();
   const [profile, setProfile] = useState({});
@@ -166,6 +167,7 @@ export const StudentHomePage = () => {
   const [courseMessage, setCourseMessage] = useState("");
   const [deleteTargetCourse, setDeleteTargetCourse] = useState(null);
   const [courseDeleting, setCourseDeleting] = useState(false);
+  const [coursePage, setCoursePage] = useState(0);
 
   useEffect(() => {
     const charged = consumePointChargeSuccessResult();
@@ -351,6 +353,23 @@ export const StudentHomePage = () => {
   const studentMenuSections = useMemo(() => getStudentSidebarSections(courses, { isAdmin }), [courses, isAdmin]);
   const studentMyMenuItems = useMemo(() => getStudentMyMenuItems(), []);
   const sidebarActiveKey = useMemo(() => getStudentSidebarActiveKey(location.pathname), [location.pathname]);
+  const totalCoursePages = useMemo(
+    () => Math.max(1, Math.ceil(courses.length / COURSE_PAGE_SIZE)),
+    [courses.length, COURSE_PAGE_SIZE]
+  );
+  const pagedCourses = useMemo(() => {
+    const start = coursePage * COURSE_PAGE_SIZE;
+    return courses.slice(start, start + COURSE_PAGE_SIZE);
+  }, [coursePage, courses, COURSE_PAGE_SIZE]);
+
+  useEffect(() => {
+    setCoursePage(0);
+  }, [courses.length]);
+
+  useEffect(() => {
+    if (coursePage < totalCoursePages) return;
+    setCoursePage(Math.max(0, totalCoursePages - 1));
+  }, [coursePage, totalCoursePages]);
 
   if (loading) {
     return (
@@ -491,7 +510,7 @@ export const StudentHomePage = () => {
               </span>
             </div>
 
-            <div className="mt-4 grid gap-3 md:grid-cols-2">
+            <div className="mt-4 space-y-3">
               {coursesLoading ? (
                 Array.from({ length: 2 }).map((_, index) => (
                   <div key={`student-course-skeleton-${index}`} className="rounded-[16px] border border-[#e2e8f0] bg-white p-4">
@@ -501,11 +520,12 @@ export const StudentHomePage = () => {
                   </div>
                 ))
               ) : courses.length === 0 ? (
-                <div className="rounded-[16px] border border-dashed border-[#d7dbe7] bg-white px-4 py-8 text-[14px] text-[#6b7280] md:col-span-2">
+                <div className="rounded-[16px] border border-dashed border-[#d7dbe7] bg-white px-4 py-8 text-[14px] text-[#6b7280]">
                   아직 등록된 과목이 없습니다. 위에서 첫 과목을 먼저 만들어 주세요.
                 </div>
               ) : (
-                courses.map((course) => {
+                pagedCourses.map((course, index) => {
+                  const sequence = coursePage * COURSE_PAGE_SIZE + index + 1;
                   return (
                     <article
                       key={course.courseId}
@@ -522,22 +542,58 @@ export const StudentHomePage = () => {
                       <button
                         type="button"
                         onClick={() => navigate(`/content/student/courses/${course.courseId}`)}
-                        className="block w-full text-left"
+                        className="block w-full pr-10 text-left"
                       >
-                        <p className="text-[12px] font-medium text-[#7c8497]">대학교</p>
-                        <p className="mt-1 text-[17px] font-semibold text-[#111827]">{course.universityName}</p>
-                        <p className="mt-4 text-[12px] font-medium text-[#7c8497]">학과</p>
-                        <p className="mt-1 text-[15px] font-medium text-[#1f2937]">{course.departmentName}</p>
-                        <p className="mt-4 text-[12px] font-medium text-[#7c8497]">과목명</p>
-                        <h3 className="mt-1 text-[22px] font-semibold text-[#111827]">{course.courseName}</h3>
-                        <p className="mt-4 text-[12px] font-medium text-[#7c8497]">교수명</p>
-                        <p className="mt-1 text-[15px] text-[#4b5563]">{course.professorName || "교수명 미입력"}</p>
+                        <div className="flex flex-wrap items-start justify-between gap-3">
+                          <div className="min-w-0 flex-1">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="rounded-full bg-[#eef2ff] px-2.5 py-1 text-[11px] font-semibold text-[#4338ca]">
+                                {String(sequence).padStart(2, "0")}
+                              </span>
+                              <h3 className="text-[20px] font-semibold text-[#111827]">{course.courseName}</h3>
+                            </div>
+                            <p className="mt-2 text-[14px] text-[#4b5563]">
+                              {course.professorName ? `${course.professorName} 교수` : "교수명 미입력"}
+                            </p>
+                            {course.courseDescription ? (
+                              <p className="mt-2 line-clamp-2 text-[13px] leading-[1.7] text-[#6b7280]">
+                                {course.courseDescription}
+                              </p>
+                            ) : null}
+                          </div>
+                          <div className="shrink-0 rounded-[12px] border border-[#e5e7eb] bg-[#f8fafc] px-3 py-2 text-[12px] font-medium text-[#475569]">
+                            상세 보기
+                          </div>
+                        </div>
                       </button>
                     </article>
                   );
                 })
               )}
             </div>
+            {!coursesLoading && courses.length > COURSE_PAGE_SIZE ? (
+              <div className="mt-4 flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setCoursePage((prev) => Math.max(0, prev - 1))}
+                  disabled={coursePage <= 0}
+                  className="rounded-[10px] border border-[#d7dbe7] bg-white px-3 py-2 text-[12px] font-semibold text-[#475569] disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  이전
+                </button>
+                <span className="text-[12px] font-medium text-[#64748b]">
+                  {coursePage + 1} / {totalCoursePages}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setCoursePage((prev) => Math.min(totalCoursePages - 1, prev + 1))}
+                  disabled={coursePage >= totalCoursePages - 1}
+                  className="rounded-[10px] border border-[#d7dbe7] bg-white px-3 py-2 text-[12px] font-semibold text-[#475569] disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  다음
+                </button>
+              </div>
+            ) : null}
           </section>
               </div>
             </div>
