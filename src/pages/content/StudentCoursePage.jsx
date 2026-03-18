@@ -505,6 +505,7 @@ export const StudentCoursePage = () => {
   const [sessionGenerationMode, setSessionGenerationMode] = useState("STANDARD");
   const [sessionQuestionCount, setSessionQuestionCount] = useState(5);
   const [sessionDifficultyLevel, setSessionDifficultyLevel] = useState(3);
+  const [showDifficultyGuide, setShowDifficultyGuide] = useState(false);
   const [sessionQuestionStyles, setSessionQuestionStyles] = useState([]);
   const [summaryFormat, setSummaryFormat] = useState("DOCX");
   const [summaryLanguage, setSummaryLanguage] = useState("KO");
@@ -1556,15 +1557,33 @@ export const StudentCoursePage = () => {
                     )}
 
                     {sessionGenerationMode === "STANDARD" ? (
-                      <div className="mt-4 rounded-[12px] border border-[#f3ddad] bg-[#fff8e8] px-4 py-3">
+                      <div className="relative mt-4 rounded-[12px] border border-[#f3ddad] bg-[#fff8e8] px-4 py-3">
                         <div className="flex items-center gap-3">
                           <span className="text-[12px] font-semibold text-[#8a5a00]">난이도</span>
                           <StarRatingInput value={sessionDifficultyLevel} onChange={setSessionDifficultyLevel} />
                           <span className="text-[12px] font-semibold text-[#8a5a00]">{sessionDifficultyLevel} / 5</span>
+                          <button
+                            type="button"
+                            onClick={() => setShowDifficultyGuide((prev) => !prev)}
+                            className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-[#d4a948] bg-white text-[11px] font-bold text-[#8a5a00]"
+                            aria-label="난이도 가이드 보기"
+                            aria-expanded={showDifficultyGuide}
+                          >
+                            ?
+                          </button>
                         </div>
-                        <p className="mt-2 text-[11px] leading-[1.7] text-[#8a5a00]">
-                          {studentExamDifficultyGuide(sessionDifficultyLevel)}
-                        </p>
+                        {showDifficultyGuide ? (
+                          <div className="mt-3 rounded-[10px] border border-[#e9c97e] bg-white/85 px-3 py-3 text-[11px] leading-[1.7] text-[#8a5a00] shadow-[0_12px_24px_rgba(138,90,0,0.08)]">
+                            <p className="font-semibold text-[#7c5100]">난이도 가이드</p>
+                            <ul className="mt-2 space-y-1.5">
+                              {[1, 2, 3, 4, 5].map((level) => (
+                                <li key={`difficulty-guide-${level}`} className={level === sessionDifficultyLevel ? "font-semibold text-[#6b4600]" : ""}>
+                                  {level}. {studentExamDifficultyGuide(level)}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        ) : null}
                       </div>
                     ) : sessionGenerationMode === "FAST_REVIEW" ? (
                       <div className="mt-4 rounded-[12px] border border-[#dcfce7] bg-[#f0fdf4] px-4 py-3 text-[12px] leading-[1.7] text-[#166534]">
