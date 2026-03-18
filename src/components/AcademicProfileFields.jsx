@@ -145,7 +145,7 @@ export const AcademicProfileFields = ({
           ) : null}
         </div>
         <p className={`mt-1 text-[11px] ${universitySelected ? "text-[#1f8f55]" : "text-[#7c8497]"}`}>
-          {universitySelected ? "검색 결과에서 선택된 대학교입니다." : "검색 결과에서 대학교를 선택해야 저장할 수 있습니다."}
+          {universitySelected ? "검색 결과에서 선택된 대학교입니다." : "검색 결과가 없으면 입력한 대학교명으로 저장됩니다."}
         </p>
       </label>
 
@@ -191,12 +191,12 @@ export const AcademicProfileFields = ({
           ) : null}
         </div>
         <p className={`mt-1 text-[11px] ${departmentSelected ? "text-[#1f8f55]" : "text-[#7c8497]"}`}>
-          {departmentSelected ? "검색 결과에서 선택된 학과입니다." : "학과는 검색 결과를 선택하거나 직접 입력해서 저장할 수 있습니다."}
+          {departmentSelected ? "검색 결과에서 선택된 학과입니다." : "검색 결과가 없으면 입력한 학과명으로 저장됩니다."}
         </p>
       </label>
 
       <p className="text-[11px] leading-[1.7] text-[#7c8497]">
-        대학교는 검색 결과에서 선택해야 하고, 학과는 검색 결과 선택 또는 직접 입력으로 저장할 수 있습니다.
+        API 검색 결과가 있으면 그 값을 우선 사용하고, 결과가 없으면 입력한 대학교/학과가 저장되어 다음부터 자동완성에 재사용됩니다.
       </p>
     </div>
   );
