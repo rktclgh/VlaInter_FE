@@ -250,6 +250,13 @@ export async function getStudentCourseYoutubeMaterialJobs(courseId) {
   });
 }
 
+export async function deleteStudentCourseYoutubeMaterialJob(courseId, jobId) {
+  return apiRequest(`/api/student/courses/${courseId}/youtube-materials/${jobId}`, {
+    method: "DELETE",
+    retryOnUnauthorized: true,
+  });
+}
+
 export async function deleteStudentCourseMaterial(courseId, materialId) {
   return apiRequest(`/api/student/courses/${courseId}/materials/${materialId}`, {
     method: "DELETE",

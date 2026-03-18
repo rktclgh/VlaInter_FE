@@ -20,6 +20,7 @@ import {
   createStudentCourseSummaryDocument,
   createStudentCourseSession,
   createStudentWrongAnswerRetest,
+  deleteStudentCourseYoutubeMaterialJob,
   deleteStudentCourseMaterial,
   downloadStudentCourseMaterialContent,
   deleteStudentExamSession,
@@ -481,6 +482,7 @@ export const StudentCoursePage = () => {
   const [creatingSummaryFormat, setCreatingSummaryFormat] = useState(null);
   const [creatingSummaryPreview, setCreatingSummaryPreview] = useState(false);
   const [creatingYoutubeMaterial, setCreatingYoutubeMaterial] = useState(false);
+  const [deletingYoutubeSummaryJobId, setDeletingYoutubeSummaryJobId] = useState(null);
   const [deletingSessionId, setDeletingSessionId] = useState(null);
   const [creatingRetestSetId, setCreatingRetestSetId] = useState(null);
   const [sessionGenerationMode, setSessionGenerationMode] = useState("STANDARD");
@@ -706,6 +708,21 @@ export const StudentCoursePage = () => {
       showToast(error?.message || "유튜브 요약본 생성 요청에 실패했습니다.", { type: "error" });
     } finally {
       setCreatingYoutubeMaterial(false);
+    }
+  };
+
+  const handleDeleteYoutubeSummaryJob = async (job) => {
+    if (!job?.jobId || job?.status !== "READY") return;
+    try {
+      setDeletingYoutubeSummaryJobId(job.jobId);
+      await deleteStudentCourseYoutubeMaterialJob(normalizedCourseId, job.jobId);
+      setYoutubeSummaryJobs((prev) => prev.filter((item) => item.jobId !== job.jobId));
+      showToast("완료된 유튜브 요약본 상태를 목록에서 삭제했습니다.", { type: "success" });
+    } catch (error) {
+      if (handleAuthenticationFailure(error)) return;
+      showToast(error.message || "유튜브 요약본 상태를 삭제하지 못했습니다.", { type: "error" });
+    } finally {
+      setDeletingYoutubeSummaryJobId(null);
     }
   };
 
@@ -1073,15 +1090,27 @@ export const StudentCoursePage = () => {
                                 <p className="mt-1 text-[11px] leading-[1.6] text-[#dc2626]">{job.errorMessage}</p>
                               ) : null}
                             </div>
-                            <span className={`rounded-full px-2.5 py-1 text-[10px] font-semibold ${
-                              job.status === "READY"
-                                ? "bg-[#e8fff1] text-[#14804a]"
-                                : job.status === "FAILED"
-                                  ? "bg-[#fff1f1] text-[#dc2626]"
-                                  : "bg-[#eef2ff] text-[#4338ca]"
-                            }`}>
-                              {youtubeSummaryStatusLabel(job)}
-                            </span>
+                            <div className="flex items-center gap-2">
+                              <span className={`rounded-full px-2.5 py-1 text-[10px] font-semibold ${
+                                job.status === "READY"
+                                  ? "bg-[#e8fff1] text-[#14804a]"
+                                  : job.status === "FAILED"
+                                    ? "bg-[#fff1f1] text-[#dc2626]"
+                                    : "bg-[#eef2ff] text-[#4338ca]"
+                              }`}>
+                                {youtubeSummaryStatusLabel(job)}
+                              </span>
+                              {job.status === "READY" ? (
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteYoutubeSummaryJob(job)}
+                                  disabled={deletingYoutubeSummaryJobId === job.jobId}
+                                  className="rounded-[8px] border border-[#d1d5db] bg-white px-2.5 py-1 text-[10px] font-semibold text-[#4b5563] disabled:opacity-55"
+                                >
+                                  {deletingYoutubeSummaryJobId === job.jobId ? "삭제 중..." : "삭제"}
+                                </button>
+                              ) : null}
+                            </div>
                           </div>
                         ))}
                       </div>
