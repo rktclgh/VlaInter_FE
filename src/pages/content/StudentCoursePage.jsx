@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { AcademicProfileRequiredModal } from "../../components/AcademicProfileRequiredModal";
 import { StarRatingInput } from "../../components/DifficultyStars";
@@ -90,7 +90,7 @@ const AnalysisLockOverlay = ({ open, fileName, pendingRequest }) => {
   );
 };
 
-const SummaryGenerationOverlay = ({ open, format, count }) => {
+const SummaryPdfSavingOverlay = ({ open, count }) => {
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-[170] flex items-center justify-center bg-[#0f172acc] px-6">
@@ -98,63 +98,60 @@ const SummaryGenerationOverlay = ({ open, format, count }) => {
         <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full border border-white/15 bg-white/5">
           <div className="h-7 w-7 animate-spin rounded-full border-[3px] border-white/25 border-t-white" />
         </div>
-        <p className="mt-5 text-[22px] font-semibold">요약본 생성 중</p>
+        <p className="mt-5 text-[22px] font-semibold">구조화 노트 PDF 저장 중</p>
         <p className="mt-3 text-[14px] leading-[1.8] text-white/80">
-          선택한 강의자료 {count}개를 바탕으로 요약본을 생성하고 있습니다.
+          선택한 강의자료 {count}개를 바탕으로 만든 구조화 노트를
           <br />
-          완료되면 {format === "PDF" ? "PDF" : "DOCX"} 파일 다운로드가 바로 시작됩니다.
+          현재 미리보기 모달 형태 그대로 PDF로 저장하고 있습니다.
         </p>
       </div>
     </div>
   );
 };
 
-const SummaryPreviewModal = ({ open, preview, downloadPendingFormat = null, onDownloadDocx, onDownloadPdf, onClose }) => {
+const SummaryPreviewModal = ({ open, preview, savingPdf = false, exportRef, onDownloadPdf, onClose }) => {
   if (!open || !preview) return null;
   return (
     <div className="fixed inset-0 z-[180] bg-black/60 px-4 py-6">
-      <div className="mx-auto flex h-full w-full max-w-[1080px] flex-col rounded-[24px] bg-white shadow-[0_24px_80px_rgba(15,23,42,0.32)]">
-        <div className="flex items-start justify-between gap-4 border-b border-[#e5e7eb] px-5 py-4">
+      <div
+        ref={exportRef}
+        data-summary-pdf-root="true"
+        className="mx-auto flex h-full w-full max-w-[1080px] flex-col rounded-[24px] bg-white shadow-[0_24px_80px_rgba(15,23,42,0.32)]"
+      >
+        <div data-summary-pdf-header="true" className="flex items-start justify-between gap-4 border-b border-[#e5e7eb] px-5 py-4">
           <div className="min-w-0">
             <p className="text-[20px] font-semibold text-[#111827]">{preview.title}</p>
             <p className="mt-1 text-[12px] text-[#6b7280]">
               참고 자료 {Array.isArray(preview.sourceFileNames) ? preview.sourceFileNames.length : 0}개를 바탕으로 생성한 구조화 노트입니다.
             </p>
           </div>
-          <div className="flex flex-wrap items-center justify-end gap-2">
-            <button
-              type="button"
-              onClick={onDownloadDocx}
-              disabled={Boolean(downloadPendingFormat)}
-              className="rounded-[10px] border border-[#111827] bg-[#111827] px-3 py-2 text-[12px] font-semibold text-white disabled:opacity-55"
-            >
-              {downloadPendingFormat === "DOCX" ? "DOCX 생성 중..." : "DOCX 다운로드"}
-            </button>
+          <div data-pdf-hidden="true" className="flex flex-wrap items-center justify-end gap-2">
             <button
               type="button"
               onClick={onDownloadPdf}
-              disabled={Boolean(downloadPendingFormat)}
+              disabled={savingPdf}
               className="rounded-[10px] border border-[#d1d5db] bg-white px-3 py-2 text-[12px] font-semibold text-[#374151] disabled:opacity-55"
             >
-              {downloadPendingFormat === "PDF" ? "PDF 생성 중..." : "PDF 다운로드"}
+              {savingPdf ? "PDF 저장 중..." : "PDF 저장"}
             </button>
             <button
               type="button"
               onClick={onClose}
+              disabled={savingPdf}
               className="rounded-[10px] border border-[#d1d5db] px-3 py-2 text-[12px] font-semibold text-[#374151]"
             >
               닫기
             </button>
           </div>
         </div>
-        <div className="flex-1 overflow-y-auto px-5 py-5">
-          <section className="rounded-[18px] border border-[#e5e7eb] bg-[#fafbff] p-5">
+        <div data-summary-pdf-body="true" data-summary-preview-scroll="true" className="flex-1 overflow-y-auto px-5 py-5">
+          <section data-summary-pdf-block="true" className="rounded-[18px] border border-[#e5e7eb] bg-[#fafbff] p-5">
             <p className="text-[12px] font-semibold tracking-[0.08em] text-[#6b7280]">OVERVIEW</p>
             <p className="mt-3 text-[14px] leading-[1.9] text-[#374151]">{preview.overview}</p>
           </section>
 
           {!!preview.coreTakeaways?.length && (
-            <section className="mt-4 rounded-[18px] border border-[#dbe4ff] bg-[#f5f8ff] p-5">
+            <section data-summary-pdf-block="true" className="mt-4 rounded-[18px] border border-[#dbe4ff] bg-[#f5f8ff] p-5">
               <p className="text-[12px] font-semibold tracking-[0.08em] text-[#3151d3]">KEY TAKEAWAYS</p>
               <ul className="mt-3 space-y-2">
                 {(preview.coreTakeaways || []).map((takeaway, takeawayIndex) => (
@@ -167,7 +164,7 @@ const SummaryPreviewModal = ({ open, preview, downloadPendingFormat = null, onDo
             </section>
           )}
 
-          <section className="mt-4 rounded-[18px] border border-[#e5e7eb] bg-white p-5">
+          <section data-summary-pdf-block="true" className="mt-4 rounded-[18px] border border-[#e5e7eb] bg-white p-5">
             <p className="text-[12px] font-semibold tracking-[0.08em] text-[#6b7280]">SOURCE MATERIALS</p>
             <div className="mt-3 flex flex-wrap gap-2">
               {(preview.sourceFileNames || []).map((fileName) => (
@@ -183,8 +180,12 @@ const SummaryPreviewModal = ({ open, preview, downloadPendingFormat = null, onDo
 
           <div className="mt-4 space-y-4">
             {(preview.majorTopics || []).map((topic, topicIndex) => (
-              <section key={`${topic.title}-${topicIndex}`} className="rounded-[20px] border border-[#dfe5f2] bg-[#fbfcfe] p-5">
-                <div className="flex items-start gap-3">
+              <section
+                key={`${topic.title}-${topicIndex}`}
+                data-summary-topic="true"
+                className="rounded-[20px] border border-[#dfe5f2] bg-[#fbfcfe] p-5"
+              >
+                <div data-summary-topic-header="true" className="flex items-start gap-3">
                   <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#111827] text-[12px] font-semibold text-white">
                     {topicIndex + 1}
                   </span>
@@ -194,25 +195,37 @@ const SummaryPreviewModal = ({ open, preview, downloadPendingFormat = null, onDo
                   </div>
                 </div>
 
-                <div className="mt-4 grid gap-3">
+                <div data-summary-topic-subtopics="true" className="mt-4 grid gap-3">
                   {(topic.subtopics || []).map((subtopic, subtopicIndex) => (
-                    <article key={`${subtopic.title}-${subtopicIndex}`} className="rounded-[16px] border border-[#e5e7eb] bg-white p-4">
-                      <p className="text-[14px] font-semibold text-[#111827]">{subtopic.title}</p>
-                      <p className="mt-2 text-[12px] leading-[1.8] text-[#5b6475]">{subtopic.summary}</p>
-                      <ul className="mt-3 space-y-2">
+                    <article
+                      key={`${subtopic.title}-${subtopicIndex}`}
+                      data-summary-topic-subtopic="true"
+                      className="rounded-[16px] border border-[#e5e7eb] bg-white p-4"
+                    >
+                      <p data-summary-subtopic-title="true" className="text-[14px] font-semibold text-[#111827]">{subtopic.title}</p>
+                      <p data-summary-subtopic-summary="true" className="mt-2 text-[12px] leading-[1.8] text-[#5b6475]">{subtopic.summary}</p>
+                      <ul data-summary-subtopic-points="true" className="mt-3 space-y-2">
                         {(subtopic.keyPoints || []).map((point, pointIndex) => (
-                          <li key={`${subtopic.title}-point-${pointIndex}`} className="flex gap-2 text-[12px] leading-[1.8] text-[#374151]">
+                          <li
+                            key={`${subtopic.title}-point-${pointIndex}`}
+                            data-summary-subtopic-point="true"
+                            className="flex gap-2 text-[12px] leading-[1.8] text-[#374151]"
+                          >
                             <span className="mt-[2px] text-[#4158c7]">•</span>
                             <span>{point}</span>
                           </li>
                         ))}
                       </ul>
                       {!!subtopic.supplementaryNotes?.length && (
-                        <div className="mt-3 rounded-[14px] border border-[#dbe4ff] bg-[#f5f8ff] p-3">
-                          <p className="text-[11px] font-semibold tracking-[0.08em] text-[#3151d3]">보충 설명</p>
-                          <div className="mt-2 space-y-2">
+                        <div data-summary-subtopic-notes="true" className="mt-3 rounded-[14px] border border-[#dbe4ff] bg-[#f5f8ff] p-3">
+                          <p data-summary-subtopic-notes-label="true" className="text-[11px] font-semibold tracking-[0.08em] text-[#3151d3]">보충 설명</p>
+                          <div data-summary-subtopic-notes-body="true" className="mt-2 space-y-2">
                             {(subtopic.supplementaryNotes || []).map((note, noteIndex) => (
-                              <p key={`${subtopic.title}-note-${noteIndex}`} className="text-[12px] leading-[1.8] text-[#374151]">
+                              <p
+                                key={`${subtopic.title}-note-${noteIndex}`}
+                                data-summary-subtopic-note="true"
+                                className="text-[12px] leading-[1.8] text-[#374151]"
+                              >
                                 {note}
                               </p>
                             ))}
@@ -229,6 +242,294 @@ const SummaryPreviewModal = ({ open, preview, downloadPendingFormat = null, onDo
       </div>
     </div>
   );
+};
+
+const sanitizeSummaryPdfFileName = (fileName) => {
+  const normalized = String(fileName || "structured-note")
+    .trim()
+    .replace(/[\\/:*?"<>|]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  return normalized || "structured-note";
+};
+
+const buildPdfExportWrapper = (sourceWidth) => {
+  const wrapper = document.createElement("div");
+  wrapper.style.position = "fixed";
+  wrapper.style.left = "-100000px";
+  wrapper.style.top = "0";
+  wrapper.style.zIndex = "-1";
+  wrapper.style.width = `${sourceWidth}px`;
+  wrapper.style.padding = "0";
+  wrapper.style.margin = "0";
+  wrapper.style.background = "#ffffff";
+  wrapper.style.display = "flex";
+  wrapper.style.flexDirection = "column";
+  wrapper.style.gap = "0";
+  return wrapper;
+};
+
+const normalizeSummaryPreviewClone = (clone, sourceWidth) => {
+  clone.style.width = `${sourceWidth}px`;
+  clone.style.height = "auto";
+  clone.style.maxHeight = "none";
+  clone.style.overflow = "visible";
+
+  clone.querySelectorAll("[data-pdf-hidden='true']").forEach((element) => element.remove());
+  clone.querySelectorAll("[data-summary-preview-scroll='true']").forEach((element) => {
+    element.style.height = "auto";
+    element.style.maxHeight = "none";
+    element.style.overflow = "visible";
+    element.style.flex = "0 0 auto";
+  });
+};
+
+const createSummaryPdfPage = (rootTemplate, headerTemplate, bodyTemplate, sourceWidth) => {
+  const shell = rootTemplate.cloneNode(false);
+  normalizeSummaryPreviewClone(shell, sourceWidth);
+
+  const header = headerTemplate.cloneNode(true);
+  const body = bodyTemplate.cloneNode(false);
+  body.style.height = "auto";
+  body.style.maxHeight = "none";
+  body.style.overflow = "visible";
+  body.style.flex = "0 0 auto";
+  body.innerHTML = "";
+
+  shell.append(header, body);
+  return { shell, body };
+};
+
+const buildSummaryTopicFragment = (topicTemplate, subtopicContainerTemplate, subtopicNodes) => {
+  const section = topicTemplate.cloneNode(false);
+  Array.from(topicTemplate.children).forEach((child) => {
+    if (child === subtopicContainerTemplate) return;
+    section.appendChild(child.cloneNode(true));
+  });
+  const subtopicContainer = subtopicContainerTemplate.cloneNode(false);
+  subtopicNodes.forEach((subtopicNode) => subtopicContainer.appendChild(subtopicNode));
+  section.appendChild(subtopicContainer);
+  return { section, subtopicContainer };
+};
+
+const buildSummarySubtopicFragment = (articleTemplate, pointListTemplate, noteTemplate, pointNodes, noteNodes) => {
+  const article = articleTemplate.cloneNode(false);
+  const noteBodyTemplate = noteTemplate?.querySelector("[data-summary-subtopic-notes-body='true']") || null;
+  Array.from(articleTemplate.children).forEach((child) => {
+    if (child === pointListTemplate || child === noteTemplate) return;
+    article.appendChild(child.cloneNode(true));
+  });
+
+  let pointList = null;
+  if (pointListTemplate && pointNodes.length > 0) {
+    pointList = pointListTemplate.cloneNode(false);
+    pointNodes.forEach((pointNode) => pointList.appendChild(pointNode));
+    article.appendChild(pointList);
+  }
+
+  let noteBody = null;
+  if (noteTemplate && noteNodes.length > 0) {
+    const noteBox = noteTemplate.cloneNode(false);
+    Array.from(noteTemplate.children).forEach((child) => {
+      if (child === noteBodyTemplate) return;
+      noteBox.appendChild(child.cloneNode(true));
+    });
+    noteBody = noteBodyTemplate ? noteBodyTemplate.cloneNode(false) : document.createElement("div");
+    noteNodes.forEach((noteNode) => noteBody.appendChild(noteNode));
+    noteBox.appendChild(noteBody);
+    article.appendChild(noteBox);
+  }
+
+  return { article, pointList, noteBody };
+};
+
+const buildSummaryPreviewPdfPages = (sourceNode, pageHeightPx) => {
+  const sourceWidth = sourceNode.offsetWidth;
+  const wrapper = buildPdfExportWrapper(sourceWidth);
+  const measurementRoot = sourceNode.cloneNode(true);
+  normalizeSummaryPreviewClone(measurementRoot, sourceWidth);
+  wrapper.appendChild(measurementRoot);
+  document.body.appendChild(wrapper);
+
+  const rootTemplate = measurementRoot;
+  const headerTemplate = measurementRoot.querySelector("[data-summary-pdf-header='true']");
+  const bodyTemplate = measurementRoot.querySelector("[data-summary-pdf-body='true']");
+  if (!headerTemplate || !bodyTemplate) {
+    throw new Error("구조화 노트 PDF 템플릿을 찾지 못했습니다.");
+  }
+
+  const pages = [];
+  let currentPage = createSummaryPdfPage(rootTemplate, headerTemplate, bodyTemplate, sourceWidth);
+  wrapper.appendChild(currentPage.shell);
+  pages.push(currentPage.shell);
+
+  const ensureCurrentPage = () => currentPage;
+  const exceedsPage = () => ensureCurrentPage().shell.getBoundingClientRect().height > pageHeightPx;
+  const startNewPage = () => {
+    currentPage = createSummaryPdfPage(rootTemplate, headerTemplate, bodyTemplate, sourceWidth);
+    wrapper.appendChild(currentPage.shell);
+    pages.push(currentPage.shell);
+    return currentPage;
+  };
+
+  const appendBlock = (blockNode) => {
+    const page = ensureCurrentPage();
+    page.body.appendChild(blockNode);
+    if (!exceedsPage()) return;
+    page.body.removeChild(blockNode);
+    if (page.body.childElementCount === 0) {
+      page.body.appendChild(blockNode);
+      return;
+    }
+    const nextPage = startNewPage();
+    nextPage.body.appendChild(blockNode);
+  };
+
+  const appendTopic = (topicTemplate) => {
+    const subtopicContainerTemplate = topicTemplate.querySelector("[data-summary-topic-subtopics='true']");
+    if (!subtopicContainerTemplate) {
+      appendBlock(topicTemplate.cloneNode(true));
+      return;
+    }
+    const subtopicTemplates = Array.from(subtopicContainerTemplate.children);
+    if (subtopicTemplates.length === 0) {
+      appendBlock(topicTemplate.cloneNode(true));
+      return;
+    }
+
+    let fragment = buildSummaryTopicFragment(topicTemplate, subtopicContainerTemplate, []);
+    appendBlock(fragment.section);
+    const appendSubtopic = (subtopicTemplate) => {
+      const pointListTemplate = subtopicTemplate.querySelector("[data-summary-subtopic-points='true']");
+      const noteTemplate = subtopicTemplate.querySelector("[data-summary-subtopic-notes='true']");
+      const pointTemplates = pointListTemplate
+        ? Array.from(pointListTemplate.querySelectorAll("[data-summary-subtopic-point='true']")).map((node) => node.cloneNode(true))
+        : [];
+      const noteTemplates = noteTemplate
+        ? Array.from(noteTemplate.querySelectorAll("[data-summary-subtopic-note='true']")).map((node) => node.cloneNode(true))
+        : [];
+
+      if (pointTemplates.length === 0 && noteTemplates.length === 0) {
+        const nextSubtopic = subtopicTemplate.cloneNode(true);
+        fragment.subtopicContainer.appendChild(nextSubtopic);
+        if (!exceedsPage()) return;
+
+        fragment.subtopicContainer.removeChild(nextSubtopic);
+        if (fragment.subtopicContainer.childElementCount === 0) {
+          fragment.subtopicContainer.appendChild(nextSubtopic);
+          return;
+        }
+
+        const nextPage = startNewPage();
+        fragment = buildSummaryTopicFragment(topicTemplate, subtopicContainerTemplate, [nextSubtopic]);
+        nextPage.body.appendChild(fragment.section);
+        return;
+      }
+
+      let articleFragment = buildSummarySubtopicFragment(subtopicTemplate, pointListTemplate, noteTemplate, [], []);
+      fragment.subtopicContainer.appendChild(articleFragment.article);
+      if (exceedsPage()) {
+        fragment.subtopicContainer.removeChild(articleFragment.article);
+        if (fragment.subtopicContainer.childElementCount > 0) {
+          const nextPage = startNewPage();
+          fragment = buildSummaryTopicFragment(topicTemplate, subtopicContainerTemplate, []);
+          nextPage.body.appendChild(fragment.section);
+        }
+        articleFragment = buildSummarySubtopicFragment(subtopicTemplate, pointListTemplate, noteTemplate, [], []);
+        fragment.subtopicContainer.appendChild(articleFragment.article);
+      }
+
+      pointTemplates.forEach((pointTemplate) => {
+        if (!articleFragment.pointList) {
+          fragment.subtopicContainer.removeChild(articleFragment.article);
+          articleFragment = buildSummarySubtopicFragment(subtopicTemplate, pointListTemplate, noteTemplate, [pointTemplate], []);
+          fragment.subtopicContainer.appendChild(articleFragment.article);
+          if (!exceedsPage()) return;
+
+          fragment.subtopicContainer.removeChild(articleFragment.article);
+          const nextPage = startNewPage();
+          fragment = buildSummaryTopicFragment(topicTemplate, subtopicContainerTemplate, []);
+          nextPage.body.appendChild(fragment.section);
+          articleFragment = buildSummarySubtopicFragment(subtopicTemplate, pointListTemplate, noteTemplate, [pointTemplate], []);
+          fragment.subtopicContainer.appendChild(articleFragment.article);
+          return;
+        }
+        articleFragment.pointList.appendChild(pointTemplate);
+        if (!exceedsPage()) return;
+
+        articleFragment.pointList.removeChild(pointTemplate);
+        const nextPage = startNewPage();
+        fragment = buildSummaryTopicFragment(topicTemplate, subtopicContainerTemplate, []);
+        nextPage.body.appendChild(fragment.section);
+        articleFragment = buildSummarySubtopicFragment(subtopicTemplate, pointListTemplate, noteTemplate, [pointTemplate], []);
+        fragment.subtopicContainer.appendChild(articleFragment.article);
+      });
+
+      noteTemplates.forEach((noteTemplateNode) => {
+        if (!articleFragment.noteBody) {
+          const existingPoints = articleFragment.pointList
+            ? Array.from(articleFragment.pointList.children).map((node) => node.cloneNode(true))
+            : [];
+          fragment.subtopicContainer.removeChild(articleFragment.article);
+          articleFragment = buildSummarySubtopicFragment(
+            subtopicTemplate,
+            pointListTemplate,
+            noteTemplate,
+            existingPoints,
+            [noteTemplateNode]
+          );
+          fragment.subtopicContainer.appendChild(articleFragment.article);
+          if (!exceedsPage()) return;
+
+          fragment.subtopicContainer.removeChild(articleFragment.article);
+          const nextPage = startNewPage();
+          fragment = buildSummaryTopicFragment(topicTemplate, subtopicContainerTemplate, []);
+          nextPage.body.appendChild(fragment.section);
+          articleFragment = buildSummarySubtopicFragment(
+            subtopicTemplate,
+            pointListTemplate,
+            noteTemplate,
+            existingPoints,
+            [noteTemplateNode]
+          );
+          fragment.subtopicContainer.appendChild(articleFragment.article);
+          return;
+        }
+
+        articleFragment.noteBody.appendChild(noteTemplateNode);
+        if (!exceedsPage()) return;
+
+        articleFragment.noteBody.removeChild(noteTemplateNode);
+        const existingPoints = articleFragment.pointList
+          ? Array.from(articleFragment.pointList.children).map((node) => node.cloneNode(true))
+          : [];
+        const nextPage = startNewPage();
+        fragment = buildSummaryTopicFragment(topicTemplate, subtopicContainerTemplate, []);
+        nextPage.body.appendChild(fragment.section);
+        articleFragment = buildSummarySubtopicFragment(
+          subtopicTemplate,
+          pointListTemplate,
+          noteTemplate,
+          existingPoints,
+          [noteTemplateNode]
+        );
+        fragment.subtopicContainer.appendChild(articleFragment.article);
+      });
+    };
+
+    subtopicTemplates.forEach((subtopicTemplate) => appendSubtopic(subtopicTemplate));
+  };
+
+  Array.from(bodyTemplate.children).forEach((block) => {
+    if (block.matches("[data-summary-topic='true']")) {
+      appendTopic(block);
+      return;
+    }
+    appendBlock(block.cloneNode(true));
+  });
+
+  measurementRoot.remove();
+  return { wrapper, pages };
 };
 
 const YoutubeMaterialModal = ({ open, youtubeUrl, format, submitting, onChange, onFormatChange, onClose, onSubmit }) => {
@@ -469,6 +770,7 @@ export const StudentCoursePage = () => {
   const { courseId } = useParams();
   const normalizedCourseId = Number(courseId);
   const { showToast } = useToast();
+  const summaryPreviewExportRef = useRef(null);
 
   const [loading, setLoading] = useState(true);
   const [userName, setUserName] = useState("사용자");
@@ -499,7 +801,8 @@ export const StudentCoursePage = () => {
   const [downloadingMaterialId, setDownloadingMaterialId] = useState(null);
   const [deletingMaterialId, setDeletingMaterialId] = useState(null);
   const [creatingSessionCount, setCreatingSessionCount] = useState(null);
-  const [creatingSummaryFormat, setCreatingSummaryFormat] = useState(null);
+  const [creatingSummaryDocumentFormat, setCreatingSummaryDocumentFormat] = useState(null);
+  const [savingSummaryPdf, setSavingSummaryPdf] = useState(false);
   const [creatingSummaryPreview, setCreatingSummaryPreview] = useState(false);
   const [creatingYoutubeMaterial, setCreatingYoutubeMaterial] = useState(false);
   const [deletingYoutubeSummaryJobId, setDeletingYoutubeSummaryJobId] = useState(null);
@@ -510,7 +813,6 @@ export const StudentCoursePage = () => {
   const [sessionDifficultyLevel, setSessionDifficultyLevel] = useState(3);
   const [showDifficultyGuide, setShowDifficultyGuide] = useState(false);
   const [sessionQuestionStyles, setSessionQuestionStyles] = useState([]);
-  const [summaryFormat, setSummaryFormat] = useState("DOCX");
   const [summaryLanguage, setSummaryLanguage] = useState("KO");
   const [sessionLanguage, setSessionLanguage] = useState("KO");
   const [selectedSummaryMaterialIds, setSelectedSummaryMaterialIds] = useState([]);
@@ -862,39 +1164,99 @@ export const StudentCoursePage = () => {
     ));
   };
 
-  const handleCreateSummaryDocument = async (formatOverride = null) => {
-    if (!course || creatingSummaryFormat || selectedSummaryMaterialIds.length === 0) return;
-    const requestedFormat = formatOverride || summaryFormat;
-    setCreatingSummaryFormat(requestedFormat);
+  const handleDownloadSummaryPreviewPdf = async () => {
+    if (!course || !summaryPreview || !summaryPreviewExportRef.current || savingSummaryPdf) return;
+    setSavingSummaryPdf(true);
+    setSessionMessage("");
+    setSessionErrorMessage("");
+    let exportWrapper = null;
+    try {
+      const [{ default: html2canvas }, { jsPDF }] = await Promise.all([
+        import("html2canvas"),
+        import("jspdf"),
+      ]);
+      if (document.fonts?.ready) {
+        await document.fonts.ready;
+      }
+
+      const pdf = new jsPDF({
+        orientation: "p",
+        unit: "pt",
+        format: "a4",
+        compress: true,
+      });
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+      const pageHeightPx = Math.floor((summaryPreviewExportRef.current.offsetWidth * pageHeight) / pageWidth);
+
+      const { wrapper, pages } = buildSummaryPreviewPdfPages(summaryPreviewExportRef.current, pageHeightPx);
+      exportWrapper = wrapper;
+      await new Promise((resolve) => window.requestAnimationFrame(() => window.requestAnimationFrame(resolve)));
+
+      for (let pageIndex = 0; pageIndex < pages.length; pageIndex += 1) {
+        const pageNode = pages[pageIndex];
+        const canvas = await html2canvas(pageNode, {
+          scale: 2,
+          useCORS: true,
+          backgroundColor: "#ffffff",
+          logging: false,
+          width: pageNode.scrollWidth,
+          windowWidth: pageNode.scrollWidth,
+          windowHeight: pageNode.scrollHeight,
+        });
+        if (pageIndex > 0) pdf.addPage();
+        const scale = Math.min(pageWidth / canvas.width, pageHeight / canvas.height);
+        const renderWidth = canvas.width * scale;
+        const renderHeight = canvas.height * scale;
+        const offsetX = (pageWidth - renderWidth) / 2;
+        pdf.addImage(canvas.toDataURL("image/png"), "PNG", offsetX, 0, renderWidth, renderHeight, undefined, "FAST");
+      }
+
+      pdf.save(`${sanitizeSummaryPdfFileName(summaryPreview.title || course.courseName)}.pdf`);
+      setSessionMessage("구조화 노트를 PDF로 저장했습니다.");
+      showToast("구조화 노트를 PDF로 저장했습니다.", { type: "success" });
+    } catch (error) {
+      if (handleAuthenticationFailure(error)) return;
+      setSessionErrorMessage(error?.message || "구조화 노트 PDF 저장에 실패했습니다.");
+      showToast(error?.message || "구조화 노트 PDF 저장에 실패했습니다.", { type: "error" });
+    } finally {
+      exportWrapper?.remove();
+      setSavingSummaryPdf(false);
+    }
+  };
+
+  const handleCreateSummaryDocument = async (format) => {
+    if (!course || creatingSummaryDocumentFormat || creatingSummaryPreview || savingSummaryPdf || selectedSummaryMaterialIds.length === 0) return;
+    setCreatingSummaryDocumentFormat(format);
     setSessionMessage("");
     setSessionErrorMessage("");
     try {
       const payload = await createStudentCourseSummaryDocument(course.courseId, {
         selectedMaterialIds: selectedSummaryMaterialIds,
         language: normalizeInterviewLanguage(summaryLanguage),
-        format: requestedFormat,
+        format,
       });
-      const objectUrl = URL.createObjectURL(payload.blob);
+      const objectUrl = window.URL.createObjectURL(payload.blob);
       const anchor = document.createElement("a");
       anchor.href = objectUrl;
-      anchor.download = payload.fileName || `${course.courseName}_요약본.${requestedFormat === "PDF" ? "pdf" : "docx"}`;
+      anchor.download = payload.fileName || `${sanitizeSummaryPdfFileName(course.courseName)}-summary.${String(format || "").toLowerCase()}`;
       document.body.appendChild(anchor);
       anchor.click();
       anchor.remove();
-      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
-      setSessionMessage(`강의자료 요약본 ${requestedFormat} 파일을 생성했습니다.`);
-      showToast(`강의자료 요약본 ${requestedFormat} 파일을 생성했습니다.`, { type: "success" });
+      window.URL.revokeObjectURL(objectUrl);
+      setSessionMessage(`${format} 요약본을 다운로드했습니다.`);
+      showToast(`${format} 요약본을 다운로드했습니다.`, { type: "success" });
     } catch (error) {
       if (handleAuthenticationFailure(error)) return;
-      setSessionErrorMessage(error?.message || "요약본 생성에 실패했습니다.");
-      showToast(error?.message || "요약본 생성에 실패했습니다.", { type: "error" });
+      setSessionErrorMessage(error?.message || `${format} 요약본 생성에 실패했습니다.`);
+      showToast(error?.message || `${format} 요약본 생성에 실패했습니다.`, { type: "error" });
     } finally {
-      setCreatingSummaryFormat(null);
+      setCreatingSummaryDocumentFormat(null);
     }
   };
 
   const handlePreviewSummary = async () => {
-    if (!course || creatingSummaryPreview || selectedSummaryMaterialIds.length === 0) return;
+    if (!course || creatingSummaryPreview || savingSummaryPdf || selectedSummaryMaterialIds.length === 0) return;
     setCreatingSummaryPreview(true);
     setSessionMessage("");
     setSessionErrorMessage("");
@@ -1306,7 +1668,7 @@ export const StudentCoursePage = () => {
                     <div>
                       <p className="text-[18px] font-semibold text-[#111827]">강의자료 요약본</p>
                       <p className="mt-1 text-[12px] text-[#6b7280]">
-                        분석 완료된 강의자료를 여러 개 선택해 구조화 노트를 미리 보고, DOCX 또는 PDF로 바로 다운로드할 수 있습니다.
+                        분석 완료된 강의자료를 여러 개 선택해 구조화 노트를 미리 보고, 현재 미리보기 모달 디자인 그대로 PDF로 저장할 수 있습니다.
                       </p>
                     </div>
                     <p className="text-[12px] font-semibold text-[#4b5563]">{selectedSummaryMaterialIds.length}개 선택</p>
@@ -1319,7 +1681,7 @@ export const StudentCoursePage = () => {
                             key={option.value}
                             type="button"
                             onClick={() => setSummaryLanguage(option.value)}
-                            disabled={Boolean(creatingSummaryFormat) || creatingSummaryPreview}
+                            disabled={savingSummaryPdf || creatingSummaryPreview}
                             className={`rounded-[10px] px-3 py-2 text-[11px] font-semibold ${
                               summaryLanguage === option.value
                                 ? "bg-[#111827] text-white"
@@ -1330,24 +1692,6 @@ export const StudentCoursePage = () => {
                           </button>
                         ))}
                       </div>
-                      {[
-                        { key: "DOCX", label: "DOCX" },
-                        { key: "PDF", label: "PDF" },
-                      ].map((option) => (
-                        <button
-                          key={option.key}
-                          type="button"
-                          onClick={() => setSummaryFormat(option.key)}
-                          disabled={Boolean(creatingSummaryFormat)}
-                          className={`rounded-[10px] border px-3 py-2 text-[11px] font-semibold ${
-                            summaryFormat === option.key
-                              ? "border-[#111827] bg-[#111827] text-white"
-                              : "border-[#d1d5db] bg-white text-[#4b5563]"
-                          } disabled:opacity-55`}
-                        >
-                          {option.label}
-                        </button>
-                      ))}
                     </div>
                     <div className="mt-4 grid gap-2">
                       {readyLectureMaterials.length === 0 ? (
@@ -1384,24 +1728,29 @@ export const StudentCoursePage = () => {
                       )}
                     </div>
                     <div className="mt-4 flex flex-wrap justify-end gap-2">
+                      {["DOCX", "PDF"].map((format) => (
+                        <button
+                          key={format}
+                          type="button"
+                          disabled={Boolean(creatingSummaryDocumentFormat) || creatingSummaryPreview || savingSummaryPdf || selectedSummaryMaterialIds.length === 0}
+                          onClick={() => void handleCreateSummaryDocument(format)}
+                          className="rounded-[12px] border border-[#d1d5db] bg-white px-4 py-3 text-[12px] font-semibold text-[#374151] disabled:opacity-55"
+                        >
+                          {creatingSummaryDocumentFormat === format ? `${format} 생성 중...` : `${format} 요약본 다운로드`}
+                        </button>
+                      ))}
                       <button
                         type="button"
-                        disabled={creatingSummaryPreview || Boolean(creatingSummaryFormat) || selectedSummaryMaterialIds.length === 0}
+                        disabled={Boolean(creatingSummaryDocumentFormat) || creatingSummaryPreview || savingSummaryPdf || selectedSummaryMaterialIds.length === 0}
                         onClick={() => void handlePreviewSummary()}
                         className="rounded-[12px] border border-[#111827] bg-white px-4 py-3 text-[12px] font-semibold text-[#111827] disabled:opacity-55"
                       >
                         {creatingSummaryPreview ? "노트 생성 중..." : "구조화 노트 미리보기"}
                       </button>
-                      <button
-                        type="button"
-                        disabled={creatingSummaryPreview || Boolean(creatingSummaryFormat) || selectedSummaryMaterialIds.length === 0}
-                        onClick={() => void handleCreateSummaryDocument()}
-                        className="rounded-[12px] bg-[#111827] px-4 py-3 text-[12px] font-semibold text-white disabled:opacity-55"
-                      >
-                        {creatingSummaryFormat ? "요약본 생성 중..." : `${summaryFormat} 요약본 생성`}
-                      </button>
                     </div>
-                    <p className="mt-3 text-[11px] text-[#7c8497]">현재 요약본 언어: {getInterviewLanguageLabel(summaryLanguage)}</p>
+                    <p className="mt-3 text-[11px] text-[#7c8497]">
+                      현재 요약본 언어: {getInterviewLanguageLabel(summaryLanguage)}. 강의자료 요약본은 DOCX/PDF로 다운로드하고, 구조화 노트는 미리보기 모달을 현재 보이는 화면 그대로 PDF로 저장할 수 있습니다.
+                    </p>
                   </div>
                 </section>
 
@@ -1806,9 +2155,8 @@ export const StudentCoursePage = () => {
         fileName={activeIngestionMaterial?.fileName}
         pendingRequest={analyzingMaterialId !== null && !activeIngestionMaterial}
       />
-      <SummaryGenerationOverlay
-        open={Boolean(creatingSummaryFormat)}
-        format={creatingSummaryFormat}
+      <SummaryPdfSavingOverlay
+        open={savingSummaryPdf}
         count={selectedSummaryMaterialIds.length}
       />
       <VisualAssetModal
@@ -1837,9 +2185,9 @@ export const StudentCoursePage = () => {
       <SummaryPreviewModal
         open={Boolean(summaryPreview)}
         preview={summaryPreview}
-        downloadPendingFormat={creatingSummaryFormat}
-        onDownloadDocx={() => void handleCreateSummaryDocument("DOCX")}
-        onDownloadPdf={() => void handleCreateSummaryDocument("PDF")}
+        savingPdf={savingSummaryPdf}
+        exportRef={summaryPreviewExportRef}
+        onDownloadPdf={() => void handleDownloadSummaryPreviewPdf()}
         onClose={() => setSummaryPreview(null)}
       />
     </>
