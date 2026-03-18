@@ -444,6 +444,23 @@ const examModeLabel = (mode) => {
   }
 };
 
+const studentExamDifficultyGuide = (level) => {
+  switch (Number(level || 3)) {
+    case 1:
+      return "기초 확인형: 정의, 핵심 원리, 대표 예시를 바로 떠올리면 풀 수 있는 수준";
+    case 2:
+      return "기본 적용형: 개념 이해에 더해 간단한 비교나 전형적 적용까지 요구하는 수준";
+    case 3:
+      return "표준 시험형: 두 개 이상의 개념 연결, 과정 설명, 비교 판단이 섞이는 평균 난이도";
+    case 4:
+      return "응용 심화형: 변형 상황, 다단계 풀이, 예외 조건 판단이 필요한 상위권 수준";
+    case 5:
+      return "고난도 종합형: 복합 개념 연결, trade-off, 복합 계산 또는 설계 판단까지 요구하는 수준";
+    default:
+      return "";
+  }
+};
+
 export const StudentCoursePage = () => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -1539,10 +1556,15 @@ export const StudentCoursePage = () => {
                     )}
 
                     {sessionGenerationMode === "STANDARD" ? (
-                      <div className="mt-4 flex items-center gap-3 rounded-[12px] border border-[#f3ddad] bg-[#fff8e8] px-4 py-3">
-                        <span className="text-[12px] font-semibold text-[#8a5a00]">난이도</span>
-                        <StarRatingInput value={sessionDifficultyLevel} onChange={setSessionDifficultyLevel} />
-                        <span className="text-[12px] font-semibold text-[#8a5a00]">{sessionDifficultyLevel} / 5</span>
+                      <div className="mt-4 rounded-[12px] border border-[#f3ddad] bg-[#fff8e8] px-4 py-3">
+                        <div className="flex items-center gap-3">
+                          <span className="text-[12px] font-semibold text-[#8a5a00]">난이도</span>
+                          <StarRatingInput value={sessionDifficultyLevel} onChange={setSessionDifficultyLevel} />
+                          <span className="text-[12px] font-semibold text-[#8a5a00]">{sessionDifficultyLevel} / 5</span>
+                        </div>
+                        <p className="mt-2 text-[11px] leading-[1.7] text-[#8a5a00]">
+                          {studentExamDifficultyGuide(sessionDifficultyLevel)}
+                        </p>
                       </div>
                     ) : sessionGenerationMode === "FAST_REVIEW" ? (
                       <div className="mt-4 rounded-[12px] border border-[#dcfce7] bg-[#f0fdf4] px-4 py-3 text-[12px] leading-[1.7] text-[#166534]">
