@@ -405,33 +405,22 @@ export const StudentExamSessionPage = () => {
     );
   }
 
-  if (!session) {
-    return (
-      <>
-        <div className="flex min-h-screen items-center justify-center bg-white px-6 text-center">
-          <div>
-            <p className="text-[15px] font-medium text-[#111827]">세션을 불러오지 못했습니다.</p>
-            {errorMessage ? <p className="mt-2 text-[13px] text-[#d84a4a]">{errorMessage}</p> : null}
-            <button
-              type="button"
-              onClick={() => navigate("/content/student")}
-              className="mt-4 rounded-[12px] bg-[#111827] px-4 py-2.5 text-[13px] font-semibold text-white"
-            >
-              학생 홈으로 돌아가기
-            </button>
-          </div>
-        </div>
-        <AcademicProfileRequiredModal
-          open={requiresAcademicProfile}
-          onMoveToMyPage={() => navigate("/content/student/mypage")}
-        />
-      </>
-    );
-  }
-
-  return (
-    <>
-      <div className="min-h-screen overflow-x-hidden bg-white pt-[3.75rem]">
+  const pageContent = !session ? (
+    <div className="flex min-h-screen items-center justify-center bg-white px-6 text-center">
+      <div>
+        <p className="text-[15px] font-medium text-[#111827]">세션을 불러오지 못했습니다.</p>
+        {errorMessage ? <p className="mt-2 text-[13px] text-[#d84a4a]">{errorMessage}</p> : null}
+        <button
+          type="button"
+          onClick={() => navigate("/content/student")}
+          className="mt-4 rounded-[12px] bg-[#111827] px-4 py-2.5 text-[13px] font-semibold text-white"
+        >
+          학생 홈으로 돌아가기
+        </button>
+      </div>
+    </div>
+  ) : (
+    <div className="min-h-screen overflow-x-hidden bg-white pt-[3.75rem]">
         <ContentTopNav
           point={pointSummaryText}
           onClickCharge={() => setShowPointChargeModal(true)}
@@ -805,7 +794,11 @@ export const StudentExamSessionPage = () => {
           </main>
         </div>
       </div>
+  );
 
+  return (
+    <>
+      {pageContent}
       {showPointChargeModal ? (
         <PointChargeModal
           onClose={() => setShowPointChargeModal(false)}

@@ -386,8 +386,6 @@ export const MyPage = () => {
   const [selectedDepartmentId, setSelectedDepartmentId] = useState(null);
   const [serviceModeSubmitting, setServiceModeSubmitting] = useState(false);
   const [academicProfileSubmitting, setAcademicProfileSubmitting] = useState(false);
-  const [, setServiceModeMessage] = useState("");
-  const [, setServiceModeErrorMessage] = useState("");
   const [profileImageUrl, setProfileImageUrl] = useState(tempProfileImage);
   const [isAdmin, setIsAdmin] = useState(false);
   const [studentCourses, setStudentCourses] = useState([]);
@@ -409,14 +407,11 @@ export const MyPage = () => {
   const [passwordErrorMessage, setPasswordErrorMessage] = useState("");
 
   const [profileUploading, setProfileUploading] = useState(false);
-  const [, setProfileUploadErrorMessage] = useState("");
   const [hasGeminiApiKey, setHasGeminiApiKey] = useState(false);
   const [geminiApiKeyInput, setGeminiApiKeyInput] = useState("");
   const [geminiApiKeySubmitting, setGeminiApiKeySubmitting] = useState(false);
   const [removingGeminiApiKey, setRemovingGeminiApiKey] = useState(false);
   const [showGeminiApiGuideModal, setShowGeminiApiGuideModal] = useState(false);
-  const [, setGeminiApiKeyMessage] = useState("");
-  const [, setGeminiApiKeyErrorMessage] = useState("");
   const profileImageInputRef = useRef(null);
 
   const [activeHistoryTab, setActiveHistoryTab] = useState("payment");
@@ -568,18 +563,15 @@ export const MyPage = () => {
       extension.endsWith(".jpeg") ||
       extension.endsWith(".webp");
     if (!isImageMime || !isImageExtension) {
-      setProfileUploadErrorMessage("프로필 사진은 PNG/JPG/JPEG/WEBP 형식만 업로드할 수 있습니다.");
       showToast("프로필 사진은 PNG/JPG/JPEG/WEBP 형식만 업로드할 수 있습니다.", { type: "error" });
       return;
     }
     if (file.size > 5 * 1024 * 1024) {
-      setProfileUploadErrorMessage("프로필 사진은 5MB 이하만 업로드할 수 있습니다.");
       showToast("프로필 사진은 5MB 이하만 업로드할 수 있습니다.", { type: "error" });
       return;
     }
 
     setProfileUploading(true);
-    setProfileUploadErrorMessage("");
 
     try {
       let existingProfileFileIds;
@@ -605,7 +597,6 @@ export const MyPage = () => {
       setProfileImageUrl(getMyProfileImageUrl());
       showToast("프로필 사진을 변경했습니다.", { type: "success" });
     } catch (error) {
-      setProfileUploadErrorMessage(error?.message || "프로필 사진 업로드에 실패했습니다.");
       showToast(error?.message || "프로필 사진 업로드에 실패했습니다.", { type: "error" });
     } finally {
       setProfileUploading(false);
@@ -646,21 +637,17 @@ export const MyPage = () => {
   const submitGeminiApiKey = async () => {
     const normalizedKey = geminiApiKeyInput.trim();
     if (!normalizedKey) {
-      setGeminiApiKeyErrorMessage("Gemini API 키를 입력해 주세요.");
+      showToast("Gemini API 키를 입력해 주세요.", { type: "error" });
       return;
     }
     setGeminiApiKeySubmitting(true);
-    setGeminiApiKeyErrorMessage("");
-    setGeminiApiKeyMessage("");
     try {
       const payload = await updateMyGeminiApiKey(normalizedKey);
       const profile = extractProfile(payload);
       setHasGeminiApiKey(Boolean(profile?.hasGeminiApiKey));
       setGeminiApiKeyInput("");
-      setGeminiApiKeyMessage("Gemini API 키가 저장되었습니다.");
       showToast("Gemini API 키가 저장되었습니다.", { type: "success" });
     } catch (error) {
-      setGeminiApiKeyErrorMessage(error?.message || "Gemini API 키 저장에 실패했습니다.");
       showToast(error?.message || "Gemini API 키 저장에 실패했습니다.", { type: "error" });
     } finally {
       setGeminiApiKeySubmitting(false);
@@ -669,17 +656,13 @@ export const MyPage = () => {
 
   const removeGeminiApiKey = async () => {
     setRemovingGeminiApiKey(true);
-    setGeminiApiKeyErrorMessage("");
-    setGeminiApiKeyMessage("");
     try {
       const payload = await clearMyGeminiApiKey();
       const profile = extractProfile(payload);
       setHasGeminiApiKey(Boolean(profile?.hasGeminiApiKey));
       setGeminiApiKeyInput("");
-      setGeminiApiKeyMessage("Gemini API 키가 제거되었습니다.");
       showToast("Gemini API 키가 제거되었습니다.", { type: "success" });
     } catch (error) {
-      setGeminiApiKeyErrorMessage(error?.message || "Gemini API 키 제거에 실패했습니다.");
       showToast(error?.message || "Gemini API 키 제거에 실패했습니다.", { type: "error" });
     } finally {
       setRemovingGeminiApiKey(false);
@@ -778,21 +761,16 @@ export const MyPage = () => {
     if (serviceModeSubmitting) return;
     if (nextServiceMode === SERVICE_MODE.STUDENT && serviceMode !== SERVICE_MODE.STUDENT && !hasSavedAcademicProfile) {
       setStudentModePendingSetup(true);
-      setServiceModeMessage("");
-      setServiceModeErrorMessage("");
       showToast("대학교와 학과를 저장하면 대학생 모드로 전환됩니다.", { type: "info" });
       return;
     }
     if (nextServiceMode === SERVICE_MODE.JOB_SEEKER && studentModePendingSetup && serviceMode === SERVICE_MODE.JOB_SEEKER) {
       setStudentModePendingSetup(false);
-      setServiceModeMessage("대학생 모드 전환 예약을 취소했습니다.");
-      setServiceModeErrorMessage("");
+      showToast("대학생 모드 전환 예약을 취소했습니다.", { type: "info" });
       return;
     }
     if (nextServiceMode === serviceMode && !studentModePendingSetup) return;
     setServiceModeSubmitting(true);
-    setServiceModeMessage("");
-    setServiceModeErrorMessage("");
     try {
       const payload = await updateMyServiceMode(nextServiceMode);
       const profile = extractProfile(payload);
@@ -816,16 +794,13 @@ export const MyPage = () => {
         setStudentCourses([]);
       }
       if (nextServiceMode === SERVICE_MODE.STUDENT) {
-        setServiceModeMessage("대학생 모드로 전환했습니다.");
         showToast("대학생 모드로 전환했습니다.", { type: "success" });
         navigate("/content/student", { replace: true });
       } else {
-        setServiceModeMessage("취준생 모드로 전환했습니다.");
         showToast("취준생 모드로 전환했습니다.", { type: "success" });
         navigate("/content/interview", { replace: true });
       }
     } catch (error) {
-      setServiceModeErrorMessage(error?.message || "서비스 모드 변경에 실패했습니다.");
       showToast(error?.message || "서비스 모드 변경에 실패했습니다.", { type: "error" });
     } finally {
       setServiceModeSubmitting(false);
@@ -835,13 +810,10 @@ export const MyPage = () => {
   const handleSaveAcademicProfile = async () => {
     if (academicProfileSubmitting) return;
     if (!canSaveAcademicProfile) {
-      setServiceModeErrorMessage("대학교와 학과를 모두 검색 결과에서 선택해 주세요.");
       showToast("대학교와 학과를 모두 검색 결과에서 선택해 주세요.", { type: "error" });
       return;
     }
     setAcademicProfileSubmitting(true);
-    setServiceModeMessage("");
-    setServiceModeErrorMessage("");
     try {
       const payload = await updateMyAcademicProfile({
         universityName: trimmedUniversityName,
@@ -873,15 +845,12 @@ export const MyPage = () => {
         } catch {
           setStudentCourses([]);
         }
-        setServiceModeMessage(shouldActivateStudentMode ? "대학교 / 학과 정보를 저장했고 대학생 모드로 전환했습니다." : "대학교 / 학과 정보를 저장했습니다. 학생 페이지로 이동합니다.");
         showToast(shouldActivateStudentMode ? "대학생 모드로 전환했습니다." : "대학교 / 학과 정보를 저장했습니다.", { type: "success" });
         navigate("/content/student", { replace: true });
       } else {
-        setServiceModeMessage(hasStudentAcademicProfile ? "대학교 / 학과 정보를 저장했습니다." : "대학교 / 학과 정보를 비웠습니다.");
         showToast(hasStudentAcademicProfile ? "대학교 / 학과 정보를 저장했습니다." : "대학교 / 학과 정보를 비웠습니다.", { type: "success" });
       }
     } catch (error) {
-      setServiceModeErrorMessage(error?.message || "대학교 / 학과 저장에 실패했습니다.");
       showToast(error?.message || "대학교 / 학과 저장에 실패했습니다.", { type: "error" });
     } finally {
       setAcademicProfileSubmitting(false);
@@ -1078,7 +1047,7 @@ export const MyPage = () => {
                     <button
                       type="button"
                       onClick={submitGeminiApiKey}
-                        disabled={hasGeminiApiKey || geminiApiKeySubmitting || removingGeminiApiKey}
+                      disabled={hasGeminiApiKey || geminiApiKeySubmitting || removingGeminiApiKey}
                       className="min-w-[88px] whitespace-nowrap rounded-[10px] border border-[#1f1f1f] bg-[#1f1f1f] px-3 py-2 text-[11px] text-white disabled:opacity-60 sm:text-[12px]"
                     >
                       {geminiApiKeySubmitting ? "저장 중..." : "저장"}
