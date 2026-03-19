@@ -6,6 +6,7 @@ import { MobileSidebarDrawer } from "../../components/MobileSidebarDrawer";
 import { PointChargeModal } from "../../components/PointChargeModal";
 import { PointChargeSuccessModal } from "../../components/PointChargeSuccessModal";
 import { Sidebar } from "../../components/Sidebar";
+import { useToast } from "../../hooks/useToast";
 import tempProfileImage from "../../assets/icon/temp.png";
 import { logout } from "../../lib/authApi";
 import { consumePointChargeSuccessResult } from "../../lib/pointChargeFlow";
@@ -20,19 +21,20 @@ import {
   updateMyAcademicProfile,
   updateMyServiceMode,
 } from "../../lib/userApi";
-import { hasAcademicProfile, SERVICE_MODE } from "../../lib/serviceMode";
+import { hasAcademicProfile, normalizeServiceMode, SERVICE_MODE } from "../../lib/serviceMode";
 
 const StudentProfileModal = ({
   open,
   universityName,
   departmentName,
+  selectedUniversityId,
   onChangeUniversityName,
   onChangeDepartmentName,
   onSelectUniversity,
   onSelectDepartment,
   universitySelected,
   departmentSelected,
-  onClose,
+  onMoveToMyPage,
   onSubmit,
   pending,
   errorMessage,
@@ -53,6 +55,7 @@ const StudentProfileModal = ({
           <AcademicProfileFields
             universityName={universityName}
             departmentName={departmentName}
+            selectedUniversityId={selectedUniversityId}
             onChangeUniversityName={onChangeUniversityName}
             onChangeDepartmentName={onChangeDepartmentName}
             onSelectUniversity={onSelectUniversity}
@@ -65,18 +68,18 @@ const StudentProfileModal = ({
 
         {errorMessage ? <p className="mt-3 text-[13px] text-[#d84a4a]">{errorMessage}</p> : null}
 
-        <div className="mt-6 flex justify-end gap-2">
+        <div className="mt-6 flex flex-wrap justify-end gap-2">
           <button
             type="button"
-            onClick={onClose}
+            onClick={onMoveToMyPage}
             className="rounded-[12px] border border-[#d1d5db] px-4 py-2.5 text-[13px] font-semibold text-[#4b5563]"
           >
-            닫기
+            마이페이지에서 설정
           </button>
           <button
             type="button"
-            disabled={pending || !universitySelected || !String(departmentName || "").trim()}
-            aria-disabled={pending || !universitySelected || !String(departmentName || "").trim()}
+            disabled={pending || !universitySelected || !departmentSelected}
+            aria-disabled={pending || !universitySelected || !departmentSelected}
             onClick={onSubmit}
             className="rounded-[12px] bg-[#111827] px-4 py-2.5 text-[13px] font-semibold text-white disabled:cursor-not-allowed disabled:opacity-55"
           >
@@ -137,8 +140,15 @@ const DeleteCourseConfirmModal = ({
 };
 
 export const StudentHomePage = () => {
+  const COURSE_PAGE_SIZE = 5;
   const navigate = useNavigate();
   const location = useLocation();
+  const { showToast } = useToast();
+  const hasSearchBackedAcademicProfile = (nextProfile) => {
+    const universityId = Number(nextProfile?.universityId);
+    const departmentId = Number(nextProfile?.departmentId);
+    return hasAcademicProfile(nextProfile) && Number.isFinite(universityId) && universityId > 0 && Number.isFinite(departmentId) && departmentId > 0;
+  };
   const [profile, setProfile] = useState({});
   const [loading, setLoading] = useState(true);
   const [userName, setUserName] = useState("사용자");
@@ -155,7 +165,6 @@ export const StudentHomePage = () => {
   const [selectedDepartmentId, setSelectedDepartmentId] = useState(null);
   const [savingAcademicProfile, setSavingAcademicProfile] = useState(false);
   const [academicProfileError, setAcademicProfileError] = useState("");
-  const [switchingMode, setSwitchingMode] = useState(false);
   const [courses, setCourses] = useState([]);
   const [coursesLoading, setCoursesLoading] = useState(true);
   const [courseName, setCourseName] = useState("");
@@ -163,9 +172,9 @@ export const StudentHomePage = () => {
   const [courseDescription, setCourseDescription] = useState("");
   const [courseSubmitting, setCourseSubmitting] = useState(false);
   const [courseErrorMessage, setCourseErrorMessage] = useState("");
-  const [courseMessage, setCourseMessage] = useState("");
   const [deleteTargetCourse, setDeleteTargetCourse] = useState(null);
   const [courseDeleting, setCourseDeleting] = useState(false);
+  const [coursePage, setCoursePage] = useState(0);
 
   useEffect(() => {
     const charged = consumePointChargeSuccessResult();
@@ -183,21 +192,24 @@ export const StudentHomePage = () => {
         const payload = await getMyProfile();
         if (cancelled) return;
         const nextProfile = extractProfile(payload);
+        const normalizedMode = normalizeServiceMode(nextProfile?.serviceMode);
+        const hasProfile = hasSearchBackedAcademicProfile(nextProfile);
         setProfile(nextProfile);
         setUserName(String(nextProfile?.name || "사용자"));
         setUserPoint(parsePoint(nextProfile?.point));
         setProfileImageUrl(getMyProfileImageUrl());
         setUniversityName(String(nextProfile?.universityName || ""));
-        setSelectedUniversityId(null);
+        setSelectedUniversityId(Number.isFinite(Number(nextProfile?.universityId)) ? Number(nextProfile.universityId) : null);
         setDepartmentName(String(nextProfile?.departmentName || ""));
-        setSelectedDepartmentId(null);
-        setModalOpen(!hasAcademicProfile(nextProfile));
-        if (hasAcademicProfile(nextProfile)) {
+        setSelectedDepartmentId(Number.isFinite(Number(nextProfile?.departmentId)) ? Number(nextProfile.departmentId) : null);
+        setModalOpen(!hasProfile || normalizedMode !== SERVICE_MODE.STUDENT);
+        if (hasProfile && normalizedMode === SERVICE_MODE.STUDENT) {
           try {
             const coursesPayload = await getMyStudentCourses();
             const nextCourses = Array.isArray(coursesPayload) ? coursesPayload : [];
             if (!cancelled) {
               setCourses(nextCourses);
+              setCourseErrorMessage("");
             }
           } catch (error) {
             if (!cancelled) setCourseErrorMessage(error?.message || "과목 목록을 불러오지 못했습니다.");
@@ -206,6 +218,7 @@ export const StudentHomePage = () => {
           }
         } else if (!cancelled) {
           setCourses([]);
+          setCourseErrorMessage("");
           setCoursesLoading(false);
         }
       } catch (error) {
@@ -232,11 +245,12 @@ export const StudentHomePage = () => {
     if (!university || !department) return "미등록";
     return `${university} · ${department}`;
   }, [profile]);
+  const isAdmin = profile?.role === "ADMIN";
 
   const handleSaveAcademicProfile = async () => {
     if (savingAcademicProfile) return;
-    if (!selectedUniversityId || !String(departmentName || "").trim()) {
-      setAcademicProfileError("대학교는 검색 결과에서 선택하고, 학과는 입력해 주세요.");
+    if (!selectedUniversityId || !selectedDepartmentId) {
+      setAcademicProfileError("대학교와 학과를 모두 검색 결과에서 선택해 주세요.");
       return;
     }
     setSavingAcademicProfile(true);
@@ -248,18 +262,29 @@ export const StudentHomePage = () => {
         departmentName,
         departmentId: selectedDepartmentId || null,
       });
-      const nextProfile = extractProfile(payload);
+      let nextProfile = extractProfile(payload);
+      if (hasSearchBackedAcademicProfile(nextProfile) && normalizeServiceMode(nextProfile?.serviceMode) !== SERVICE_MODE.STUDENT) {
+        const modePayload = await updateMyServiceMode(SERVICE_MODE.STUDENT);
+        nextProfile = extractProfile(modePayload);
+      }
+
+      const normalizedMode = normalizeServiceMode(nextProfile?.serviceMode);
+      const hasProfile = hasSearchBackedAcademicProfile(nextProfile);
       setProfile(nextProfile);
-      setSelectedUniversityId(null);
-      setSelectedDepartmentId(null);
-      const hasProfile = hasAcademicProfile(nextProfile);
-      setModalOpen(!hasProfile);
-      if (hasProfile) {
+      setUniversityName(String(nextProfile?.universityName || ""));
+      setSelectedUniversityId(Number.isFinite(Number(nextProfile?.universityId)) ? Number(nextProfile.universityId) : null);
+      setDepartmentName(String(nextProfile?.departmentName || ""));
+      setSelectedDepartmentId(Number.isFinite(Number(nextProfile?.departmentId)) ? Number(nextProfile.departmentId) : null);
+      setModalOpen(!hasProfile || normalizedMode !== SERVICE_MODE.STUDENT);
+      if (hasProfile && normalizedMode === SERVICE_MODE.STUDENT) {
         const refreshedCourses = await getMyStudentCourses();
         const nextCourses = Array.isArray(refreshedCourses) ? refreshedCourses : [];
         setCourses(nextCourses);
+        setCourseErrorMessage("");
+        showToast("대학생 모드로 전환했고 학적 정보를 저장했습니다.", { type: "success" });
       } else {
         setCourses([]);
+        setCourseErrorMessage("");
       }
     } catch (error) {
       setAcademicProfileError(error?.message || "학습 기본 정보를 저장하지 못했습니다.");
@@ -270,16 +295,14 @@ export const StudentHomePage = () => {
 
   const handleCreateCourse = async () => {
     if (courseSubmitting) return;
-    const normalizedCourseName = String(courseName || "").trim();
+      const normalizedCourseName = String(courseName || "").trim();
     if (!normalizedCourseName) {
       setCourseErrorMessage("과목명을 입력해 주세요.");
-      setCourseMessage("");
       setCourseSubmitting(false);
       return;
     }
     setCourseSubmitting(true);
     setCourseErrorMessage("");
-    setCourseMessage("");
     try {
       const payload = await createStudentCourse({
         courseName: normalizedCourseName,
@@ -290,9 +313,11 @@ export const StudentHomePage = () => {
       setCourseName("");
       setProfessorName("");
       setCourseDescription("");
-      setCourseMessage("과목이 등록되었습니다.");
+      setCourseErrorMessage("");
+      showToast("과목이 등록되었습니다.", { type: "success" });
     } catch (error) {
       setCourseErrorMessage(error?.message || "과목 등록에 실패했습니다.");
+      showToast(error?.message || "과목 등록에 실패했습니다.", { type: "error" });
     } finally {
       setCourseSubmitting(false);
     }
@@ -303,28 +328,17 @@ export const StudentHomePage = () => {
     const targetCourseId = Number(deleteTargetCourse.courseId);
     setCourseDeleting(true);
     setCourseErrorMessage("");
-    setCourseMessage("");
     try {
       await deleteStudentCourse(targetCourseId);
       setCourses((prev) => prev.filter((course) => course.courseId !== targetCourseId));
-      setCourseMessage(`과목 "${deleteTargetCourse.courseName}"을 삭제했습니다.`);
+      setCourseErrorMessage("");
+      showToast(`과목 "${deleteTargetCourse.courseName}"을 삭제했습니다.`, { type: "success" });
       setDeleteTargetCourse(null);
     } catch (error) {
       setCourseErrorMessage(error?.message || "과목 삭제에 실패했습니다.");
+      showToast(error?.message || "과목 삭제에 실패했습니다.", { type: "error" });
     } finally {
       setCourseDeleting(false);
-    }
-  };
-
-  const handleSwitchToJobSeeker = async () => {
-    if (switchingMode) return;
-    setSwitchingMode(true);
-    try {
-      await updateMyServiceMode(SERVICE_MODE.JOB_SEEKER);
-      navigate("/content/interview", { replace: true });
-    } catch (error) {
-      setAcademicProfileError(error?.message || "서비스 모드 전환에 실패했습니다.");
-      setSwitchingMode(false);
     }
   };
 
@@ -347,9 +361,26 @@ export const StudentHomePage = () => {
   };
 
   const pointSummaryText = useMemo(() => formatPoint(userPoint), [userPoint]);
-  const studentMenuSections = useMemo(() => getStudentSidebarSections(courses), [courses]);
+  const studentMenuSections = useMemo(() => getStudentSidebarSections(courses, { isAdmin }), [courses, isAdmin]);
   const studentMyMenuItems = useMemo(() => getStudentMyMenuItems(), []);
   const sidebarActiveKey = useMemo(() => getStudentSidebarActiveKey(location.pathname), [location.pathname]);
+  const totalCoursePages = useMemo(
+    () => Math.max(1, Math.ceil(courses.length / COURSE_PAGE_SIZE)),
+    [courses.length, COURSE_PAGE_SIZE]
+  );
+  const pagedCourses = useMemo(() => {
+    const start = coursePage * COURSE_PAGE_SIZE;
+    return courses.slice(start, start + COURSE_PAGE_SIZE);
+  }, [coursePage, courses, COURSE_PAGE_SIZE]);
+
+  useEffect(() => {
+    setCoursePage(0);
+  }, [courses.length]);
+
+  useEffect(() => {
+    if (coursePage < totalCoursePages) return;
+    setCoursePage(Math.max(0, totalCoursePages - 1));
+  }, [coursePage, totalCoursePages]);
 
   if (loading) {
     return (
@@ -406,23 +437,16 @@ export const StudentHomePage = () => {
               <p className="text-[12px] font-semibold tracking-[0.12em] text-[#7c8497]">STUDENT MODE</p>
               <h1 className="mt-3 text-[30px] font-semibold text-[#111827] sm:text-[36px]">대학생 학습 모드</h1>
               <p className="mt-3 max-w-[760px] text-[14px] leading-[1.8] text-[#5b6475]">
-                과목별 자료 업로드, 자료 기반 시험문제 생성, 오답노트 흐름을 여기에 연결할 예정입니다.
-                현재는 진입 구조와 기본 프로필 저장부터 먼저 고정했습니다.
+                과목별 학습 자료를 정리하고, 자료 기반 모의고사를 만들고, 오답노트를 누적 관리할 수 있는 공간입니다.
+                대학교와 학과를 등록한 뒤 과목을 추가해 학습을 시작해 주세요.
               </p>
+              {courseErrorMessage ? <p className="mt-3 text-[13px] text-[#d84a4a]">{courseErrorMessage}</p> : null}
             </div>
-            <button
-              type="button"
-              disabled={switchingMode}
-              onClick={handleSwitchToJobSeeker}
-              className="rounded-[14px] border border-[#d1d5db] px-4 py-2.5 text-[13px] font-semibold text-[#374151] disabled:cursor-not-allowed disabled:opacity-55"
-            >
-              {switchingMode ? "전환 중..." : "취준생 모드로 전환"}
-            </button>
           </div>
 
           <div className="mt-8 grid gap-4 md:grid-cols-[1.2fr,0.8fr]">
             <section className="rounded-[22px] border border-[#e6e9f2] bg-[#fbfcfe] p-5">
-              <h2 className="text-[18px] font-semibold text-[#111827]">기본 학습 컨텍스트</h2>
+              <h2 className="text-[18px] font-semibold text-[#111827]">학습 기본 정보</h2>
               <p className="mt-3 text-[14px] text-[#4b5563]">현재 등록: {academicProfileLabel}</p>
               <button
                 type="button"
@@ -473,8 +497,6 @@ export const StudentHomePage = () => {
                 >
                   {courseSubmitting ? "등록 중..." : "과목 등록"}
                 </button>
-                {courseMessage ? <p className="text-[12px] text-[#1f8f55]">{courseMessage}</p> : null}
-                {courseErrorMessage ? <p className="text-[12px] text-[#d84a4a]">{courseErrorMessage}</p> : null}
               </div>
             </section>
           </div>
@@ -490,7 +512,7 @@ export const StudentHomePage = () => {
               </span>
             </div>
 
-            <div className="mt-4 grid gap-3 md:grid-cols-2">
+            <div className="mt-4 space-y-3">
               {coursesLoading ? (
                 Array.from({ length: 2 }).map((_, index) => (
                   <div key={`student-course-skeleton-${index}`} className="rounded-[16px] border border-[#e2e8f0] bg-white p-4">
@@ -500,11 +522,12 @@ export const StudentHomePage = () => {
                   </div>
                 ))
               ) : courses.length === 0 ? (
-                <div className="rounded-[16px] border border-dashed border-[#d7dbe7] bg-white px-4 py-8 text-[14px] text-[#6b7280] md:col-span-2">
+                <div className="rounded-[16px] border border-dashed border-[#d7dbe7] bg-white px-4 py-8 text-[14px] text-[#6b7280]">
                   아직 등록된 과목이 없습니다. 위에서 첫 과목을 먼저 만들어 주세요.
                 </div>
               ) : (
-                courses.map((course) => {
+                pagedCourses.map((course, index) => {
+                  const sequence = coursePage * COURSE_PAGE_SIZE + index + 1;
                   return (
                     <article
                       key={course.courseId}
@@ -512,31 +535,70 @@ export const StudentHomePage = () => {
                     >
                       <button
                         type="button"
-                        onClick={() => setDeleteTargetCourse(course)}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setDeleteTargetCourse(course);
+                        }}
                         aria-label={`${course.courseName} 삭제`}
-                        className="absolute right-4 top-4 inline-flex h-8 w-8 items-center justify-center rounded-full border border-[#fecaca] bg-[#fff5f5] text-[18px] font-semibold leading-none text-[#dc2626]"
+                        className="absolute right-4 top-4 z-10 inline-flex h-8 w-8 items-center justify-center rounded-full border border-[#fecaca] bg-[#fff5f5] text-[18px] font-semibold leading-none text-[#dc2626]"
                       >
                         ×
                       </button>
                       <button
                         type="button"
                         onClick={() => navigate(`/content/student/courses/${course.courseId}`)}
-                        className="block w-full text-left"
+                        className="block w-full pr-10 text-left"
                       >
-                        <p className="text-[12px] font-medium text-[#7c8497]">대학교</p>
-                        <p className="mt-1 text-[17px] font-semibold text-[#111827]">{course.universityName}</p>
-                        <p className="mt-4 text-[12px] font-medium text-[#7c8497]">학과</p>
-                        <p className="mt-1 text-[15px] font-medium text-[#1f2937]">{course.departmentName}</p>
-                        <p className="mt-4 text-[12px] font-medium text-[#7c8497]">과목명</p>
-                        <h3 className="mt-1 text-[22px] font-semibold text-[#111827]">{course.courseName}</h3>
-                        <p className="mt-4 text-[12px] font-medium text-[#7c8497]">교수명</p>
-                        <p className="mt-1 text-[15px] text-[#4b5563]">{course.professorName || "교수명 미입력"}</p>
+                        <div className="flex flex-wrap items-start justify-between gap-3">
+                          <div className="min-w-0 flex-1">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="rounded-full bg-[#eef2ff] px-2.5 py-1 text-[11px] font-semibold text-[#4338ca]">
+                                {String(sequence).padStart(2, "0")}
+                              </span>
+                              <h3 className="text-[20px] font-semibold text-[#111827]">{course.courseName}</h3>
+                            </div>
+                            <p className="mt-2 text-[14px] text-[#4b5563]">
+                              {course.professorName ? `${course.professorName} 교수` : "교수명 미입력"}
+                            </p>
+                            {course.courseDescription ? (
+                              <p className="mt-2 line-clamp-2 text-[13px] leading-[1.7] text-[#6b7280]">
+                                {course.courseDescription}
+                              </p>
+                            ) : null}
+                          </div>
+                          <div className="shrink-0 rounded-[12px] border border-[#e5e7eb] bg-[#f8fafc] px-3 py-2 text-[12px] font-medium text-[#475569]">
+                            상세 보기
+                          </div>
+                        </div>
                       </button>
                     </article>
                   );
                 })
               )}
             </div>
+            {!coursesLoading && courses.length > COURSE_PAGE_SIZE ? (
+              <div className="mt-4 flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setCoursePage((prev) => Math.max(0, prev - 1))}
+                  disabled={coursePage <= 0}
+                  className="rounded-[10px] border border-[#d7dbe7] bg-white px-3 py-2 text-[12px] font-semibold text-[#475569] disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  이전
+                </button>
+                <span className="text-[12px] font-medium text-[#64748b]">
+                  {coursePage + 1} / {totalCoursePages}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setCoursePage((prev) => Math.min(totalCoursePages - 1, prev + 1))}
+                  disabled={coursePage >= totalCoursePages - 1}
+                  className="rounded-[10px] border border-[#d7dbe7] bg-white px-3 py-2 text-[12px] font-semibold text-[#475569] disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  다음
+                </button>
+              </div>
+            ) : null}
           </section>
               </div>
             </div>
@@ -548,6 +610,7 @@ export const StudentHomePage = () => {
         open={modalOpen}
         universityName={universityName}
         departmentName={departmentName}
+        selectedUniversityId={selectedUniversityId}
         onChangeUniversityName={(value) => {
           setUniversityName(value);
           setSelectedUniversityId(null);
@@ -568,10 +631,9 @@ export const StudentHomePage = () => {
           setDepartmentName(String(item?.departmentName || ""));
           setSelectedDepartmentId(Number.isFinite(Number(item?.departmentId)) ? Number(item.departmentId) : null);
         }}
-        selectedUniversityId={selectedUniversityId}
         universitySelected={Boolean(selectedUniversityId)}
         departmentSelected={Boolean(selectedDepartmentId)}
-        onClose={() => setModalOpen(false)}
+        onMoveToMyPage={() => navigate("/content/student/mypage")}
         onSubmit={handleSaveAcademicProfile}
         pending={savingAcademicProfile}
         errorMessage={academicProfileError}

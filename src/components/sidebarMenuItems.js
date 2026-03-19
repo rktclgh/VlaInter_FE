@@ -45,9 +45,9 @@ export const MY_MENU_ITEMS = [
   { key: "mypage", label: "마이페이지", path: "/content/mypage" },
 ];
 
-export const buildStudentMenuSections = (courses = []) => {
+export const buildStudentMenuSections = (courses = [], { isAdmin = false } = {}) => {
   const normalizedCourses = Array.isArray(courses) ? courses : [];
-  return [
+  const sections = [
     ...STUDENT_MENU_SECTIONS,
     {
       title: "내 과목",
@@ -57,7 +57,11 @@ export const buildStudentMenuSections = (courses = []) => {
         path: `/content/student/courses/${course.courseId}`,
       })),
     },
-  ].filter((section) => section.items.length > 0);
+  ];
+  if (isAdmin) {
+    sections.push({ title: "운영", items: ADMIN_MENU_ITEMS });
+  }
+  return sections.filter((section) => section.items.length > 0);
 };
 
 export const getMainMenuItems = ({ isAdmin = false } = {}) => {

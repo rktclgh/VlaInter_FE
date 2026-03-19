@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
+import { AcademicProfileRequiredModal } from "../../components/AcademicProfileRequiredModal";
 import { StarRatingInput } from "../../components/DifficultyStars";
 import { ContentTopNav } from "../../components/ContentTopNav";
 import { MobileSidebarDrawer } from "../../components/MobileSidebarDrawer";
@@ -7,26 +8,34 @@ import { PointChargeModal } from "../../components/PointChargeModal";
 import { PointChargeSuccessModal } from "../../components/PointChargeSuccessModal";
 import { ProtectedImage } from "../../components/ProtectedImage";
 import { Sidebar } from "../../components/Sidebar";
+import { useToast } from "../../hooks/useToast";
 import tempProfileImage from "../../assets/icon/temp.png";
+import { isAuthenticationError } from "../../lib/apiClient";
 import { logout } from "../../lib/authApi";
+import { getInterviewLanguageLabel, INTERVIEW_LANGUAGE_OPTIONS, normalizeInterviewLanguage } from "../../lib/interviewLanguage";
 import { consumePointChargeSuccessResult } from "../../lib/pointChargeFlow";
 import { extractProfile, formatPoint, parsePoint } from "../../lib/profileUtils";
+import { hasAcademicProfile } from "../../lib/serviceMode";
 import { getStudentMyMenuItems, getStudentSidebarActiveKey, getStudentSidebarSections } from "../../lib/studentNavigation";
 import {
   analyzeStudentCourseMaterial,
   createStudentCourseSummaryDocument,
   createStudentCourseSession,
   createStudentWrongAnswerRetest,
+  deleteStudentCourseYoutubeMaterialJob,
   deleteStudentCourseMaterial,
+  downloadStudentCourseMaterialContent,
   deleteStudentExamSession,
   getMyProfile,
   getMyProfileImageUrl,
   getMyStudentCourses,
   getStudentCourseMaterials,
   getStudentCourseSessions,
+  getStudentCourseYoutubeMaterialJobs,
   getStudentCourseWrongAnswerSets,
-  getStudentCourseMaterialDownloadUrl,
   uploadStudentCourseMaterial,
+  previewStudentCourseSummary,
+  uploadStudentCourseYoutubeMaterial,
 } from "../../lib/userApi";
 
 const ConfirmModal = ({ open, title, description, pending, confirmLabel = "삭제", onCancel, onConfirm }) => {
@@ -81,20 +90,505 @@ const AnalysisLockOverlay = ({ open, fileName, pendingRequest }) => {
   );
 };
 
-const SummaryGenerationOverlay = ({ open, format, count }) => {
+const SummaryPdfSavingOverlay = ({ open, count }) => {
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-[170] flex items-center justify-center bg-[#0f172acc] px-6">
+    <div className="fixed inset-0 z-[190] flex items-center justify-center bg-[#0f172acc] px-6">
       <div className="w-full max-w-[440px] rounded-[28px] border border-white/15 bg-[#111827] px-6 py-7 text-center text-white shadow-[0_28px_100px_rgba(15,23,42,0.45)]">
         <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full border border-white/15 bg-white/5">
           <div className="h-7 w-7 animate-spin rounded-full border-[3px] border-white/25 border-t-white" />
         </div>
-        <p className="mt-5 text-[22px] font-semibold">요약본 생성 중</p>
+        <p className="mt-5 text-[22px] font-semibold">구조화 노트 PDF 저장 중</p>
         <p className="mt-3 text-[14px] leading-[1.8] text-white/80">
-          선택한 강의자료 {count}개를 바탕으로 요약본을 생성하고 있습니다.
+          선택한 강의자료 {count}개를 바탕으로 만든 구조화 노트를
           <br />
-          완료되면 {format === "PDF" ? "PDF" : "DOCX"} 파일 다운로드가 바로 시작됩니다.
+          현재 미리보기 모달 형태 그대로 PDF로 저장하고 있습니다.
         </p>
+      </div>
+    </div>
+  );
+};
+
+const SummaryPreviewModal = ({ open, preview, savingPdf = false, exportRef, onDownloadPdf, onClose }) => {
+  if (!open || !preview) return null;
+  return (
+    <div className="fixed inset-0 z-[180] bg-black/60 px-4 py-6">
+      <div
+        ref={exportRef}
+        data-summary-pdf-root="true"
+        className="mx-auto flex h-full w-full max-w-[1080px] flex-col rounded-[24px] bg-white shadow-[0_24px_80px_rgba(15,23,42,0.32)]"
+      >
+        <div data-summary-pdf-header="true" className="flex items-start justify-between gap-4 border-b border-[#e5e7eb] px-5 py-4">
+          <div className="min-w-0">
+            <p className="text-[20px] font-semibold text-[#111827]">{preview.title}</p>
+            <p className="mt-1 text-[12px] text-[#6b7280]">
+              참고 자료 {Array.isArray(preview.sourceFileNames) ? preview.sourceFileNames.length : 0}개를 바탕으로 생성한 구조화 노트입니다.
+            </p>
+          </div>
+          <div data-pdf-hidden="true" className="flex flex-wrap items-center justify-end gap-2">
+            <button
+              type="button"
+              onClick={onDownloadPdf}
+              disabled={savingPdf}
+              className="rounded-[10px] border border-[#d1d5db] bg-white px-3 py-2 text-[12px] font-semibold text-[#374151] disabled:opacity-55"
+            >
+              {savingPdf ? "PDF 저장 중..." : "PDF 저장"}
+            </button>
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={savingPdf}
+              className="rounded-[10px] border border-[#d1d5db] px-3 py-2 text-[12px] font-semibold text-[#374151]"
+            >
+              닫기
+            </button>
+          </div>
+        </div>
+        <div data-summary-pdf-body="true" data-summary-preview-scroll="true" className="flex-1 overflow-y-auto px-5 py-5">
+          <section data-summary-pdf-block="true" className="rounded-[18px] border border-[#e5e7eb] bg-[#fafbff] p-5">
+            <p className="text-[12px] font-semibold tracking-[0.08em] text-[#6b7280]">OVERVIEW</p>
+            <p className="mt-3 text-[14px] leading-[1.9] text-[#374151]">{preview.overview}</p>
+          </section>
+
+          {!!preview.coreTakeaways?.length && (
+            <section data-summary-pdf-block="true" className="mt-4 rounded-[18px] border border-[#dbe4ff] bg-[#f5f8ff] p-5">
+              <p className="text-[12px] font-semibold tracking-[0.08em] text-[#3151d3]">KEY TAKEAWAYS</p>
+              <ul className="mt-3 space-y-2">
+                {(preview.coreTakeaways || []).map((takeaway, takeawayIndex) => (
+                  <li key={`takeaway-${takeawayIndex}`} className="flex gap-2 text-[13px] leading-[1.8] text-[#1f2937]">
+                    <span className="mt-[2px] text-[#3151d3]">•</span>
+                    <span>{takeaway}</span>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+
+          <section data-summary-pdf-block="true" className="mt-4 rounded-[18px] border border-[#e5e7eb] bg-white p-5">
+            <p className="text-[12px] font-semibold tracking-[0.08em] text-[#6b7280]">SOURCE MATERIALS</p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {(preview.sourceFileNames || []).map((fileName) => (
+                <span
+                  key={fileName}
+                  className="rounded-full border border-[#dbe4ff] bg-[#eef2ff] px-3 py-1.5 text-[11px] font-semibold text-[#4338ca]"
+                >
+                  {fileName}
+                </span>
+              ))}
+            </div>
+          </section>
+
+          <div className="mt-4 space-y-4">
+            {(preview.majorTopics || []).map((topic, topicIndex) => (
+              <section
+                key={`${topic.title}-${topicIndex}`}
+                data-summary-topic="true"
+                className="rounded-[20px] border border-[#dfe5f2] bg-[#fbfcfe] p-5"
+              >
+                <div data-summary-topic-header="true" className="flex items-start gap-3">
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#111827] text-[12px] font-semibold text-white">
+                    {topicIndex + 1}
+                  </span>
+                  <div className="min-w-0">
+                    <p className="text-[18px] font-semibold text-[#111827]">{topic.title}</p>
+                    <p className="mt-2 text-[13px] leading-[1.8] text-[#4b5563]">{topic.summary}</p>
+                  </div>
+                </div>
+
+                <div data-summary-topic-subtopics="true" className="mt-4 grid gap-3">
+                  {(topic.subtopics || []).map((subtopic, subtopicIndex) => (
+                    <article
+                      key={`${subtopic.title}-${subtopicIndex}`}
+                      data-summary-topic-subtopic="true"
+                      className="rounded-[16px] border border-[#e5e7eb] bg-white p-4"
+                    >
+                      <p data-summary-subtopic-title="true" className="text-[14px] font-semibold text-[#111827]">{subtopic.title}</p>
+                      <p data-summary-subtopic-summary="true" className="mt-2 text-[12px] leading-[1.8] text-[#5b6475]">{subtopic.summary}</p>
+                      <ul data-summary-subtopic-points="true" className="mt-3 space-y-2">
+                        {(subtopic.keyPoints || []).map((point, pointIndex) => (
+                          <li
+                            key={`${subtopic.title}-point-${pointIndex}`}
+                            data-summary-subtopic-point="true"
+                            className="flex gap-2 text-[12px] leading-[1.8] text-[#374151]"
+                          >
+                            <span className="mt-[2px] text-[#4158c7]">•</span>
+                            <span>{point}</span>
+                          </li>
+                        ))}
+                      </ul>
+                      {!!subtopic.supplementaryNotes?.length && (
+                        <div data-summary-subtopic-notes="true" className="mt-3 rounded-[14px] border border-[#dbe4ff] bg-[#f5f8ff] p-3">
+                          <p data-summary-subtopic-notes-label="true" className="text-[11px] font-semibold tracking-[0.08em] text-[#3151d3]">보충 설명</p>
+                          <div data-summary-subtopic-notes-body="true" className="mt-2 space-y-2">
+                            {(subtopic.supplementaryNotes || []).map((note, noteIndex) => (
+                              <p
+                                key={`${subtopic.title}-note-${noteIndex}`}
+                                data-summary-subtopic-note="true"
+                                className="text-[12px] leading-[1.8] text-[#374151]"
+                              >
+                                {note}
+                              </p>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </article>
+                  ))}
+                </div>
+              </section>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const sanitizeSummaryPdfFileName = (fileName) => {
+  const normalized = String(fileName || "structured-note")
+    .trim()
+    .replace(/[\\/:*?"<>|]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  return normalized || "structured-note";
+};
+
+const buildPdfExportWrapper = (sourceWidth) => {
+  const wrapper = document.createElement("div");
+  wrapper.style.position = "fixed";
+  wrapper.style.left = "-100000px";
+  wrapper.style.top = "0";
+  wrapper.style.zIndex = "-1";
+  wrapper.style.width = `${sourceWidth}px`;
+  wrapper.style.padding = "0";
+  wrapper.style.margin = "0";
+  wrapper.style.background = "#ffffff";
+  wrapper.style.display = "flex";
+  wrapper.style.flexDirection = "column";
+  wrapper.style.gap = "0";
+  return wrapper;
+};
+
+const normalizeSummaryPreviewClone = (clone, sourceWidth) => {
+  clone.style.width = `${sourceWidth}px`;
+  clone.style.height = "auto";
+  clone.style.maxHeight = "none";
+  clone.style.overflow = "visible";
+
+  clone.querySelectorAll("[data-pdf-hidden='true']").forEach((element) => element.remove());
+  clone.querySelectorAll("[data-summary-preview-scroll='true']").forEach((element) => {
+    element.style.height = "auto";
+    element.style.maxHeight = "none";
+    element.style.overflow = "visible";
+    element.style.flex = "0 0 auto";
+  });
+};
+
+const createSummaryPdfPage = (rootTemplate, headerTemplate, bodyTemplate, sourceWidth) => {
+  const shell = rootTemplate.cloneNode(false);
+  normalizeSummaryPreviewClone(shell, sourceWidth);
+
+  const header = headerTemplate.cloneNode(true);
+  const body = bodyTemplate.cloneNode(false);
+  body.style.height = "auto";
+  body.style.maxHeight = "none";
+  body.style.overflow = "visible";
+  body.style.flex = "0 0 auto";
+  body.innerHTML = "";
+
+  shell.append(header, body);
+  return { shell, body };
+};
+
+const buildSummaryTopicFragment = (topicTemplate, subtopicContainerTemplate, subtopicNodes) => {
+  const section = topicTemplate.cloneNode(false);
+  Array.from(topicTemplate.children).forEach((child) => {
+    if (child === subtopicContainerTemplate) return;
+    section.appendChild(child.cloneNode(true));
+  });
+  const subtopicContainer = subtopicContainerTemplate.cloneNode(false);
+  subtopicNodes.forEach((subtopicNode) => subtopicContainer.appendChild(subtopicNode));
+  section.appendChild(subtopicContainer);
+  return { section, subtopicContainer };
+};
+
+const buildSummarySubtopicFragment = (articleTemplate, pointListTemplate, noteTemplate, pointNodes, noteNodes) => {
+  const article = articleTemplate.cloneNode(false);
+  const noteBodyTemplate = noteTemplate?.querySelector("[data-summary-subtopic-notes-body='true']") || null;
+  Array.from(articleTemplate.children).forEach((child) => {
+    if (child === pointListTemplate || child === noteTemplate) return;
+    article.appendChild(child.cloneNode(true));
+  });
+
+  let pointList = null;
+  if (pointListTemplate && pointNodes.length > 0) {
+    pointList = pointListTemplate.cloneNode(false);
+    pointNodes.forEach((pointNode) => pointList.appendChild(pointNode));
+    article.appendChild(pointList);
+  }
+
+  let noteBody = null;
+  if (noteTemplate && noteNodes.length > 0) {
+    const noteBox = noteTemplate.cloneNode(false);
+    Array.from(noteTemplate.children).forEach((child) => {
+      if (child === noteBodyTemplate) return;
+      noteBox.appendChild(child.cloneNode(true));
+    });
+    noteBody = noteBodyTemplate ? noteBodyTemplate.cloneNode(false) : document.createElement("div");
+    noteNodes.forEach((noteNode) => noteBody.appendChild(noteNode));
+    noteBox.appendChild(noteBody);
+    article.appendChild(noteBox);
+  }
+
+  return { article, pointList, noteBody };
+};
+
+const buildSummaryPreviewPdfPages = (sourceNode, pageHeightPx) => {
+  const sourceWidth = sourceNode.offsetWidth;
+  const wrapper = buildPdfExportWrapper(sourceWidth);
+  const measurementRoot = sourceNode.cloneNode(true);
+  normalizeSummaryPreviewClone(measurementRoot, sourceWidth);
+  wrapper.appendChild(measurementRoot);
+  document.body.appendChild(wrapper);
+
+  const rootTemplate = measurementRoot;
+  const headerTemplate = measurementRoot.querySelector("[data-summary-pdf-header='true']");
+  const bodyTemplate = measurementRoot.querySelector("[data-summary-pdf-body='true']");
+  if (!headerTemplate || !bodyTemplate) {
+    throw new Error("구조화 노트 PDF 템플릿을 찾지 못했습니다.");
+  }
+
+  const pages = [];
+  let currentPage = createSummaryPdfPage(rootTemplate, headerTemplate, bodyTemplate, sourceWidth);
+  wrapper.appendChild(currentPage.shell);
+  pages.push(currentPage.shell);
+
+  const ensureCurrentPage = () => currentPage;
+  const exceedsPage = () => ensureCurrentPage().shell.getBoundingClientRect().height > pageHeightPx;
+  const startNewPage = () => {
+    currentPage = createSummaryPdfPage(rootTemplate, headerTemplate, bodyTemplate, sourceWidth);
+    wrapper.appendChild(currentPage.shell);
+    pages.push(currentPage.shell);
+    return currentPage;
+  };
+
+  const appendBlock = (blockNode) => {
+    const page = ensureCurrentPage();
+    page.body.appendChild(blockNode);
+    if (!exceedsPage()) return;
+    page.body.removeChild(blockNode);
+    if (page.body.childElementCount === 0) {
+      page.body.appendChild(blockNode);
+      return;
+    }
+    const nextPage = startNewPage();
+    nextPage.body.appendChild(blockNode);
+  };
+
+  const appendTopic = (topicTemplate) => {
+    const subtopicContainerTemplate = topicTemplate.querySelector("[data-summary-topic-subtopics='true']");
+    if (!subtopicContainerTemplate) {
+      appendBlock(topicTemplate.cloneNode(true));
+      return;
+    }
+    const subtopicTemplates = Array.from(subtopicContainerTemplate.children);
+    if (subtopicTemplates.length === 0) {
+      appendBlock(topicTemplate.cloneNode(true));
+      return;
+    }
+
+    let fragment = buildSummaryTopicFragment(topicTemplate, subtopicContainerTemplate, []);
+    appendBlock(fragment.section);
+    const appendSubtopic = (subtopicTemplate) => {
+      const pointListTemplate = subtopicTemplate.querySelector("[data-summary-subtopic-points='true']");
+      const noteTemplate = subtopicTemplate.querySelector("[data-summary-subtopic-notes='true']");
+      const pointTemplates = pointListTemplate
+        ? Array.from(pointListTemplate.querySelectorAll("[data-summary-subtopic-point='true']")).map((node) => node.cloneNode(true))
+        : [];
+      const noteTemplates = noteTemplate
+        ? Array.from(noteTemplate.querySelectorAll("[data-summary-subtopic-note='true']")).map((node) => node.cloneNode(true))
+        : [];
+
+      if (pointTemplates.length === 0 && noteTemplates.length === 0) {
+        const nextSubtopic = subtopicTemplate.cloneNode(true);
+        fragment.subtopicContainer.appendChild(nextSubtopic);
+        if (!exceedsPage()) return;
+
+        fragment.subtopicContainer.removeChild(nextSubtopic);
+        if (fragment.subtopicContainer.childElementCount === 0) {
+          fragment.subtopicContainer.appendChild(nextSubtopic);
+          return;
+        }
+
+        const nextPage = startNewPage();
+        fragment = buildSummaryTopicFragment(topicTemplate, subtopicContainerTemplate, [nextSubtopic]);
+        nextPage.body.appendChild(fragment.section);
+        return;
+      }
+
+      let articleFragment = buildSummarySubtopicFragment(subtopicTemplate, pointListTemplate, noteTemplate, [], []);
+      fragment.subtopicContainer.appendChild(articleFragment.article);
+      if (exceedsPage()) {
+        fragment.subtopicContainer.removeChild(articleFragment.article);
+        if (fragment.subtopicContainer.childElementCount > 0) {
+          const nextPage = startNewPage();
+          fragment = buildSummaryTopicFragment(topicTemplate, subtopicContainerTemplate, []);
+          nextPage.body.appendChild(fragment.section);
+        }
+        articleFragment = buildSummarySubtopicFragment(subtopicTemplate, pointListTemplate, noteTemplate, [], []);
+        fragment.subtopicContainer.appendChild(articleFragment.article);
+      }
+
+      pointTemplates.forEach((pointTemplate) => {
+        if (!articleFragment.pointList) {
+          fragment.subtopicContainer.removeChild(articleFragment.article);
+          articleFragment = buildSummarySubtopicFragment(subtopicTemplate, pointListTemplate, noteTemplate, [pointTemplate], []);
+          fragment.subtopicContainer.appendChild(articleFragment.article);
+          if (!exceedsPage()) return;
+
+          fragment.subtopicContainer.removeChild(articleFragment.article);
+          const nextPage = startNewPage();
+          fragment = buildSummaryTopicFragment(topicTemplate, subtopicContainerTemplate, []);
+          nextPage.body.appendChild(fragment.section);
+          articleFragment = buildSummarySubtopicFragment(subtopicTemplate, pointListTemplate, noteTemplate, [pointTemplate], []);
+          fragment.subtopicContainer.appendChild(articleFragment.article);
+          return;
+        }
+        articleFragment.pointList.appendChild(pointTemplate);
+        if (!exceedsPage()) return;
+
+        articleFragment.pointList.removeChild(pointTemplate);
+        const nextPage = startNewPage();
+        fragment = buildSummaryTopicFragment(topicTemplate, subtopicContainerTemplate, []);
+        nextPage.body.appendChild(fragment.section);
+        articleFragment = buildSummarySubtopicFragment(subtopicTemplate, pointListTemplate, noteTemplate, [pointTemplate], []);
+        fragment.subtopicContainer.appendChild(articleFragment.article);
+      });
+
+      noteTemplates.forEach((noteTemplateNode) => {
+        if (!articleFragment.noteBody) {
+          const existingPoints = articleFragment.pointList
+            ? Array.from(articleFragment.pointList.children).map((node) => node.cloneNode(true))
+            : [];
+          fragment.subtopicContainer.removeChild(articleFragment.article);
+          articleFragment = buildSummarySubtopicFragment(
+            subtopicTemplate,
+            pointListTemplate,
+            noteTemplate,
+            existingPoints,
+            [noteTemplateNode]
+          );
+          fragment.subtopicContainer.appendChild(articleFragment.article);
+          if (!exceedsPage()) return;
+
+          fragment.subtopicContainer.removeChild(articleFragment.article);
+          const nextPage = startNewPage();
+          fragment = buildSummaryTopicFragment(topicTemplate, subtopicContainerTemplate, []);
+          nextPage.body.appendChild(fragment.section);
+          articleFragment = buildSummarySubtopicFragment(
+            subtopicTemplate,
+            pointListTemplate,
+            noteTemplate,
+            existingPoints,
+            [noteTemplateNode]
+          );
+          fragment.subtopicContainer.appendChild(articleFragment.article);
+          return;
+        }
+
+        articleFragment.noteBody.appendChild(noteTemplateNode);
+        if (!exceedsPage()) return;
+
+        articleFragment.noteBody.removeChild(noteTemplateNode);
+        const existingPoints = articleFragment.pointList
+          ? Array.from(articleFragment.pointList.children).map((node) => node.cloneNode(true))
+          : [];
+        const nextPage = startNewPage();
+        fragment = buildSummaryTopicFragment(topicTemplate, subtopicContainerTemplate, []);
+        nextPage.body.appendChild(fragment.section);
+        articleFragment = buildSummarySubtopicFragment(
+          subtopicTemplate,
+          pointListTemplate,
+          noteTemplate,
+          existingPoints,
+          [noteTemplateNode]
+        );
+        fragment.subtopicContainer.appendChild(articleFragment.article);
+      });
+    };
+
+    subtopicTemplates.forEach((subtopicTemplate) => appendSubtopic(subtopicTemplate));
+  };
+
+  Array.from(bodyTemplate.children).forEach((block) => {
+    if (block.matches("[data-summary-topic='true']")) {
+      appendTopic(block);
+      return;
+    }
+    appendBlock(block.cloneNode(true));
+  });
+
+  measurementRoot.remove();
+  return { wrapper, pages };
+};
+
+const YoutubeMaterialModal = ({ open, youtubeUrl, format, submitting, onChange, onFormatChange, onClose, onSubmit }) => {
+  if (!open) return null;
+  return (
+    <div className="fixed inset-0 z-[175] flex items-center justify-center bg-black/45 px-4">
+      <div className="w-full max-w-[520px] rounded-[24px] border border-[#dfe3ee] bg-white p-6 shadow-[0_24px_80px_rgba(15,23,42,0.22)]">
+        <h2 className="text-[22px] font-semibold text-[#111827]">유튜브 강의 요약본 만들기</h2>
+        <p className="mt-3 text-[14px] leading-[1.8] text-[#5b6475]">
+          자막이 있는 유튜브 영상 링크를 넣으면 자동 생성 자막을 문맥 기준으로 후보정한 뒤 핵심 요약본을 만들어 강의자료에 추가합니다.
+        </p>
+        <label className="mt-5 block">
+          <span className="text-[12px] font-semibold text-[#4b5563]">유튜브 링크</span>
+          <input
+            type="url"
+            value={youtubeUrl}
+            onChange={(event) => onChange(event.target.value)}
+            placeholder="https://youtu.be/... 또는 https://www.youtube.com/watch?v=..."
+            className="mt-2 w-full rounded-[14px] border border-[#d1d5db] px-4 py-3 text-[13px] text-[#111827] outline-none transition focus:border-[#111827]"
+          />
+        </label>
+        <p className="mt-3 text-[11px] leading-[1.7] text-[#7c8497]">
+          자막이 없는 영상은 처리할 수 없습니다. 긴 영상은 자막 정리와 분석에 시간이 조금 더 걸릴 수 있습니다.
+        </p>
+        <div className="mt-4 flex gap-2">
+          {["DOCX", "PDF"].map((option) => (
+            <button
+              key={option}
+              type="button"
+              onClick={() => onFormatChange(option)}
+              disabled={submitting}
+              className={`rounded-[10px] border px-3 py-2 text-[11px] font-semibold ${
+                format === option
+                  ? "border-[#111827] bg-[#111827] text-white"
+                  : "border-[#d1d5db] bg-white text-[#4b5563]"
+              } disabled:opacity-55`}
+            >
+              {option} 요약본
+            </button>
+          ))}
+        </div>
+        <div className="mt-6 flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={submitting}
+            className="rounded-[12px] border border-[#d1d5db] px-4 py-2.5 text-[13px] font-semibold text-[#4b5563] disabled:opacity-60"
+          >
+            취소
+          </button>
+          <button
+            type="button"
+            onClick={onSubmit}
+            disabled={submitting || !String(youtubeUrl || "").trim()}
+            className="rounded-[12px] bg-[#111827] px-4 py-2.5 text-[13px] font-semibold text-white disabled:opacity-60"
+          >
+            {submitting ? "요약본 생성 요청 중..." : "요약본 만들기"}
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -145,6 +639,7 @@ const VisualAssetModal = ({ open, title, assets, onClose }) => {
 };
 
 const materialStatusLabel = (material) => {
+  if (material?.sourceType === "AI_GENERATED_SUMMARY") return "요약본 생성 완료";
   if (material?.ingested) return "분석 완료";
   if (material?.ingestionStatus === "QUEUED") return "분석 대기";
   if (material?.ingestionStatus === "PROCESSING") return "분석 중";
@@ -153,6 +648,7 @@ const materialStatusLabel = (material) => {
 };
 
 const isMaterialAnalysisDisabled = (material, analyzingMaterialId, uploading, hasOngoingMaterialIngestion) => {
+  if (material?.sourceType === "AI_GENERATED_SUMMARY") return true;
   if (uploading) return true;
   if (analyzingMaterialId !== null) return true;
   if (hasOngoingMaterialIngestion) return true;
@@ -162,10 +658,20 @@ const isMaterialAnalysisDisabled = (material, analyzingMaterialId, uploading, ha
 
 const materialAnalyzeButtonLabel = (material, analyzingMaterialId) => {
   if (analyzingMaterialId === material?.materialId) return "분석 요청 중...";
+  if (material?.sourceType === "AI_GENERATED_SUMMARY") return "요약본";
   if (material?.ingested) return "분석 완료";
   if (material?.ingestionStatus === "QUEUED") return "분석 대기";
   if (material?.ingestionStatus === "PROCESSING") return "분석 중";
   return "AI 분석";
+};
+
+const youtubeSummaryStatusLabel = (job) => {
+  if (job?.status === "FETCHING_CAPTIONS") return "자막 추출 중";
+  if (job?.status === "REFINING_TRANSCRIPT") return "자막 후보정 중";
+  if (job?.status === "GENERATING_SUMMARY") return "요약본 생성 중";
+  if (job?.status === "READY") return "완료";
+  if (job?.status === "FAILED") return "실패";
+  return "대기 중";
 };
 
 const materialKindMeta = (materialKind) => {
@@ -228,6 +734,8 @@ const examStyleLabel = (style) => {
 
 const examModeLabel = (mode) => {
   switch (mode) {
+    case "FAST_REVIEW":
+      return "패스트 모의고사";
     case "PAST_EXAM":
       return "족보형";
     case "PAST_EXAM_PRACTICE":
@@ -235,7 +743,24 @@ const examModeLabel = (mode) => {
     case "WRONG_ANSWER_RETEST":
       return "오답노트 재시험";
     default:
-      return "일반형";
+      return "모의고사";
+  }
+};
+
+const studentExamDifficultyGuide = (level) => {
+  switch (Number(level || 3)) {
+    case 1:
+      return "기초 확인형: 정의, 핵심 원리, 대표 예시를 바로 떠올리면 풀 수 있는 수준";
+    case 2:
+      return "기본 적용형: 개념 이해에 더해 간단한 비교나 전형적 적용까지 요구하는 수준";
+    case 3:
+      return "표준 시험형: 두 개 이상의 개념 연결, 과정 설명, 비교 판단이 섞이는 평균 난이도";
+    case 4:
+      return "응용 심화형: 변형 상황, 다단계 풀이, 예외 조건 판단이 필요한 상위권 수준";
+    case 5:
+      return "고난도 종합형: 복합 개념 연결, trade-off, 복합 계산 또는 설계 판단까지 요구하는 수준";
+    default:
+      return "";
   }
 };
 
@@ -244,9 +769,12 @@ export const StudentCoursePage = () => {
   const location = useLocation();
   const { courseId } = useParams();
   const normalizedCourseId = Number(courseId);
+  const { showToast } = useToast();
+  const summaryPreviewExportRef = useRef(null);
 
   const [loading, setLoading] = useState(true);
   const [userName, setUserName] = useState("사용자");
+  const [isAdmin, setIsAdmin] = useState(false);
   const [userPoint, setUserPoint] = useState(0);
   const [profileImageUrl, setProfileImageUrl] = useState(tempProfileImage);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -257,34 +785,51 @@ export const StudentCoursePage = () => {
   const [courses, setCourses] = useState([]);
   const [course, setCourse] = useState(null);
   const [materials, setMaterials] = useState([]);
+  const [youtubeSummaryJobs, setYoutubeSummaryJobs] = useState([]);
   const [sessions, setSessions] = useState([]);
   const [wrongAnswerSets, setWrongAnswerSets] = useState([]);
 
   const [pageErrorMessage, setPageErrorMessage] = useState("");
-  const [materialMessage, setMaterialMessage] = useState("");
-  const [materialErrorMessage, setMaterialErrorMessage] = useState("");
-  const [sessionMessage, setSessionMessage] = useState("");
-  const [sessionErrorMessage, setSessionErrorMessage] = useState("");
-
+  const [requiresAcademicProfile, setRequiresAcademicProfile] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [analyzingMaterialId, setAnalyzingMaterialId] = useState(null);
   const [downloadingMaterialId, setDownloadingMaterialId] = useState(null);
   const [deletingMaterialId, setDeletingMaterialId] = useState(null);
   const [creatingSessionCount, setCreatingSessionCount] = useState(null);
-  const [creatingSummaryFormat, setCreatingSummaryFormat] = useState(null);
+  const [creatingSummaryDocumentFormat, setCreatingSummaryDocumentFormat] = useState(null);
+  const [savingSummaryPdf, setSavingSummaryPdf] = useState(false);
+  const [creatingSummaryPreview, setCreatingSummaryPreview] = useState(false);
+  const [creatingYoutubeMaterial, setCreatingYoutubeMaterial] = useState(false);
+  const [deletingYoutubeSummaryJobId, setDeletingYoutubeSummaryJobId] = useState(null);
   const [deletingSessionId, setDeletingSessionId] = useState(null);
   const [creatingRetestSetId, setCreatingRetestSetId] = useState(null);
   const [sessionGenerationMode, setSessionGenerationMode] = useState("STANDARD");
   const [sessionQuestionCount, setSessionQuestionCount] = useState(5);
   const [sessionDifficultyLevel, setSessionDifficultyLevel] = useState(3);
+  const [showDifficultyGuide, setShowDifficultyGuide] = useState(false);
   const [sessionQuestionStyles, setSessionQuestionStyles] = useState([]);
-  const [summaryFormat, setSummaryFormat] = useState("DOCX");
+  const [summaryLanguage, setSummaryLanguage] = useState("KO");
+  const [sessionLanguage, setSessionLanguage] = useState("KO");
   const [selectedSummaryMaterialIds, setSelectedSummaryMaterialIds] = useState([]);
   const [selectedPastExamMaterialIds, setSelectedPastExamMaterialIds] = useState([]);
 
   const [materialDeleteTarget, setMaterialDeleteTarget] = useState(null);
   const [sessionDeleteTarget, setSessionDeleteTarget] = useState(null);
   const [visualAssetViewer, setVisualAssetViewer] = useState(null);
+  const [summaryPreview, setSummaryPreview] = useState(null);
+  const [showYoutubeMaterialModal, setShowYoutubeMaterialModal] = useState(false);
+  const [youtubeMaterialUrl, setYoutubeMaterialUrl] = useState("");
+  const [youtubeSummaryFormat, setYoutubeSummaryFormat] = useState("DOCX");
+
+  const handleAuthenticationFailure = useCallback((error) => {
+    if (!isAuthenticationError(error)) return false;
+    setPageErrorMessage("");
+    navigate("/login", {
+      replace: true,
+      state: { redirectedFrom: location.pathname },
+    });
+    return true;
+  }, [location.pathname, navigate]);
 
   useEffect(() => {
     const charged = consumePointChargeSuccessResult();
@@ -298,17 +843,20 @@ export const StudentCoursePage = () => {
     if (!matchedCourse) {
       setCourse(null);
       setMaterials([]);
+      setYoutubeSummaryJobs([]);
       setSessions([]);
       setWrongAnswerSets([]);
       return;
     }
     setCourse(matchedCourse);
-    const [materialsPayload, sessionsPayload, wrongAnswerPayload] = await Promise.all([
+    const [materialsPayload, youtubeJobsPayload, sessionsPayload, wrongAnswerPayload] = await Promise.all([
       getStudentCourseMaterials(matchedCourse.courseId),
+      getStudentCourseYoutubeMaterialJobs(matchedCourse.courseId),
       getStudentCourseSessions(matchedCourse.courseId),
       getStudentCourseWrongAnswerSets(matchedCourse.courseId),
     ]);
     setMaterials(Array.isArray(materialsPayload) ? materialsPayload : []);
+    setYoutubeSummaryJobs(Array.isArray(youtubeJobsPayload) ? youtubeJobsPayload : []);
     setSessions(Array.isArray(sessionsPayload) ? sessionsPayload : []);
     setWrongAnswerSets(Array.isArray(wrongAnswerPayload) ? wrongAnswerPayload : []);
   }, [normalizedCourseId]);
@@ -318,20 +866,31 @@ export const StudentCoursePage = () => {
 
     const load = async () => {
       try {
-        const [profilePayload, coursesPayload] = await Promise.all([
-          getMyProfile(),
-          getMyStudentCourses(),
-        ]);
+        const profilePayload = await getMyProfile();
         if (cancelled) return;
         const profile = extractProfile(profilePayload);
         setUserName(String(profile?.name || "사용자"));
+        setIsAdmin(profile?.role === "ADMIN");
         setUserPoint(parsePoint(profile?.point));
         setProfileImageUrl(getMyProfileImageUrl());
+        const profileReady = hasAcademicProfile(profile);
+        setRequiresAcademicProfile(!profileReady);
+        if (!profileReady) {
+          setCourses([]);
+          setCourse(null);
+          setMaterials([]);
+          setYoutubeSummaryJobs([]);
+          setSessions([]);
+          setWrongAnswerSets([]);
+          return;
+        }
+        const coursesPayload = await getMyStudentCourses();
+        if (cancelled) return;
         const nextCourses = Array.isArray(coursesPayload) ? coursesPayload : [];
         setCourses(nextCourses);
         await loadCourseData(nextCourses);
       } catch (error) {
-        if (!cancelled) {
+        if (!cancelled && !handleAuthenticationFailure(error)) {
           setPageErrorMessage(error?.message || "과목 정보를 불러오지 못했습니다.");
         }
       } finally {
@@ -343,18 +902,18 @@ export const StudentCoursePage = () => {
     return () => {
       cancelled = true;
     };
-  }, [loadCourseData]);
+  }, [handleAuthenticationFailure, loadCourseData]);
 
   const pointSummaryText = useMemo(() => formatPoint(userPoint), [userPoint]);
-  const studentMenuSections = useMemo(() => getStudentSidebarSections(courses), [courses]);
+  const studentMenuSections = useMemo(() => getStudentSidebarSections(courses, { isAdmin }), [courses, isAdmin]);
   const studentMyMenuItems = useMemo(() => getStudentMyMenuItems(), []);
   const sidebarActiveKey = useMemo(() => getStudentSidebarActiveKey(location.pathname), [location.pathname]);
   const readyMaterialCount = useMemo(
-    () => materials.filter((material) => material?.materialKind !== "PAST_EXAM" && material?.ingested).length,
+    () => materials.filter((material) => material?.materialKind !== "PAST_EXAM" && material?.sourceType !== "AI_GENERATED_SUMMARY" && material?.ingested).length,
     [materials]
   );
   const readyLectureMaterials = useMemo(
-    () => materials.filter((material) => material?.materialKind !== "PAST_EXAM" && material?.ingested),
+    () => materials.filter((material) => material?.materialKind !== "PAST_EXAM" && material?.sourceType !== "AI_GENERATED_SUMMARY" && material?.ingested),
     [materials]
   );
   const lectureMaterials = useMemo(
@@ -380,6 +939,11 @@ export const StudentCoursePage = () => {
       ),
     [materials]
   );
+  const activeYoutubeSummaryJobs = useMemo(
+    () => youtubeSummaryJobs.filter((job) => job?.status !== "READY" && job?.status !== "FAILED"),
+    [youtubeSummaryJobs]
+  );
+  const hasOngoingYoutubeSummaryJob = activeYoutubeSummaryJobs.length > 0;
   const activeIngestionMaterial = useMemo(
     () =>
       materials.find(
@@ -415,47 +979,81 @@ export const StudentCoursePage = () => {
   }, [loadCourseData]);
 
   useEffect(() => {
-    if (!hasOngoingMaterialIngestion) return undefined;
+    if (!hasOngoingMaterialIngestion && !hasOngoingYoutubeSummaryJob) return undefined;
     const timer = window.setInterval(() => {
       void (async () => {
         try {
           await refreshCourse();
         } catch (error) {
+          if (handleAuthenticationFailure(error)) return;
           console.error("student course ingestion polling failed", error);
         }
       })();
     }, 4000);
     return () => window.clearInterval(timer);
-  }, [hasOngoingMaterialIngestion, refreshCourse]);
+  }, [handleAuthenticationFailure, hasOngoingMaterialIngestion, hasOngoingYoutubeSummaryJob, refreshCourse]);
 
   const handleUploadMaterial = async (file, materialKind = "LECTURE_MATERIAL") => {
     if (!file || !course || uploading || isAnalysisLocked) return;
     setUploading(true);
-    setMaterialMessage("");
-    setMaterialErrorMessage("");
     try {
       await uploadStudentCourseMaterial(course.courseId, file, materialKind);
       const kindMeta = materialKindMeta(materialKind);
-      setMaterialMessage(`${kindMeta.successLabel}를 업로드했습니다.`);
+      showToast(`${kindMeta.successLabel}를 업로드했습니다.`, { type: "success" });
       await refreshCourse();
     } catch (error) {
-      setMaterialErrorMessage(error?.message || "자료 업로드에 실패했습니다.");
+      if (handleAuthenticationFailure(error)) return;
+      showToast(error?.message || "자료 업로드에 실패했습니다.", { type: "error" });
     } finally {
       setUploading(false);
+    }
+  };
+
+  const handleUploadYoutubeMaterial = async () => {
+    if (!course || creatingYoutubeMaterial || uploading || isAnalysisLocked) return;
+    const normalizedUrl = String(youtubeMaterialUrl || "").trim();
+    if (!normalizedUrl) return;
+    setCreatingYoutubeMaterial(true);
+    try {
+      const payload = await uploadStudentCourseYoutubeMaterial(course.courseId, normalizedUrl, youtubeSummaryFormat);
+      showToast(`"${payload?.videoTitle || "유튜브 강의"}" 요약본 생성을 시작했습니다.`, { type: "success" });
+      setYoutubeMaterialUrl("");
+      setYoutubeSummaryFormat("DOCX");
+      setShowYoutubeMaterialModal(false);
+      await refreshCourse();
+    } catch (error) {
+      if (handleAuthenticationFailure(error)) return;
+      showToast(error?.message || "유튜브 요약본 생성 요청에 실패했습니다.", { type: "error" });
+    } finally {
+      setCreatingYoutubeMaterial(false);
+    }
+  };
+
+  const handleDeleteYoutubeSummaryJob = async (job) => {
+    if (!job?.jobId) return;
+    try {
+      setDeletingYoutubeSummaryJobId(job.jobId);
+      await deleteStudentCourseYoutubeMaterialJob(normalizedCourseId, job.jobId);
+      setYoutubeSummaryJobs((prev) => prev.filter((item) => item.jobId !== job.jobId));
+      showToast("유튜브 요약본 상태를 목록에서 삭제했습니다.", { type: "success" });
+    } catch (error) {
+      if (handleAuthenticationFailure(error)) return;
+      showToast(error.message || "유튜브 요약본 상태를 삭제하지 못했습니다.", { type: "error" });
+    } finally {
+      setDeletingYoutubeSummaryJobId(null);
     }
   };
 
   const handleAnalyzeMaterial = async (material) => {
     if (!course || !material || analyzingMaterialId || hasOngoingMaterialIngestion) return;
     setAnalyzingMaterialId(material.materialId);
-    setMaterialMessage("");
-    setMaterialErrorMessage("");
     try {
       await analyzeStudentCourseMaterial(course.courseId, material.materialId);
-      setMaterialMessage(`"${material.fileName}" 분석을 요청했습니다.`);
+      showToast(`"${material.fileName}" 분석을 요청했습니다.`, { type: "success" });
       await refreshCourse();
     } catch (error) {
-      setMaterialErrorMessage(error?.message || "AI 분석 요청에 실패했습니다.");
+      if (handleAuthenticationFailure(error)) return;
+      showToast(error?.message || "AI 분석 요청에 실패했습니다.", { type: "error" });
     } finally {
       setAnalyzingMaterialId(null);
     }
@@ -464,17 +1062,19 @@ export const StudentCoursePage = () => {
   const handleDownloadMaterial = async (material) => {
     if (!course || !material || downloadingMaterialId) return;
     setDownloadingMaterialId(material.materialId);
-    setMaterialMessage("");
-    setMaterialErrorMessage("");
     try {
-      const payload = await getStudentCourseMaterialDownloadUrl(course.courseId, material.materialId);
-      if (!payload?.downloadUrl) {
-        setMaterialErrorMessage("다운로드 링크를 받지 못했습니다.");
-        return;
-      }
-      window.open(payload.downloadUrl, "_blank", "noopener,noreferrer");
+      const payload = await downloadStudentCourseMaterialContent(course.courseId, material.materialId);
+      const objectUrl = window.URL.createObjectURL(payload.blob);
+      const anchor = document.createElement("a");
+      anchor.href = objectUrl;
+      anchor.download = payload.fileName || material.fileName || "lecture-material";
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      window.URL.revokeObjectURL(objectUrl);
     } catch (error) {
-      setMaterialErrorMessage(error?.message || "다운로드 링크 생성에 실패했습니다.");
+      if (handleAuthenticationFailure(error)) return;
+      showToast(error?.message || "다운로드 링크 생성에 실패했습니다.", { type: "error" });
     } finally {
       setDownloadingMaterialId(null);
     }
@@ -483,15 +1083,14 @@ export const StudentCoursePage = () => {
   const handleDeleteMaterial = async () => {
     if (!course || !materialDeleteTarget || deletingMaterialId) return;
     setDeletingMaterialId(materialDeleteTarget.materialId);
-    setMaterialMessage("");
-    setMaterialErrorMessage("");
     try {
       await deleteStudentCourseMaterial(course.courseId, materialDeleteTarget.materialId);
-      setMaterialMessage(`"${materialDeleteTarget.fileName}" 자료를 삭제했습니다.`);
+      showToast(`"${materialDeleteTarget.fileName}" 자료를 삭제했습니다.`, { type: "success" });
       setMaterialDeleteTarget(null);
       await refreshCourse();
     } catch (error) {
-      setMaterialErrorMessage(error?.message || "자료 삭제에 실패했습니다.");
+      if (handleAuthenticationFailure(error)) return;
+      showToast(error?.message || "자료 삭제에 실패했습니다.", { type: "error" });
     } finally {
       setDeletingMaterialId(null);
     }
@@ -500,23 +1099,28 @@ export const StudentCoursePage = () => {
   const handleCreateSession = async (questionCount) => {
     if (!course || creatingSessionCount) return;
     setCreatingSessionCount(questionCount);
-    setSessionMessage("");
-    setSessionErrorMessage("");
     try {
       await createStudentCourseSession(course.courseId, {
         questionCount,
         generationMode: sessionGenerationMode,
-        difficultyLevel: sessionGenerationMode === "PAST_EXAM" || sessionGenerationMode === "PAST_EXAM_PRACTICE" ? null : sessionDifficultyLevel,
+        difficultyLevel:
+          sessionGenerationMode === "PAST_EXAM" || sessionGenerationMode === "PAST_EXAM_PRACTICE"
+            ? null
+            : sessionGenerationMode === "FAST_REVIEW"
+              ? 1
+              : sessionDifficultyLevel,
         questionStyles: sessionGenerationMode === "STANDARD" ? sessionQuestionStyles : [],
         selectedPastExamMaterialIds:
           sessionGenerationMode === "PAST_EXAM" || sessionGenerationMode === "PAST_EXAM_PRACTICE"
             ? selectedPastExamMaterialIds
             : [],
+        language: normalizeInterviewLanguage(sessionLanguage),
       });
-      setSessionMessage(`${examModeLabel(sessionGenerationMode)} ${questionCount}문항 모의고사를 생성했습니다.`);
+      showToast(`${examModeLabel(sessionGenerationMode)} ${questionCount}문항 모의고사를 ${getInterviewLanguageLabel(sessionLanguage)}로 생성했습니다.`, { type: "success" });
       await refreshCourse();
     } catch (error) {
-      setSessionErrorMessage(error?.message || "모의고사 생성에 실패했습니다.");
+      if (handleAuthenticationFailure(error)) return;
+      showToast(error?.message || "모의고사 생성에 실패했습니다.", { type: "error" });
     } finally {
       setCreatingSessionCount(null);
     }
@@ -530,29 +1134,104 @@ export const StudentCoursePage = () => {
     ));
   };
 
-  const handleCreateSummaryDocument = async () => {
-    if (!course || creatingSummaryFormat || selectedSummaryMaterialIds.length === 0) return;
-    setCreatingSummaryFormat(summaryFormat);
-    setSessionMessage("");
-    setSessionErrorMessage("");
+  const handleDownloadSummaryPreviewPdf = async () => {
+    if (!course || !summaryPreview || !summaryPreviewExportRef.current || savingSummaryPdf) return;
+    setSavingSummaryPdf(true);
+    let exportWrapper = null;
+    try {
+      const [{ default: html2canvas }, { jsPDF }] = await Promise.all([
+        import("html2canvas"),
+        import("jspdf"),
+      ]);
+      if (document.fonts?.ready) {
+        await document.fonts.ready;
+      }
+
+      const pdf = new jsPDF({
+        orientation: "p",
+        unit: "pt",
+        format: "a4",
+        compress: true,
+      });
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+      const pageHeightPx = Math.floor((summaryPreviewExportRef.current.offsetWidth * pageHeight) / pageWidth);
+
+      const { wrapper, pages } = buildSummaryPreviewPdfPages(summaryPreviewExportRef.current, pageHeightPx);
+      exportWrapper = wrapper;
+      await new Promise((resolve) => window.requestAnimationFrame(() => window.requestAnimationFrame(resolve)));
+
+      for (let pageIndex = 0; pageIndex < pages.length; pageIndex += 1) {
+        const pageNode = pages[pageIndex];
+        const canvas = await html2canvas(pageNode, {
+          scale: 2,
+          useCORS: true,
+          backgroundColor: "#ffffff",
+          logging: false,
+          width: pageNode.scrollWidth,
+          windowWidth: pageNode.scrollWidth,
+          windowHeight: pageNode.scrollHeight,
+        });
+        if (pageIndex > 0) pdf.addPage();
+        const scale = Math.min(pageWidth / canvas.width, pageHeight / canvas.height);
+        const renderWidth = canvas.width * scale;
+        const renderHeight = canvas.height * scale;
+        const offsetX = (pageWidth - renderWidth) / 2;
+        pdf.addImage(canvas.toDataURL("image/png"), "PNG", offsetX, 0, renderWidth, renderHeight, undefined, "FAST");
+      }
+
+      pdf.save(`${sanitizeSummaryPdfFileName(summaryPreview.title || course.courseName)}.pdf`);
+      showToast("구조화 노트를 PDF로 저장했습니다.", { type: "success" });
+    } catch (error) {
+      if (handleAuthenticationFailure(error)) return;
+      showToast(error?.message || "구조화 노트 PDF 저장에 실패했습니다.", { type: "error" });
+    } finally {
+      exportWrapper?.remove();
+      setSavingSummaryPdf(false);
+    }
+  };
+
+  const handleCreateSummaryDocument = async (format) => {
+    if (!course || creatingSummaryDocumentFormat || creatingSummaryPreview || savingSummaryPdf || selectedSummaryMaterialIds.length === 0) return;
+    setCreatingSummaryDocumentFormat(format);
     try {
       const payload = await createStudentCourseSummaryDocument(course.courseId, {
         selectedMaterialIds: selectedSummaryMaterialIds,
-        format: summaryFormat,
+        language: normalizeInterviewLanguage(summaryLanguage),
+        format,
       });
-      const objectUrl = URL.createObjectURL(payload.blob);
+      const objectUrl = window.URL.createObjectURL(payload.blob);
       const anchor = document.createElement("a");
       anchor.href = objectUrl;
-      anchor.download = payload.fileName || `${course.courseName}_요약본.${summaryFormat === "PDF" ? "pdf" : "docx"}`;
+      anchor.download = payload.fileName || `${sanitizeSummaryPdfFileName(course.courseName)}-summary.${String(format || "").toLowerCase()}`;
       document.body.appendChild(anchor);
       anchor.click();
       anchor.remove();
-      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
-      setSessionMessage(`강의자료 요약본 ${summaryFormat} 파일을 생성했습니다.`);
+      window.URL.revokeObjectURL(objectUrl);
+      showToast(`${format} 요약본을 다운로드했습니다.`, { type: "success" });
     } catch (error) {
-      setSessionErrorMessage(error?.message || "요약본 생성에 실패했습니다.");
+      if (handleAuthenticationFailure(error)) return;
+      showToast(error?.message || `${format} 요약본 생성에 실패했습니다.`, { type: "error" });
     } finally {
-      setCreatingSummaryFormat(null);
+      setCreatingSummaryDocumentFormat(null);
+    }
+  };
+
+  const handlePreviewSummary = async () => {
+    if (!course || creatingSummaryPreview || savingSummaryPdf || selectedSummaryMaterialIds.length === 0) return;
+    setCreatingSummaryPreview(true);
+    try {
+      const payload = await previewStudentCourseSummary(course.courseId, {
+        selectedMaterialIds: selectedSummaryMaterialIds,
+        language: normalizeInterviewLanguage(summaryLanguage),
+      });
+      setSummaryPreview(payload);
+      showToast("구조화 노트 미리보기를 생성했습니다.", { type: "success" });
+    } catch (error) {
+      if (handleAuthenticationFailure(error)) return;
+      showToast(error?.message || "노트 미리보기에 실패했습니다.", { type: "error" });
+    } finally {
+      setCreatingSummaryPreview(false);
     }
   };
 
@@ -576,17 +1255,16 @@ export const StudentCoursePage = () => {
   const handleCreateRetest = async (wrongSet) => {
     if (!wrongSet || creatingRetestSetId) return;
     setCreatingRetestSetId(wrongSet.setId);
-    setSessionMessage("");
-    setSessionErrorMessage("");
     try {
       const payload = await createStudentWrongAnswerRetest(wrongSet.setId);
-      setSessionMessage(`"${wrongSet.title}" 재시험 세션을 생성했습니다.`);
+      showToast(`"${wrongSet.title}" 재시험 세션을 생성했습니다.`, { type: "success" });
       await refreshCourse();
       if (payload?.sessionId) {
         navigate(`/content/student/sessions/${payload.sessionId}`);
       }
     } catch (error) {
-      setSessionErrorMessage(error?.message || "재시험 세션 생성에 실패했습니다.");
+      if (handleAuthenticationFailure(error)) return;
+      showToast(error?.message || "재시험 세션 생성에 실패했습니다.", { type: "error" });
     } finally {
       setCreatingRetestSetId(null);
     }
@@ -595,15 +1273,14 @@ export const StudentCoursePage = () => {
   const handleDeleteSession = async () => {
     if (!sessionDeleteTarget || deletingSessionId) return;
     setDeletingSessionId(sessionDeleteTarget.sessionId);
-    setSessionMessage("");
-    setSessionErrorMessage("");
     try {
       await deleteStudentExamSession(sessionDeleteTarget.sessionId);
-      setSessionMessage(`"${sessionDeleteTarget.title}" 세션을 삭제했습니다.`);
+      showToast(`"${sessionDeleteTarget.title}" 세션을 삭제했습니다.`, { type: "success" });
       setSessionDeleteTarget(null);
       await refreshCourse();
     } catch (error) {
-      setSessionErrorMessage(error?.message || "모의고사 삭제에 실패했습니다.");
+      if (handleAuthenticationFailure(error)) return;
+      showToast(error?.message || "모의고사 삭제에 실패했습니다.", { type: "error" });
     } finally {
       setDeletingSessionId(null);
     }
@@ -635,21 +1312,31 @@ export const StudentCoursePage = () => {
     );
   }
 
+  const academicProfileRequiredModal = (
+    <AcademicProfileRequiredModal
+      open={requiresAcademicProfile}
+      onMoveToMyPage={() => navigate("/content/student/mypage")}
+    />
+  );
+
   if (!course) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-white px-6 text-center">
-        <div>
-          <p className="text-[15px] font-medium text-[#111827]">과목을 찾을 수 없습니다.</p>
-          {pageErrorMessage ? <p className="mt-2 text-[13px] text-[#d84a4a]">{pageErrorMessage}</p> : null}
-          <button
-            type="button"
-            onClick={() => navigate("/content/student")}
-            className="mt-4 rounded-[12px] bg-[#111827] px-4 py-2.5 text-[13px] font-semibold text-white"
-          >
-            과목 홈으로 돌아가기
-          </button>
+      <>
+        <div className="flex min-h-screen items-center justify-center bg-white px-6 text-center">
+          <div>
+            <p className="text-[15px] font-medium text-[#111827]">과목을 찾을 수 없습니다.</p>
+            {pageErrorMessage ? <p className="mt-2 text-[13px] text-[#d84a4a]">{pageErrorMessage}</p> : null}
+            <button
+              type="button"
+              onClick={() => navigate("/content/student")}
+              className="mt-4 rounded-[12px] bg-[#111827] px-4 py-2.5 text-[13px] font-semibold text-white"
+            >
+              과목 홈으로 돌아가기
+            </button>
+          </div>
         </div>
-      </div>
+        {academicProfileRequiredModal}
+      </>
     );
   }
 
@@ -735,8 +1422,51 @@ export const StudentCoursePage = () => {
                       <p className="mt-1 text-[12px] text-[#6b7280]">강의자료는 PDF/DOCX/PPTX, 족보는 PDF/DOCX/PPTX/JPG/JPEG/PNG 형식을 업로드할 수 있습니다.</p>
                     </div>
                   </div>
-                  {materialMessage ? <p className="mt-3 text-[12px] text-[#1f8f55]">{materialMessage}</p> : null}
-                  {materialErrorMessage ? <p className="mt-3 text-[12px] text-[#d84a4a]">{materialErrorMessage}</p> : null}
+                  {youtubeSummaryJobs.length > 0 ? (
+                    <div className="mt-4 rounded-[16px] border border-[#e5e7eb] bg-white p-4">
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                          <p className="text-[14px] font-semibold text-[#111827]">유튜브 요약본 생성 상태</p>
+                          <p className="mt-1 text-[11px] text-[#7c8497]">최근 요청한 유튜브 강의 요약본 작업입니다.</p>
+                        </div>
+                        <p className="text-[11px] font-semibold text-[#4b5563]">{youtubeSummaryJobs.length}건</p>
+                      </div>
+                      <div className="mt-3 grid gap-2">
+                        {youtubeSummaryJobs.slice(0, 5).map((job) => (
+                          <div key={job.jobId} className="flex flex-wrap items-center justify-between gap-3 rounded-[12px] border border-[#edf0f6] bg-[#fafbff] px-3 py-3">
+                            <div className="min-w-0">
+                              <p className="truncate text-[12px] font-semibold text-[#111827]">{job.summaryTitle || job.videoTitle || job.youtubeUrl}</p>
+                              <p className="mt-1 text-[10px] text-[#7c8497]">
+                                {new Date(job.createdAt).toLocaleString("ko-KR")} · {job.format}
+                              </p>
+                              {job.errorMessage ? (
+                                <p className="mt-1 text-[11px] leading-[1.6] text-[#dc2626]">{job.errorMessage}</p>
+                              ) : null}
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span className={`rounded-full px-2.5 py-1 text-[10px] font-semibold ${
+                                job.status === "READY"
+                                  ? "bg-[#e8fff1] text-[#14804a]"
+                                  : job.status === "FAILED"
+                                    ? "bg-[#fff1f1] text-[#dc2626]"
+                                    : "bg-[#eef2ff] text-[#4338ca]"
+                              }`}>
+                                {youtubeSummaryStatusLabel(job)}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteYoutubeSummaryJob(job)}
+                                disabled={deletingYoutubeSummaryJobId === job.jobId}
+                                className="rounded-[8px] border border-[#d1d5db] bg-white px-2.5 py-1 text-[10px] font-semibold text-[#4b5563] disabled:opacity-55"
+                              >
+                                {deletingYoutubeSummaryJobId === job.jobId ? "삭제 중..." : "삭제"}
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
                   <div className="mt-4 grid gap-4 xl:grid-cols-2">
                     {[
                       { key: "LECTURE_MATERIAL", items: lectureMaterials },
@@ -750,24 +1480,36 @@ export const StudentCoursePage = () => {
                               <p className="text-[15px] font-semibold text-[#111827]">{meta.title}</p>
                               <p className="mt-1 text-[12px] text-[#7c8497]">{section.items.length}개 업로드됨</p>
                             </div>
-                            <label className={`cursor-pointer rounded-[10px] px-3 py-2 text-[11px] font-semibold ${uploading ? "bg-[#d1d5db] text-white" : "bg-[#111827] text-white"}`}>
-                              {uploading ? "업로드 중..." : meta.uploadLabel}
-                              <input
-                                type="file"
-                                accept={
-                                  section.key === "PAST_EXAM"
-                                    ? ".pdf,.docx,.pptx,.jpg,.jpeg,.png,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.presentationml.presentation,image/jpeg,image/png"
-                                    : ".pdf,.docx,.pptx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.presentationml.presentation"
-                                }
-                                className="hidden"
-                                disabled={uploading || isAnalysisLocked}
-                                onChange={(event) => {
-                                  const file = event.target.files?.[0];
-                                  void handleUploadMaterial(file, section.key);
-                                  event.target.value = "";
-                                }}
-                              />
-                            </label>
+                            <div className="flex flex-wrap items-center justify-end gap-2">
+                              {section.key === "LECTURE_MATERIAL" ? (
+                                <button
+                                  type="button"
+                                  onClick={() => setShowYoutubeMaterialModal(true)}
+                                  disabled={uploading || creatingYoutubeMaterial || isAnalysisLocked || hasOngoingYoutubeSummaryJob}
+                                  className="rounded-[10px] border border-[#111827] bg-white px-3 py-2 text-[11px] font-semibold text-[#111827] disabled:opacity-55"
+                                >
+                                  {creatingYoutubeMaterial ? "요청 중..." : hasOngoingYoutubeSummaryJob ? "요약본 생성 중..." : "유튜브 영상 업로드"}
+                                </button>
+                              ) : null}
+                              <label className={`cursor-pointer rounded-[10px] px-3 py-2 text-[11px] font-semibold ${uploading ? "bg-[#d1d5db] text-white" : "bg-[#111827] text-white"}`}>
+                                {uploading ? "업로드 중..." : meta.uploadLabel}
+                                <input
+                                  type="file"
+                                  accept={
+                                    section.key === "PAST_EXAM"
+                                      ? ".pdf,.docx,.pptx,.jpg,.jpeg,.png,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.presentationml.presentation,image/jpeg,image/png"
+                                      : ".pdf,.docx,.pptx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.presentationml.presentation"
+                                  }
+                                  className="hidden"
+                                  disabled={uploading || isAnalysisLocked}
+                                  onChange={(event) => {
+                                    const file = event.target.files?.[0];
+                                    void handleUploadMaterial(file, section.key);
+                                    event.target.value = "";
+                                  }}
+                                />
+                              </label>
+                            </div>
                           </div>
                           <div className="mt-4">
                             {section.items.length === 0 ? (
@@ -777,9 +1519,16 @@ export const StudentCoursePage = () => {
                                 {section.items.map((material) => (
                                   <div key={material.materialId} className="rounded-[14px] border border-[#e5e7eb] bg-[#fcfcfd] p-3">
                                     <div className="flex items-start justify-between gap-2">
-                                      <span className={`rounded-full px-2.5 py-1 text-[10px] font-semibold ${meta.toneClass}`}>
-                                        {meta.title}
-                                      </span>
+                                      <div className="flex flex-wrap gap-1.5">
+                                        <span className={`rounded-full px-2.5 py-1 text-[10px] font-semibold ${meta.toneClass}`}>
+                                          {meta.title}
+                                        </span>
+                                        {material?.sourceType === "AI_GENERATED_SUMMARY" ? (
+                                          <span className="rounded-full bg-[#111827] px-2.5 py-1 text-[10px] font-semibold text-white">
+                                            AI 요약본
+                                          </span>
+                                        ) : null}
+                                      </div>
                                       <span className={`rounded-full px-2.5 py-1 text-[10px] font-semibold ${
                                         material?.ingested
                                           ? "bg-[#e8fff1] text-[#14804a]"
@@ -879,31 +1628,30 @@ export const StudentCoursePage = () => {
                     <div>
                       <p className="text-[18px] font-semibold text-[#111827]">강의자료 요약본</p>
                       <p className="mt-1 text-[12px] text-[#6b7280]">
-                        분석 완료된 강의자료를 여러 개 선택해 요약본을 만들고, DOCX 또는 PDF로 바로 다운로드할 수 있습니다.
+                        분석 완료된 강의자료를 여러 개 선택해 구조화 노트를 미리 보고, 현재 미리보기 모달 디자인 그대로 PDF로 저장할 수 있습니다.
                       </p>
                     </div>
                     <p className="text-[12px] font-semibold text-[#4b5563]">{selectedSummaryMaterialIds.length}개 선택</p>
                   </div>
                   <div className="mt-4 rounded-[16px] border border-[#e5e7eb] bg-white p-4">
                     <div className="flex flex-wrap items-center gap-2">
-                      {[
-                        { key: "DOCX", label: "DOCX" },
-                        { key: "PDF", label: "PDF" },
-                      ].map((option) => (
-                        <button
-                          key={option.key}
-                          type="button"
-                          onClick={() => setSummaryFormat(option.key)}
-                          disabled={Boolean(creatingSummaryFormat)}
-                          className={`rounded-[10px] border px-3 py-2 text-[11px] font-semibold ${
-                            summaryFormat === option.key
-                              ? "border-[#111827] bg-[#111827] text-white"
-                              : "border-[#d1d5db] bg-white text-[#4b5563]"
-                          } disabled:opacity-55`}
-                        >
-                          {option.label}
-                        </button>
-                      ))}
+                      <div className="flex rounded-[12px] border border-[#d1d5db] bg-white p-1">
+                        {INTERVIEW_LANGUAGE_OPTIONS.map((option) => (
+                          <button
+                            key={option.value}
+                            type="button"
+                            onClick={() => setSummaryLanguage(option.value)}
+                            disabled={savingSummaryPdf || creatingSummaryPreview}
+                            className={`rounded-[10px] px-3 py-2 text-[11px] font-semibold ${
+                              summaryLanguage === option.value
+                                ? "bg-[#111827] text-white"
+                                : "text-[#4b5563]"
+                            } disabled:opacity-55`}
+                          >
+                            {option.label}
+                          </button>
+                        ))}
+                      </div>
                     </div>
                     <div className="mt-4 grid gap-2">
                       {readyLectureMaterials.length === 0 ? (
@@ -939,16 +1687,30 @@ export const StudentCoursePage = () => {
                         ))
                       )}
                     </div>
-                    <div className="mt-4 flex justify-end">
+                    <div className="mt-4 flex flex-wrap justify-end gap-2">
+                      {["DOCX", "PDF"].map((format) => (
+                        <button
+                          key={format}
+                          type="button"
+                          disabled={Boolean(creatingSummaryDocumentFormat) || creatingSummaryPreview || savingSummaryPdf || selectedSummaryMaterialIds.length === 0}
+                          onClick={() => void handleCreateSummaryDocument(format)}
+                          className="rounded-[12px] border border-[#d1d5db] bg-white px-4 py-3 text-[12px] font-semibold text-[#374151] disabled:opacity-55"
+                        >
+                          {creatingSummaryDocumentFormat === format ? `${format} 생성 중...` : `${format} 요약본 다운로드`}
+                        </button>
+                      ))}
                       <button
                         type="button"
-                        disabled={Boolean(creatingSummaryFormat) || selectedSummaryMaterialIds.length === 0}
-                        onClick={() => void handleCreateSummaryDocument()}
-                        className="rounded-[12px] bg-[#111827] px-4 py-3 text-[12px] font-semibold text-white disabled:opacity-55"
+                        disabled={Boolean(creatingSummaryDocumentFormat) || creatingSummaryPreview || savingSummaryPdf || selectedSummaryMaterialIds.length === 0}
+                        onClick={() => void handlePreviewSummary()}
+                        className="rounded-[12px] border border-[#111827] bg-white px-4 py-3 text-[12px] font-semibold text-[#111827] disabled:opacity-55"
                       >
-                        {creatingSummaryFormat ? "요약본 생성 중..." : `${summaryFormat} 요약본 생성`}
+                        {creatingSummaryPreview ? "노트 생성 중..." : "구조화 노트 미리보기"}
                       </button>
                     </div>
+                    <p className="mt-3 text-[11px] text-[#7c8497]">
+                      현재 요약본 언어: {getInterviewLanguageLabel(summaryLanguage)}. 강의자료 요약본은 DOCX/PDF로 다운로드하고, 구조화 노트는 미리보기 모달을 현재 보이는 화면 그대로 PDF로 저장할 수 있습니다.
+                    </p>
                   </div>
                 </section>
 
@@ -958,6 +1720,7 @@ export const StudentCoursePage = () => {
                       <p className="text-[18px] font-semibold text-[#111827]">모의고사 세션</p>
                       <p className="mt-1 text-[12px] text-[#6b7280]">
                         강의자료 {readyMaterialCount}개를 기반으로 실제 대학 시험 스타일 문제를 생성합니다.
+                        {sessionGenerationMode === "FAST_REVIEW" ? " 패스트 모의고사는 매우 쉬운 개념 암기형 문제만 빠르게 생성합니다." : ""}
                         {sessionGenerationMode === "PAST_EXAM" ? ` 선택한 족보 ${selectedPastExamMaterialIds.length || readyPastExamCount}개로 난이도와 출제 경향을 맞춥니다.` : ""}
                         {sessionGenerationMode === "PAST_EXAM_PRACTICE" ? ` 선택한 족보 ${selectedPastExamMaterialIds.length || readyPastExamCount}개를 바탕으로 실제 문제를 그대로 복원 연습합니다.` : ""}
                       </p>
@@ -966,8 +1729,26 @@ export const StudentCoursePage = () => {
                   <div className="mt-4 rounded-[16px] border border-[#e5e7eb] bg-white p-4">
                     <div className="flex flex-wrap items-center gap-2">
                       <div className="flex rounded-[12px] border border-[#d1d5db] bg-white p-1">
+                        {INTERVIEW_LANGUAGE_OPTIONS.map((option) => (
+                          <button
+                            key={option.value}
+                            type="button"
+                            onClick={() => setSessionLanguage(option.value)}
+                            disabled={Boolean(creatingSessionCount)}
+                            className={`rounded-[10px] px-3 py-1.5 text-[11px] font-semibold ${
+                              sessionLanguage === option.value
+                                ? "bg-[#111827] text-white"
+                                : "text-[#4b5563]"
+                            } disabled:opacity-55`}
+                          >
+                            {option.label}
+                          </button>
+                        ))}
+                      </div>
+                      <div className="flex rounded-[12px] border border-[#d1d5db] bg-white p-1">
                         {[
-                          { key: "STANDARD", label: "일반형" },
+                          { key: "STANDARD", label: "모의고사" },
+                          { key: "FAST_REVIEW", label: "패스트 모의고사" },
                           { key: "PAST_EXAM", label: "족보형" },
                           { key: "PAST_EXAM_PRACTICE", label: "족보 그대로 연습" },
                         ].map((mode) => (
@@ -1029,6 +1810,11 @@ export const StudentCoursePage = () => {
                           문제 스타일을 1개 이상 직접 선택해 주세요. 코딩형만 원하면 코딩형만 선택해야 합니다.
                         </p>
                       </>
+                    ) : sessionGenerationMode === "FAST_REVIEW" ? (
+                      <div className="mt-4 rounded-[12px] border border-[#dbe4ff] bg-[#f5f8ff] px-4 py-3 text-[12px] leading-[1.7] text-[#44506a]">
+                        패스트 모의고사는 강의자료 전 범위를 넓게 훑는 암기 점검용 모드입니다. 난이도는 매우 쉬움으로 고정되고,
+                        정의형 개념 확인 문제만 짧게 생성됩니다.
+                      </div>
                     ) : (
                       <>
                         <div className="mt-4 rounded-[12px] border border-[#e5e7eb] bg-[#f8fafc] px-4 py-3 text-[12px] leading-[1.7] text-[#5b6475]">
@@ -1091,10 +1877,37 @@ export const StudentCoursePage = () => {
                     )}
 
                     {sessionGenerationMode === "STANDARD" ? (
-                      <div className="mt-4 flex items-center gap-3 rounded-[12px] border border-[#f3ddad] bg-[#fff8e8] px-4 py-3">
-                        <span className="text-[12px] font-semibold text-[#8a5a00]">난이도</span>
-                        <StarRatingInput value={sessionDifficultyLevel} onChange={setSessionDifficultyLevel} />
-                        <span className="text-[12px] font-semibold text-[#8a5a00]">{sessionDifficultyLevel} / 5</span>
+                      <div className="relative mt-4 rounded-[12px] border border-[#f3ddad] bg-[#fff8e8] px-4 py-3">
+                        <div className="flex items-center gap-3">
+                          <span className="text-[12px] font-semibold text-[#8a5a00]">난이도</span>
+                          <StarRatingInput value={sessionDifficultyLevel} onChange={setSessionDifficultyLevel} />
+                          <span className="text-[12px] font-semibold text-[#8a5a00]">{sessionDifficultyLevel} / 5</span>
+                          <button
+                            type="button"
+                            onClick={() => setShowDifficultyGuide((prev) => !prev)}
+                            className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-[#d4a948] bg-white text-[11px] font-bold text-[#8a5a00]"
+                            aria-label="난이도 가이드 보기"
+                            aria-expanded={showDifficultyGuide}
+                          >
+                            ?
+                          </button>
+                        </div>
+                        {showDifficultyGuide ? (
+                          <div className="mt-3 rounded-[10px] border border-[#e9c97e] bg-white/85 px-3 py-3 text-[11px] leading-[1.7] text-[#8a5a00] shadow-[0_12px_24px_rgba(138,90,0,0.08)]">
+                            <p className="font-semibold text-[#7c5100]">난이도 가이드</p>
+                            <ul className="mt-2 space-y-1.5">
+                              {[1, 2, 3, 4, 5].map((level) => (
+                                <li key={`difficulty-guide-${level}`} className={level === sessionDifficultyLevel ? "font-semibold text-[#6b4600]" : ""}>
+                                  {level}. {studentExamDifficultyGuide(level)}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        ) : null}
+                      </div>
+                    ) : sessionGenerationMode === "FAST_REVIEW" ? (
+                      <div className="mt-4 rounded-[12px] border border-[#dcfce7] bg-[#f0fdf4] px-4 py-3 text-[12px] leading-[1.7] text-[#166534]">
+                        패스트 모의고사는 난이도 1/5로 고정됩니다. OX 퀴즈처럼 빠르게 핵심 개념을 떠올릴 수 있는 짧은 서술형 문제만 출제합니다.
                       </div>
                     ) : sessionGenerationMode === "PAST_EXAM_PRACTICE" ? (
                       <div className="mt-4 rounded-[12px] border border-[#dbe4ff] bg-[#f5f8ff] px-4 py-3 text-[12px] leading-[1.7] text-[#44506a]">
@@ -1122,9 +1935,8 @@ export const StudentCoursePage = () => {
                         {creatingSessionCount ? "세션 생성 중..." : `${examModeLabel(sessionGenerationMode)} 세션 생성`}
                       </button>
                     </div>
+                    <p className="mt-3 text-[11px] text-[#7c8497]">현재 모의고사 언어: {getInterviewLanguageLabel(sessionLanguage)}</p>
                   </div>
-                  {sessionMessage ? <p className="mt-3 text-[12px] text-[#1f8f55]">{sessionMessage}</p> : null}
-                  {sessionErrorMessage ? <p className="mt-3 text-[12px] text-[#d84a4a]">{sessionErrorMessage}</p> : null}
                   <div className="mt-4 space-y-3">
                     {sessions.length === 0 ? (
                       <p className="text-[13px] text-[#7c8497]">아직 생성된 모의고사 세션이 없습니다.</p>
@@ -1140,6 +1952,9 @@ export const StudentCoursePage = () => {
                               <div className="mt-2 flex flex-wrap gap-2">
                                 <span className="rounded-full bg-[#eef2ff] px-2.5 py-1 text-[10px] font-semibold text-[#4338ca]">
                                   {examModeLabel(session.generationMode)}
+                                </span>
+                                <span className="rounded-full bg-[#ecfeff] px-2.5 py-1 text-[10px] font-semibold text-[#0f766e]">
+                                  {getInterviewLanguageLabel(session.language)}
                                 </span>
                                 {session.difficultyLevel ? (
                                   <span className="rounded-full bg-[#fff8e8] px-2.5 py-1 text-[10px] font-semibold text-[#8a5a00]">
@@ -1300,9 +2115,8 @@ export const StudentCoursePage = () => {
         fileName={activeIngestionMaterial?.fileName}
         pendingRequest={analyzingMaterialId !== null && !activeIngestionMaterial}
       />
-      <SummaryGenerationOverlay
-        open={Boolean(creatingSummaryFormat)}
-        format={creatingSummaryFormat}
+      <SummaryPdfSavingOverlay
+        open={savingSummaryPdf}
         count={selectedSummaryMaterialIds.length}
       />
       <VisualAssetModal
@@ -1310,6 +2124,28 @@ export const StudentCoursePage = () => {
         title={visualAssetViewer ? `${visualAssetViewer.title} 원문 이미지` : ""}
         assets={Array.isArray(visualAssetViewer?.assets) ? visualAssetViewer.assets : []}
         onClose={() => setVisualAssetViewer(null)}
+      />
+      <YoutubeMaterialModal
+        open={showYoutubeMaterialModal}
+        youtubeUrl={youtubeMaterialUrl}
+        format={youtubeSummaryFormat}
+        submitting={creatingYoutubeMaterial}
+        onChange={setYoutubeMaterialUrl}
+        onFormatChange={setYoutubeSummaryFormat}
+        onClose={() => {
+          if (creatingYoutubeMaterial) return;
+          setShowYoutubeMaterialModal(false);
+        }}
+        onSubmit={() => void handleUploadYoutubeMaterial()}
+      />
+      {academicProfileRequiredModal}
+      <SummaryPreviewModal
+        open={Boolean(summaryPreview)}
+        preview={summaryPreview}
+        savingPdf={savingSummaryPdf}
+        exportRef={summaryPreviewExportRef}
+        onDownloadPdf={() => void handleDownloadSummaryPreviewPdf()}
+        onClose={() => setSummaryPreview(null)}
       />
     </>
   );
