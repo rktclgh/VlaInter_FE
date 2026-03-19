@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
+import { AcademicProfileRequiredModal } from "../../components/AcademicProfileRequiredModal";
 import { ContentTopNav } from "../../components/ContentTopNav";
 import { MobileSidebarDrawer } from "../../components/MobileSidebarDrawer";
 import { PointChargeModal } from "../../components/PointChargeModal";
@@ -7,10 +8,13 @@ import { PointChargeSuccessModal } from "../../components/PointChargeSuccessModa
 import { ProtectedImage } from "../../components/ProtectedImage";
 import { Sidebar } from "../../components/Sidebar";
 import { StarIcons } from "../../components/DifficultyStars";
+import { useToast } from "../../hooks/useToast";
 import tempProfileImage from "../../assets/icon/temp.png";
 import { logout } from "../../lib/authApi";
+import { getInterviewLanguageLabel } from "../../lib/interviewLanguage";
 import { consumePointChargeSuccessResult } from "../../lib/pointChargeFlow";
 import { extractProfile, formatPoint, parsePoint } from "../../lib/profileUtils";
+import { hasAcademicProfile } from "../../lib/serviceMode";
 import { getStudentMyMenuItems, getStudentSidebarSections } from "../../lib/studentNavigation";
 import {
   createStudentWrongAnswerSet,
@@ -63,6 +67,8 @@ const DeleteSessionConfirmModal = ({ open, pending, onCancel, onConfirm }) => {
 
 const examModeLabel = (mode) => {
   switch (mode) {
+    case "FAST_REVIEW":
+      return "패스트 모의고사";
     case "PAST_EXAM":
       return "족보형";
     case "PAST_EXAM_PRACTICE":
@@ -70,7 +76,7 @@ const examModeLabel = (mode) => {
     case "WRONG_ANSWER_RETEST":
       return "오답노트 재시험";
     default:
-      return "일반형";
+      return "모의고사";
   }
 };
 
@@ -200,6 +206,7 @@ export const StudentExamSessionPage = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { sessionId } = useParams();
+  const { showToast } = useToast();
   const [loading, setLoading] = useState(true);
   const [session, setSession] = useState(null);
   const [answers, setAnswers] = useState({});
@@ -209,8 +216,8 @@ export const StudentExamSessionPage = () => {
   const [submitting, setSubmitting] = useState(false);
   const [savingWrongAnswerSet, setSavingWrongAnswerSet] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
-  const [successMessage, setSuccessMessage] = useState("");
   const [userName, setUserName] = useState("사용자");
+  const [isAdmin, setIsAdmin] = useState(false);
   const [userPoint, setUserPoint] = useState(0);
   const [profileImageUrl, setProfileImageUrl] = useState(tempProfileImage);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -221,6 +228,7 @@ export const StudentExamSessionPage = () => {
   const [deleting, setDeleting] = useState(false);
   const [courses, setCourses] = useState([]);
   const [sourceAssetViewer, setSourceAssetViewer] = useState(null);
+  const [requiresAcademicProfile, setRequiresAcademicProfile] = useState(false);
 
   useEffect(() => {
     const charged = consumePointChargeSuccessResult();
@@ -234,16 +242,26 @@ export const StudentExamSessionPage = () => {
 
     const load = async () => {
       try {
-        const [profilePayload, sessionPayload, coursesPayload] = await Promise.all([
-          getMyProfile(),
+        const profilePayload = await getMyProfile();
+        if (cancelled) return;
+        const profile = extractProfile(profilePayload);
+        setUserName(String(profile?.name || "사용자"));
+        setIsAdmin(profile?.role === "ADMIN");
+        setUserPoint(parsePoint(profile?.point));
+        setProfileImageUrl(getMyProfileImageUrl());
+        const profileReady = hasAcademicProfile(profile);
+        setRequiresAcademicProfile(!profileReady);
+        if (!profileReady) {
+          setCourses([]);
+          setSession(null);
+          setAnswers({});
+          return;
+        }
+        const [sessionPayload, coursesPayload] = await Promise.all([
           getStudentExamSessionDetail(sessionId),
           getMyStudentCourses(),
         ]);
         if (cancelled) return;
-        const profile = extractProfile(profilePayload);
-        setUserName(String(profile?.name || "사용자"));
-        setUserPoint(parsePoint(profile?.point));
-        setProfileImageUrl(getMyProfileImageUrl());
         setSession(sessionPayload);
         setCourses(Array.isArray(coursesPayload) ? coursesPayload : []);
         setAnswers(
@@ -279,7 +297,7 @@ export const StudentExamSessionPage = () => {
   const activeReferenceExample = normalizeReferenceExample(activeQuestion?.referenceExample);
   const isLastQuestion = activeQuestionIndex >= questions.length - 1;
   const pointSummaryText = useMemo(() => formatPoint(userPoint), [userPoint]);
-  const studentMenuSections = useMemo(() => getStudentSidebarSections(courses), [courses]);
+  const studentMenuSections = useMemo(() => getStudentSidebarSections(courses, { isAdmin }), [courses, isAdmin]);
   const studentMyMenuItems = useMemo(() => getStudentMyMenuItems(), []);
   const sidebarActiveKey = useMemo(() => {
     if (Number.isFinite(Number(session?.courseId))) {
@@ -299,7 +317,6 @@ export const StudentExamSessionPage = () => {
     if (submitting || !session) return;
     setSubmitting(true);
     setErrorMessage("");
-    setSuccessMessage("");
     try {
       const payload = await submitStudentExamAnswers(
         session.sessionId,
@@ -310,9 +327,10 @@ export const StudentExamSessionPage = () => {
       );
       setSession(payload);
       setSelectedQuestionIds(buildInitialSelectedQuestionIds(payload?.questions));
-      setSuccessMessage("답안이 제출되고 채점 결과가 저장되었습니다.");
+      setActiveQuestionIndex(0);
+      showToast("답안이 제출되고 채점 결과가 저장되었습니다.", { type: "success" });
     } catch (error) {
-      setErrorMessage(error?.message || "답안 제출에 실패했습니다.");
+      showToast(error?.message || "답안 제출에 실패했습니다.", { type: "error" });
     } finally {
       setSubmitting(false);
     }
@@ -321,20 +339,19 @@ export const StudentExamSessionPage = () => {
   const handleSaveWrongAnswerSet = async () => {
     if (!session || savingWrongAnswerSet) return;
     if (selectedQuestionIds.length === 0) {
-      setErrorMessage("오답노트로 저장할 문제를 1개 이상 선택해 주세요.");
+      showToast("오답노트로 저장할 문제를 1개 이상 선택해 주세요.", { type: "error" });
       return;
     }
     setSavingWrongAnswerSet(true);
     setErrorMessage("");
-    setSuccessMessage("");
     try {
       const payload = await createStudentWrongAnswerSet(session.sessionId, {
         title: wrongAnswerSetTitle,
         questionIds: selectedQuestionIds,
       });
-      setSuccessMessage(`오답노트가 저장되었습니다. (${payload.questionCount}문항)`);
+      showToast(`오답노트가 저장되었습니다. (${payload.questionCount}문항)`, { type: "success" });
     } catch (error) {
-      setErrorMessage(error?.message || "오답노트 저장에 실패했습니다.");
+      showToast(error?.message || "오답노트 저장에 실패했습니다.", { type: "error" });
     } finally {
       setSavingWrongAnswerSet(false);
     }
@@ -344,12 +361,11 @@ export const StudentExamSessionPage = () => {
     if (!session || deleting) return;
     setDeleting(true);
     setErrorMessage("");
-    setSuccessMessage("");
     try {
       await deleteStudentExamSession(session.sessionId);
       navigate("/content/student", { replace: true });
     } catch (error) {
-      setErrorMessage(error?.message || "모의고사 세션 삭제에 실패했습니다.");
+      showToast(error?.message || "모의고사 세션 삭제에 실패했습니다.", { type: "error" });
       setDeleting(false);
       setShowDeleteModal(false);
     }
@@ -389,27 +405,22 @@ export const StudentExamSessionPage = () => {
     );
   }
 
-  if (!session) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-white px-6 text-center">
-        <div>
-          <p className="text-[15px] font-medium text-[#111827]">세션을 불러오지 못했습니다.</p>
-          {errorMessage ? <p className="mt-2 text-[13px] text-[#d84a4a]">{errorMessage}</p> : null}
-          <button
-            type="button"
-            onClick={() => navigate("/content/student")}
-            className="mt-4 rounded-[12px] bg-[#111827] px-4 py-2.5 text-[13px] font-semibold text-white"
-          >
-            학생 홈으로 돌아가기
-          </button>
-        </div>
+  const pageContent = !session ? (
+    <div className="flex min-h-screen items-center justify-center bg-white px-6 text-center">
+      <div>
+        <p className="text-[15px] font-medium text-[#111827]">세션을 불러오지 못했습니다.</p>
+        {errorMessage ? <p className="mt-2 text-[13px] text-[#d84a4a]">{errorMessage}</p> : null}
+        <button
+          type="button"
+          onClick={() => navigate("/content/student")}
+          className="mt-4 rounded-[12px] bg-[#111827] px-4 py-2.5 text-[13px] font-semibold text-white"
+        >
+          학생 홈으로 돌아가기
+        </button>
       </div>
-    );
-  }
-
-  return (
-    <>
-      <div className="min-h-screen overflow-x-hidden bg-white pt-[3.75rem]">
+    </div>
+  ) : (
+    <div className="min-h-screen overflow-x-hidden bg-white pt-[3.75rem]">
         <ContentTopNav
           point={pointSummaryText}
           onClickCharge={() => setShowPointChargeModal(true)}
@@ -454,6 +465,9 @@ export const StudentExamSessionPage = () => {
                       <div className="mt-3 flex flex-wrap gap-2">
                         <span className="rounded-full bg-[#eef2ff] px-3 py-1 text-[11px] font-semibold text-[#4338ca]">
                           {examModeLabel(session.generationMode)}
+                        </span>
+                        <span className="rounded-full bg-[#ecfeff] px-3 py-1 text-[11px] font-semibold text-[#0f766e]">
+                          {getInterviewLanguageLabel(session.language)}
                         </span>
                         {session.difficultyLevel ? (
                           <span className="inline-flex items-center gap-2 rounded-full bg-[#fff8e8] px-3 py-1 text-[11px] font-semibold text-[#8a5a00]">
@@ -515,7 +529,6 @@ export const StudentExamSessionPage = () => {
                     </div>
                   </div>
 
-                  {successMessage ? <p className="mt-4 text-[13px] text-[#1f8f55]">{successMessage}</p> : null}
                   {errorMessage ? <p className="mt-4 text-[13px] text-[#d84a4a]">{errorMessage}</p> : null}
                 </section>
 
@@ -781,7 +794,11 @@ export const StudentExamSessionPage = () => {
           </main>
         </div>
       </div>
+  );
 
+  return (
+    <>
+      {pageContent}
       {showPointChargeModal ? (
         <PointChargeModal
           onClose={() => setShowPointChargeModal(false)}
@@ -829,6 +846,10 @@ export const StudentExamSessionPage = () => {
           setShowDeleteModal(false);
         }}
         onConfirm={() => void handleDeleteSession()}
+      />
+      <AcademicProfileRequiredModal
+        open={requiresAcademicProfile}
+        onMoveToMyPage={() => navigate("/content/student/mypage")}
       />
       <VisualAssetModal
         open={Boolean(sourceAssetViewer)}

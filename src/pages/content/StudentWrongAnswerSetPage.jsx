@@ -1,16 +1,19 @@
 import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
+import { AcademicProfileRequiredModal } from "../../components/AcademicProfileRequiredModal";
 import { ContentTopNav } from "../../components/ContentTopNav";
 import { MobileSidebarDrawer } from "../../components/MobileSidebarDrawer";
 import { PointChargeModal } from "../../components/PointChargeModal";
 import { PointChargeSuccessModal } from "../../components/PointChargeSuccessModal";
 import { ProtectedImage } from "../../components/ProtectedImage";
 import { Sidebar } from "../../components/Sidebar";
+import { useToast } from "../../hooks/useToast";
 import tempProfileImage from "../../assets/icon/temp.png";
 import { downloadProtectedResource } from "../../lib/apiClient";
 import { logout } from "../../lib/authApi";
 import { consumePointChargeSuccessResult } from "../../lib/pointChargeFlow";
 import { extractProfile, formatPoint, parsePoint } from "../../lib/profileUtils";
+import { hasAcademicProfile } from "../../lib/serviceMode";
 import { getStudentMyMenuItems, getStudentSidebarSections } from "../../lib/studentNavigation";
 import {
   createStudentWrongAnswerRetest,
@@ -138,10 +141,12 @@ export const StudentWrongAnswerSetPage = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { setId } = useParams();
+  const { showToast } = useToast();
   const [loading, setLoading] = useState(true);
   const [wrongSet, setWrongSet] = useState(null);
   const [courses, setCourses] = useState([]);
   const [userName, setUserName] = useState("사용자");
+  const [isAdmin, setIsAdmin] = useState(false);
   const [userPoint, setUserPoint] = useState(0);
   const [profileImageUrl, setProfileImageUrl] = useState(tempProfileImage);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -151,6 +156,7 @@ export const StudentWrongAnswerSetPage = () => {
   const [creatingRetest, setCreatingRetest] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [sourceAssetViewer, setSourceAssetViewer] = useState(null);
+  const [requiresAcademicProfile, setRequiresAcademicProfile] = useState(false);
 
   useEffect(() => {
     const charged = consumePointChargeSuccessResult();
@@ -164,16 +170,25 @@ export const StudentWrongAnswerSetPage = () => {
 
     const load = async () => {
       try {
-        const [profilePayload, coursesPayload, setPayload] = await Promise.all([
-          getMyProfile(),
+        const profilePayload = await getMyProfile();
+        if (cancelled) return;
+        const profile = extractProfile(profilePayload);
+        setUserName(String(profile?.name || "사용자"));
+        setIsAdmin(profile?.role === "ADMIN");
+        setUserPoint(parsePoint(profile?.point));
+        setProfileImageUrl(getMyProfileImageUrl());
+        const profileReady = hasAcademicProfile(profile);
+        setRequiresAcademicProfile(!profileReady);
+        if (!profileReady) {
+          setCourses([]);
+          setWrongSet(null);
+          return;
+        }
+        const [coursesPayload, setPayload] = await Promise.all([
           getMyStudentCourses(),
           getStudentWrongAnswerSetDetail(setId),
         ]);
         if (cancelled) return;
-        const profile = extractProfile(profilePayload);
-        setUserName(String(profile?.name || "사용자"));
-        setUserPoint(parsePoint(profile?.point));
-        setProfileImageUrl(getMyProfileImageUrl());
         setCourses(Array.isArray(coursesPayload) ? coursesPayload : []);
         setWrongSet(setPayload);
       } catch (error) {
@@ -192,7 +207,7 @@ export const StudentWrongAnswerSetPage = () => {
   }, [setId]);
 
   const pointSummaryText = useMemo(() => formatPoint(userPoint), [userPoint]);
-  const studentMenuSections = useMemo(() => getStudentSidebarSections(courses), [courses]);
+  const studentMenuSections = useMemo(() => getStudentSidebarSections(courses, { isAdmin }), [courses, isAdmin]);
   const studentMyMenuItems = useMemo(() => getStudentMyMenuItems(), []);
   const sidebarActiveKey = useMemo(() => {
     if (Number.isFinite(Number(wrongSet?.courseId))) {
@@ -223,11 +238,13 @@ export const StudentWrongAnswerSetPage = () => {
     setErrorMessage("");
     try {
       const payload = await createStudentWrongAnswerRetest(wrongSet.setId);
+      showToast("재시험 세션을 생성했습니다.", { type: "success" });
       if (payload?.sessionId) {
         navigate(`/content/student/sessions/${payload.sessionId}`);
       }
     } catch (error) {
-      setErrorMessage(error?.message || "재시험 세션 생성에 실패했습니다.");
+      showToast(error?.message || "재시험 세션 생성에 실패했습니다.", { type: "error" });
+    } finally {
       setCreatingRetest(false);
     }
   };
@@ -247,19 +264,25 @@ export const StudentWrongAnswerSetPage = () => {
 
   if (!wrongSet) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-white px-6 text-center">
-        <div>
-          <p className="text-[15px] font-medium text-[#111827]">오답노트를 찾을 수 없습니다.</p>
-          {errorMessage ? <p className="mt-2 text-[13px] text-[#d84a4a]">{errorMessage}</p> : null}
-          <button
-            type="button"
-            onClick={() => navigate("/content/student")}
-            className="mt-4 rounded-[12px] bg-[#111827] px-4 py-2.5 text-[13px] font-semibold text-white"
-          >
-            학생 홈으로 돌아가기
-          </button>
+      <>
+        <div className="flex min-h-screen items-center justify-center bg-white px-6 text-center">
+          <div>
+            <p className="text-[15px] font-medium text-[#111827]">오답노트를 찾을 수 없습니다.</p>
+            {errorMessage ? <p className="mt-2 text-[13px] text-[#d84a4a]">{errorMessage}</p> : null}
+            <button
+              type="button"
+              onClick={() => navigate("/content/student")}
+              className="mt-4 rounded-[12px] bg-[#111827] px-4 py-2.5 text-[13px] font-semibold text-white"
+            >
+              학생 홈으로 돌아가기
+            </button>
+          </div>
         </div>
-      </div>
+        <AcademicProfileRequiredModal
+          open={requiresAcademicProfile}
+          onMoveToMyPage={() => navigate("/content/student/mypage")}
+        />
+      </>
     );
   }
 
@@ -329,7 +352,6 @@ export const StudentWrongAnswerSetPage = () => {
                       </button>
                     </div>
                   </div>
-                  {errorMessage ? <p className="mt-4 text-[13px] text-[#d84a4a]">{errorMessage}</p> : null}
                 </section>
 
                 <section className="rounded-[24px] border border-[#e4e6ee] bg-white px-6 py-6 shadow-[0_24px_80px_rgba(15,23,42,0.06)] sm:px-8">
@@ -486,6 +508,10 @@ export const StudentWrongAnswerSetPage = () => {
           </div>
         </div>
       ) : null}
+      <AcademicProfileRequiredModal
+        open={requiresAcademicProfile}
+        onMoveToMyPage={() => navigate("/content/student/mypage")}
+      />
       <VisualAssetModal
         open={Boolean(sourceAssetViewer)}
         title={sourceAssetViewer?.title || "원문 이미지"}

@@ -6,6 +6,8 @@ import { MobileSidebarDrawer } from "../../components/MobileSidebarDrawer";
 import { PointChargeModal } from "../../components/PointChargeModal";
 import { PointChargeSuccessModal } from "../../components/PointChargeSuccessModal";
 import { AcademicProfileFields } from "../../components/AcademicProfileFields";
+import { GeminiApiGuideModal } from "../../components/GeminiApiKeyGuard";
+import { useToast } from "../../hooks/useToast";
 import tempProfileImage from "../../assets/icon/temp.png";
 import { isAuthenticationError } from "../../lib/apiClient";
 import { logout } from "../../lib/authApi";
@@ -371,20 +373,21 @@ const DeleteAccountConfirmModal = ({ deleting, errorMessage, onCancel, onConfirm
 export const MyPage = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  const { showToast } = useToast();
 
   const [userName, setUserName] = useState("사용자");
   const [userEmail, setUserEmail] = useState("-");
   const [userPoint, setUserPoint] = useState(0);
   const [serviceMode, setServiceMode] = useState(null);
+  const [studentModePendingSetup, setStudentModePendingSetup] = useState(false);
   const [universityName, setUniversityName] = useState("");
   const [selectedUniversityId, setSelectedUniversityId] = useState(null);
   const [departmentName, setDepartmentName] = useState("");
   const [selectedDepartmentId, setSelectedDepartmentId] = useState(null);
   const [serviceModeSubmitting, setServiceModeSubmitting] = useState(false);
   const [academicProfileSubmitting, setAcademicProfileSubmitting] = useState(false);
-  const [serviceModeMessage, setServiceModeMessage] = useState("");
-  const [serviceModeErrorMessage, setServiceModeErrorMessage] = useState("");
   const [profileImageUrl, setProfileImageUrl] = useState(tempProfileImage);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [studentCourses, setStudentCourses] = useState([]);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [showPointChargeModal, setShowPointChargeModal] = useState(false);
@@ -404,13 +407,11 @@ export const MyPage = () => {
   const [passwordErrorMessage, setPasswordErrorMessage] = useState("");
 
   const [profileUploading, setProfileUploading] = useState(false);
-  const [profileUploadErrorMessage, setProfileUploadErrorMessage] = useState("");
   const [hasGeminiApiKey, setHasGeminiApiKey] = useState(false);
   const [geminiApiKeyInput, setGeminiApiKeyInput] = useState("");
   const [geminiApiKeySubmitting, setGeminiApiKeySubmitting] = useState(false);
   const [removingGeminiApiKey, setRemovingGeminiApiKey] = useState(false);
-  const [geminiApiKeyMessage, setGeminiApiKeyMessage] = useState("");
-  const [geminiApiKeyErrorMessage, setGeminiApiKeyErrorMessage] = useState("");
+  const [showGeminiApiGuideModal, setShowGeminiApiGuideModal] = useState(false);
   const profileImageInputRef = useRef(null);
 
   const [activeHistoryTab, setActiveHistoryTab] = useState("payment");
@@ -425,7 +426,7 @@ export const MyPage = () => {
     items: [],
   });
   const [paymentLoading, setPaymentLoading] = useState(true);
-  const [paymentErrorMessage, setPaymentErrorMessage] = useState("");
+  const [, setPaymentErrorMessage] = useState("");
 
   const [ledgerPage, setLedgerPage] = useState(0);
   const [ledgerHistory, setLedgerHistory] = useState({
@@ -488,15 +489,19 @@ export const MyPage = () => {
         const profile = extractProfile(profilePayload);
         setUserName(profile?.name || "사용자");
         setUserEmail(profile?.email || "-");
+        setIsAdmin(profile?.role === "ADMIN");
         setUserPoint(parsePoint(profile?.point));
-        setServiceMode(normalizeServiceMode(profile?.serviceMode));
+        const normalizedMode = normalizeServiceMode(profile?.serviceMode);
+        setServiceMode(normalizedMode);
+        setStudentModePendingSetup(false);
         setUniversityName(String(profile?.universityName || ""));
         setSelectedUniversityId((current) => normalizeOptionalId(profile?.universityId) ?? current);
         setDepartmentName(String(profile?.departmentName || ""));
         setSelectedDepartmentId((current) => normalizeOptionalId(profile?.departmentId) ?? current);
         setHasGeminiApiKey(Boolean(profile?.hasGeminiApiKey));
         setProfileImageUrl(getMyProfileImageUrl());
-        if (normalizeServiceMode(profile?.serviceMode) === SERVICE_MODE.STUDENT) {
+        const hasStudentAcademicProfile = hasAcademicProfile(profile);
+        if (normalizedMode === SERVICE_MODE.STUDENT && hasStudentAcademicProfile) {
           const coursesPayload = await getMyStudentCourses();
           setStudentCourses(Array.isArray(coursesPayload) ? coursesPayload : []);
         } else {
@@ -558,16 +563,15 @@ export const MyPage = () => {
       extension.endsWith(".jpeg") ||
       extension.endsWith(".webp");
     if (!isImageMime || !isImageExtension) {
-      setProfileUploadErrorMessage("프로필 사진은 PNG/JPG/JPEG/WEBP 형식만 업로드할 수 있습니다.");
+      showToast("프로필 사진은 PNG/JPG/JPEG/WEBP 형식만 업로드할 수 있습니다.", { type: "error" });
       return;
     }
     if (file.size > 5 * 1024 * 1024) {
-      setProfileUploadErrorMessage("프로필 사진은 5MB 이하만 업로드할 수 있습니다.");
+      showToast("프로필 사진은 5MB 이하만 업로드할 수 있습니다.", { type: "error" });
       return;
     }
 
     setProfileUploading(true);
-    setProfileUploadErrorMessage("");
 
     try {
       let existingProfileFileIds;
@@ -591,8 +595,9 @@ export const MyPage = () => {
         await Promise.allSettled(staleProfileFileIds.map((fileId) => deleteMyFile(fileId)));
       }
       setProfileImageUrl(getMyProfileImageUrl());
+      showToast("프로필 사진을 변경했습니다.", { type: "success" });
     } catch (error) {
-      setProfileUploadErrorMessage(error?.message || "프로필 사진 업로드에 실패했습니다.");
+      showToast(error?.message || "프로필 사진 업로드에 실패했습니다.", { type: "error" });
     } finally {
       setProfileUploading(false);
     }
@@ -632,20 +637,18 @@ export const MyPage = () => {
   const submitGeminiApiKey = async () => {
     const normalizedKey = geminiApiKeyInput.trim();
     if (!normalizedKey) {
-      setGeminiApiKeyErrorMessage("Gemini API 키를 입력해 주세요.");
+      showToast("Gemini API 키를 입력해 주세요.", { type: "error" });
       return;
     }
     setGeminiApiKeySubmitting(true);
-    setGeminiApiKeyErrorMessage("");
-    setGeminiApiKeyMessage("");
     try {
       const payload = await updateMyGeminiApiKey(normalizedKey);
       const profile = extractProfile(payload);
       setHasGeminiApiKey(Boolean(profile?.hasGeminiApiKey));
       setGeminiApiKeyInput("");
-      setGeminiApiKeyMessage("Gemini API 키가 저장되었습니다.");
+      showToast("Gemini API 키가 저장되었습니다.", { type: "success" });
     } catch (error) {
-      setGeminiApiKeyErrorMessage(error?.message || "Gemini API 키 저장에 실패했습니다.");
+      showToast(error?.message || "Gemini API 키 저장에 실패했습니다.", { type: "error" });
     } finally {
       setGeminiApiKeySubmitting(false);
     }
@@ -653,16 +656,14 @@ export const MyPage = () => {
 
   const removeGeminiApiKey = async () => {
     setRemovingGeminiApiKey(true);
-    setGeminiApiKeyErrorMessage("");
-    setGeminiApiKeyMessage("");
     try {
       const payload = await clearMyGeminiApiKey();
       const profile = extractProfile(payload);
       setHasGeminiApiKey(Boolean(profile?.hasGeminiApiKey));
       setGeminiApiKeyInput("");
-      setGeminiApiKeyMessage("Gemini API 키가 제거되었습니다.");
+      showToast("Gemini API 키가 제거되었습니다.", { type: "success" });
     } catch (error) {
-      setGeminiApiKeyErrorMessage(error?.message || "Gemini API 키 제거에 실패했습니다.");
+      showToast(error?.message || "Gemini API 키 제거에 실패했습니다.", { type: "error" });
     } finally {
       setRemovingGeminiApiKey(false);
     }
@@ -719,8 +720,10 @@ export const MyPage = () => {
       const result = await refundPointPayment(chargeId);
       setUserPoint(parsePoint(result?.currentPoint));
       await Promise.all([refreshPaymentHistory(paymentPage), refreshLedgerHistory(ledgerPage)]);
+      showToast("환불 처리되었습니다.", { type: "success" });
     } catch (error) {
       setPaymentErrorMessage(error?.message || "환불 처리에 실패했습니다.");
+      showToast(error?.message || "환불 처리에 실패했습니다.", { type: "error" });
     } finally {
       setRefundingChargeId(null);
     }
@@ -728,11 +731,19 @@ export const MyPage = () => {
 
   const pointSummaryText = useMemo(() => formatPoint(userPoint), [userPoint]);
   const isStudentRoute = location.pathname.startsWith("/content/student");
-  const studentMenuSections = useMemo(() => getStudentSidebarSections(studentCourses), [studentCourses]);
+  const studentMenuSections = useMemo(
+    () => getStudentSidebarSections(studentCourses, { isAdmin }),
+    [studentCourses, isAdmin]
+  );
   const studentMyMenuItems = useMemo(() => getStudentMyMenuItems(), []);
   const trimmedUniversityName = String(universityName || "").trim();
   const trimmedDepartmentName = String(departmentName || "").trim();
-  const canSaveAcademicProfile = !academicProfileSubmitting && Boolean(trimmedUniversityName) && Boolean(trimmedDepartmentName);
+  const shouldShowStudentAcademicFields = serviceMode === SERVICE_MODE.STUDENT || studentModePendingSetup;
+  const canSaveAcademicProfile = !academicProfileSubmitting &&
+    Boolean(trimmedUniversityName) &&
+    Boolean(trimmedDepartmentName) &&
+    Boolean(selectedUniversityId) &&
+    Boolean(selectedDepartmentId);
   const academicProfileLabel = useMemo(() => {
     if (!trimmedUniversityName || !trimmedDepartmentName) return "미등록";
     return `${trimmedUniversityName} · ${trimmedDepartmentName}`;
@@ -746,20 +757,33 @@ export const MyPage = () => {
   }, [isStudentRoute, location.pathname]);
 
   const handleUpdateServiceMode = async (nextServiceMode) => {
-    if (serviceModeSubmitting || nextServiceMode === serviceMode) return;
+    const hasSavedAcademicProfile = Boolean(trimmedUniversityName && trimmedDepartmentName);
+    if (serviceModeSubmitting) return;
+    if (nextServiceMode === SERVICE_MODE.STUDENT && serviceMode !== SERVICE_MODE.STUDENT && !hasSavedAcademicProfile) {
+      setStudentModePendingSetup(true);
+      showToast("대학교와 학과를 저장하면 대학생 모드로 전환됩니다.", { type: "info" });
+      return;
+    }
+    if (nextServiceMode === SERVICE_MODE.JOB_SEEKER && studentModePendingSetup && serviceMode === SERVICE_MODE.JOB_SEEKER) {
+      setStudentModePendingSetup(false);
+      showToast("대학생 모드 전환 예약을 취소했습니다.", { type: "info" });
+      return;
+    }
+    if (nextServiceMode === serviceMode && !studentModePendingSetup) return;
     setServiceModeSubmitting(true);
-    setServiceModeMessage("");
-    setServiceModeErrorMessage("");
     try {
       const payload = await updateMyServiceMode(nextServiceMode);
       const profile = extractProfile(payload);
+      setIsAdmin(profile?.role === "ADMIN");
       const normalizedMode = normalizeServiceMode(profile?.serviceMode);
       setServiceMode(normalizedMode);
+      setStudentModePendingSetup(false);
       setUniversityName(String(profile?.universityName || ""));
       setSelectedUniversityId((current) => normalizeOptionalId(profile?.universityId) ?? current);
       setDepartmentName(String(profile?.departmentName || ""));
       setSelectedDepartmentId((current) => normalizeOptionalId(profile?.departmentId) ?? current);
-      if (normalizedMode === SERVICE_MODE.STUDENT) {
+      const hasStudentAcademicProfile = hasAcademicProfile(profile);
+      if (normalizedMode === SERVICE_MODE.STUDENT && hasStudentAcademicProfile) {
         try {
           const coursesPayload = await getMyStudentCourses();
           setStudentCourses(Array.isArray(coursesPayload) ? coursesPayload : []);
@@ -769,13 +793,15 @@ export const MyPage = () => {
       } else {
         setStudentCourses([]);
       }
-      setServiceModeMessage(nextServiceMode === SERVICE_MODE.STUDENT ? "대학생 모드로 전환했습니다." : "취준생 모드로 전환했습니다.");
-      navigate(
-        nextServiceMode === SERVICE_MODE.STUDENT ? "/content/student" : "/content/interview",
-        { replace: true }
-      );
+      if (nextServiceMode === SERVICE_MODE.STUDENT) {
+        showToast("대학생 모드로 전환했습니다.", { type: "success" });
+        navigate("/content/student", { replace: true });
+      } else {
+        showToast("취준생 모드로 전환했습니다.", { type: "success" });
+        navigate("/content/interview", { replace: true });
+      }
     } catch (error) {
-      setServiceModeErrorMessage(error?.message || "서비스 모드 변경에 실패했습니다.");
+      showToast(error?.message || "서비스 모드 변경에 실패했습니다.", { type: "error" });
     } finally {
       setServiceModeSubmitting(false);
     }
@@ -784,12 +810,10 @@ export const MyPage = () => {
   const handleSaveAcademicProfile = async () => {
     if (academicProfileSubmitting) return;
     if (!canSaveAcademicProfile) {
-      setServiceModeErrorMessage("대학교와 학과를 모두 입력해 주세요.");
+      showToast("대학교와 학과를 모두 검색 결과에서 선택해 주세요.", { type: "error" });
       return;
     }
     setAcademicProfileSubmitting(true);
-    setServiceModeMessage("");
-    setServiceModeErrorMessage("");
     try {
       const payload = await updateMyAcademicProfile({
         universityName: trimmedUniversityName,
@@ -797,14 +821,37 @@ export const MyPage = () => {
         departmentName: trimmedDepartmentName,
         departmentId: selectedDepartmentId || null,
       });
-      const profile = extractProfile(payload);
+      let profile = extractProfile(payload);
+      const shouldActivateStudentMode = serviceMode !== SERVICE_MODE.STUDENT && studentModePendingSetup;
+
+      if (shouldActivateStudentMode && hasAcademicProfile(profile)) {
+        const modePayload = await updateMyServiceMode(SERVICE_MODE.STUDENT);
+        profile = extractProfile(modePayload);
+      }
+
+      const hasStudentAcademicProfile = hasAcademicProfile(profile);
+      const normalizedMode = normalizeServiceMode(profile?.serviceMode);
+      setIsAdmin(profile?.role === "ADMIN");
+      setServiceMode(normalizedMode);
+      setStudentModePendingSetup(false);
       setUniversityName(String(profile?.universityName || ""));
       setSelectedUniversityId((current) => normalizeOptionalId(profile?.universityId) ?? current);
       setDepartmentName(String(profile?.departmentName || ""));
       setSelectedDepartmentId((current) => normalizeOptionalId(profile?.departmentId) ?? current);
-      setServiceModeMessage(hasAcademicProfile(profile) ? "대학교 / 학과 정보를 저장했습니다." : "대학교 / 학과 정보를 비웠습니다.");
+      if (normalizedMode === SERVICE_MODE.STUDENT && hasStudentAcademicProfile) {
+        try {
+          const coursesPayload = await getMyStudentCourses();
+          setStudentCourses(Array.isArray(coursesPayload) ? coursesPayload : []);
+        } catch {
+          setStudentCourses([]);
+        }
+        showToast(shouldActivateStudentMode ? "대학생 모드로 전환했습니다." : "대학교 / 학과 정보를 저장했습니다.", { type: "success" });
+        navigate("/content/student", { replace: true });
+      } else {
+        showToast(hasStudentAcademicProfile ? "대학교 / 학과 정보를 저장했습니다." : "대학교 / 학과 정보를 비웠습니다.", { type: "success" });
+      }
     } catch (error) {
-      setServiceModeErrorMessage(error?.message || "대학교 / 학과 저장에 실패했습니다.");
+      showToast(error?.message || "대학교 / 학과 저장에 실패했습니다.", { type: "error" });
     } finally {
       setAcademicProfileSubmitting(false);
     }
@@ -891,13 +938,12 @@ export const MyPage = () => {
                     </p>
                   </div>
                 </div>
-                {profileUploadErrorMessage ? <p className="mt-3 text-[12px] text-[#d84a4a]">{profileUploadErrorMessage}</p> : null}
               </div>
 
               <div className="mt-4 rounded-[16px] border border-[#e0e0e0] bg-white p-6">
                 <h2 className="text-[18px] font-medium text-[#1f1f1f]">서비스 모드</h2>
                 <p className="mt-1 text-[12px] leading-[1.6] text-[#7a7a7a]">
-                  취준생 모드와 대학생 모드는 같은 계정에서 전환할 수 있습니다. 대학생 모드는 대학교와 학과를 함께 등록해야 합니다.
+                  취준생 모드와 대학생 모드는 같은 계정에서 전환할 수 있습니다. 대학생 모드로 바꾼 뒤 학생 페이지에서 대학교와 학과를 등록해 학습을 시작할 수 있습니다.
                 </p>
                 <div className="mt-4 flex flex-wrap items-center gap-2">
                   <button
@@ -905,7 +951,7 @@ export const MyPage = () => {
                     onClick={() => handleUpdateServiceMode(SERVICE_MODE.JOB_SEEKER)}
                     disabled={serviceModeSubmitting}
                     className={`rounded-[10px] border px-4 py-2 text-[12px] font-semibold ${
-                      serviceMode === SERVICE_MODE.JOB_SEEKER
+                      serviceMode === SERVICE_MODE.JOB_SEEKER && !studentModePendingSetup
                         ? "border-[#111827] bg-[#111827] text-white"
                         : "border-[#d7dbe7] bg-white text-[#374151]"
                     } disabled:opacity-60`}
@@ -917,16 +963,16 @@ export const MyPage = () => {
                     onClick={() => handleUpdateServiceMode(SERVICE_MODE.STUDENT)}
                     disabled={serviceModeSubmitting}
                     className={`rounded-[10px] border px-4 py-2 text-[12px] font-semibold ${
-                      serviceMode === SERVICE_MODE.STUDENT
+                      serviceMode === SERVICE_MODE.STUDENT || studentModePendingSetup
                         ? "border-[#111827] bg-[#111827] text-white"
                         : "border-[#d7dbe7] bg-white text-[#374151]"
                     } disabled:opacity-60`}
                   >
-                    {serviceModeSubmitting && serviceMode !== SERVICE_MODE.STUDENT ? "전환 중..." : "대학생 모드"}
+                    {serviceModeSubmitting && serviceMode !== SERVICE_MODE.STUDENT ? "전환 중..." : studentModePendingSetup ? "학적 입력 중..." : "대학생 모드"}
                   </button>
                 </div>
 
-                {serviceMode === SERVICE_MODE.STUDENT ? (
+                {shouldShowStudentAcademicFields ? (
                   <>
                     <div className="mt-5">
                       <AcademicProfileFields
@@ -971,12 +1017,20 @@ export const MyPage = () => {
                     </div>
                   </>
                 ) : null}
-                {serviceModeMessage ? <p className="mt-2 text-[12px] text-[#1f8f55]">{serviceModeMessage}</p> : null}
-                {serviceModeErrorMessage ? <p className="mt-2 text-[12px] text-[#d84a4a]">{serviceModeErrorMessage}</p> : null}
               </div>
 
               <div className="mt-4 rounded-[16px] border border-[#e0e0e0] bg-white p-6">
-                <h2 className="text-[18px] font-medium text-[#1f1f1f]">Gemini API 키</h2>
+                <div className="flex items-center gap-2">
+                  <h2 className="text-[18px] font-medium text-[#1f1f1f]">Gemini API 키</h2>
+                  <button
+                    type="button"
+                    onClick={() => setShowGeminiApiGuideModal(true)}
+                    className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-[#d1d5db] text-[12px] font-semibold text-[#4b5563]"
+                    aria-label="Gemini API 키 발급 가이드 보기"
+                  >
+                    ?
+                  </button>
+                </div>
                 <p className="mt-1 whitespace-pre-line text-[12px] leading-[1.6] text-[#7a7a7a]">
                   {"본 서비스는 Gemini API를 기반으로 작동합니다.\n입력하신 API 키는 암호화되어 관리되며 비용이 따로 발생하지 않습니다."}
                 </p>
@@ -993,7 +1047,7 @@ export const MyPage = () => {
                     <button
                       type="button"
                       onClick={submitGeminiApiKey}
-                        disabled={hasGeminiApiKey || geminiApiKeySubmitting || removingGeminiApiKey}
+                      disabled={hasGeminiApiKey || geminiApiKeySubmitting || removingGeminiApiKey}
                       className="min-w-[88px] whitespace-nowrap rounded-[10px] border border-[#1f1f1f] bg-[#1f1f1f] px-3 py-2 text-[11px] text-white disabled:opacity-60 sm:text-[12px]"
                     >
                       {geminiApiKeySubmitting ? "저장 중..." : "저장"}
@@ -1013,8 +1067,6 @@ export const MyPage = () => {
                 <p className="mt-2 text-[12px] text-[#4f5664]">
                   현재 상태: {hasGeminiApiKey ? "등록됨" : "미등록"}
                 </p>
-                {geminiApiKeyMessage ? <p className="mt-2 text-[12px] text-[#1f8f55]">{geminiApiKeyMessage}</p> : null}
-                {geminiApiKeyErrorMessage ? <p className="mt-2 text-[12px] text-[#d84a4a]">{geminiApiKeyErrorMessage}</p> : null}
               </div>
 
               <div className="mt-4 rounded-[16px] border border-[#e0e0e0] bg-white p-6">
@@ -1131,7 +1183,6 @@ export const MyPage = () => {
                         </table>
                       </div>
 
-                      {paymentErrorMessage ? <p className="mt-2 text-[12px] text-[#e14b4b]">{paymentErrorMessage}</p> : null}
                       <HistoryPagination
                         page={paymentPage}
                         totalPages={paymentHistory.totalPages}
@@ -1250,6 +1301,12 @@ export const MyPage = () => {
         />
       ) : null}
       {showReLoginGuideModal ? <ReLoginGuideModal onConfirm={moveToLoginAfterPasswordChange} /> : null}
+      {showGeminiApiGuideModal ? (
+        <GeminiApiGuideModal
+          onClose={() => setShowGeminiApiGuideModal(false)}
+          onGoToMyPage={() => setShowGeminiApiGuideModal(false)}
+        />
+      ) : null}
     </div>
   );
 };
