@@ -144,6 +144,11 @@ export const StudentHomePage = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { showToast } = useToast();
+  const hasSearchBackedAcademicProfile = (nextProfile) => {
+    const universityId = Number(nextProfile?.universityId);
+    const departmentId = Number(nextProfile?.departmentId);
+    return hasAcademicProfile(nextProfile) && Number.isFinite(universityId) && universityId > 0 && Number.isFinite(departmentId) && departmentId > 0;
+  };
   const [profile, setProfile] = useState({});
   const [loading, setLoading] = useState(true);
   const [userName, setUserName] = useState("사용자");
@@ -166,8 +171,7 @@ export const StudentHomePage = () => {
   const [professorName, setProfessorName] = useState("");
   const [courseDescription, setCourseDescription] = useState("");
   const [courseSubmitting, setCourseSubmitting] = useState(false);
-  const [, setCourseErrorMessage] = useState("");
-  const [, setCourseMessage] = useState("");
+  const [courseErrorMessage, setCourseErrorMessage] = useState("");
   const [deleteTargetCourse, setDeleteTargetCourse] = useState(null);
   const [courseDeleting, setCourseDeleting] = useState(false);
   const [coursePage, setCoursePage] = useState(0);
@@ -189,7 +193,7 @@ export const StudentHomePage = () => {
         if (cancelled) return;
         const nextProfile = extractProfile(payload);
         const normalizedMode = normalizeServiceMode(nextProfile?.serviceMode);
-        const hasProfile = hasAcademicProfile(nextProfile);
+        const hasProfile = hasSearchBackedAcademicProfile(nextProfile);
         setProfile(nextProfile);
         setUserName(String(nextProfile?.name || "사용자"));
         setUserPoint(parsePoint(nextProfile?.point));
@@ -205,6 +209,7 @@ export const StudentHomePage = () => {
             const nextCourses = Array.isArray(coursesPayload) ? coursesPayload : [];
             if (!cancelled) {
               setCourses(nextCourses);
+              setCourseErrorMessage("");
             }
           } catch (error) {
             if (!cancelled) setCourseErrorMessage(error?.message || "과목 목록을 불러오지 못했습니다.");
@@ -213,6 +218,7 @@ export const StudentHomePage = () => {
           }
         } else if (!cancelled) {
           setCourses([]);
+          setCourseErrorMessage("");
           setCoursesLoading(false);
         }
       } catch (error) {
@@ -257,13 +263,13 @@ export const StudentHomePage = () => {
         departmentId: selectedDepartmentId || null,
       });
       let nextProfile = extractProfile(payload);
-      if (hasAcademicProfile(nextProfile) && normalizeServiceMode(nextProfile?.serviceMode) !== SERVICE_MODE.STUDENT) {
+      if (hasSearchBackedAcademicProfile(nextProfile) && normalizeServiceMode(nextProfile?.serviceMode) !== SERVICE_MODE.STUDENT) {
         const modePayload = await updateMyServiceMode(SERVICE_MODE.STUDENT);
         nextProfile = extractProfile(modePayload);
       }
 
       const normalizedMode = normalizeServiceMode(nextProfile?.serviceMode);
-      const hasProfile = hasAcademicProfile(nextProfile);
+      const hasProfile = hasSearchBackedAcademicProfile(nextProfile);
       setProfile(nextProfile);
       setUniversityName(String(nextProfile?.universityName || ""));
       setSelectedUniversityId(Number.isFinite(Number(nextProfile?.universityId)) ? Number(nextProfile.universityId) : null);
@@ -274,9 +280,11 @@ export const StudentHomePage = () => {
         const refreshedCourses = await getMyStudentCourses();
         const nextCourses = Array.isArray(refreshedCourses) ? refreshedCourses : [];
         setCourses(nextCourses);
+        setCourseErrorMessage("");
         showToast("대학생 모드로 전환했고 학적 정보를 저장했습니다.", { type: "success" });
       } else {
         setCourses([]);
+        setCourseErrorMessage("");
       }
     } catch (error) {
       setAcademicProfileError(error?.message || "학습 기본 정보를 저장하지 못했습니다.");
@@ -287,16 +295,14 @@ export const StudentHomePage = () => {
 
   const handleCreateCourse = async () => {
     if (courseSubmitting) return;
-    const normalizedCourseName = String(courseName || "").trim();
+      const normalizedCourseName = String(courseName || "").trim();
     if (!normalizedCourseName) {
       setCourseErrorMessage("과목명을 입력해 주세요.");
-      setCourseMessage("");
       setCourseSubmitting(false);
       return;
     }
     setCourseSubmitting(true);
     setCourseErrorMessage("");
-    setCourseMessage("");
     try {
       const payload = await createStudentCourse({
         courseName: normalizedCourseName,
@@ -307,7 +313,7 @@ export const StudentHomePage = () => {
       setCourseName("");
       setProfessorName("");
       setCourseDescription("");
-      setCourseMessage("과목이 등록되었습니다.");
+      setCourseErrorMessage("");
       showToast("과목이 등록되었습니다.", { type: "success" });
     } catch (error) {
       setCourseErrorMessage(error?.message || "과목 등록에 실패했습니다.");
@@ -322,11 +328,10 @@ export const StudentHomePage = () => {
     const targetCourseId = Number(deleteTargetCourse.courseId);
     setCourseDeleting(true);
     setCourseErrorMessage("");
-    setCourseMessage("");
     try {
       await deleteStudentCourse(targetCourseId);
       setCourses((prev) => prev.filter((course) => course.courseId !== targetCourseId));
-      setCourseMessage(`과목 "${deleteTargetCourse.courseName}"을 삭제했습니다.`);
+      setCourseErrorMessage("");
       showToast(`과목 "${deleteTargetCourse.courseName}"을 삭제했습니다.`, { type: "success" });
       setDeleteTargetCourse(null);
     } catch (error) {
@@ -435,6 +440,7 @@ export const StudentHomePage = () => {
                 과목별 학습 자료를 정리하고, 자료 기반 모의고사를 만들고, 오답노트를 누적 관리할 수 있는 공간입니다.
                 대학교와 학과를 등록한 뒤 과목을 추가해 학습을 시작해 주세요.
               </p>
+              {courseErrorMessage ? <p className="mt-3 text-[13px] text-[#d84a4a]">{courseErrorMessage}</p> : null}
             </div>
           </div>
 
