@@ -22,7 +22,6 @@ import {
   createStudentCourseSummaryDocument,
   createStudentCourseSession,
   createStudentWrongAnswerRetest,
-  deleteStudentCourseYoutubeMaterialJob,
   deleteStudentCourseMaterial,
   downloadStudentCourseMaterialContent,
   deleteStudentExamSession,
@@ -31,11 +30,9 @@ import {
   getMyStudentCourses,
   getStudentCourseMaterials,
   getStudentCourseSessions,
-  getStudentCourseYoutubeMaterialJobs,
   getStudentCourseWrongAnswerSets,
   uploadStudentCourseMaterial,
   previewStudentCourseSummary,
-  uploadStudentCourseYoutubeMaterial,
 } from "../../lib/userApi";
 
 const ConfirmModal = ({ open, title, description, pending, confirmLabel = "삭제", onCancel, onConfirm }) => {
@@ -532,68 +529,6 @@ const buildSummaryPreviewPdfPages = (sourceNode, pageHeightPx) => {
   return { wrapper, pages };
 };
 
-const YoutubeMaterialModal = ({ open, youtubeUrl, format, submitting, onChange, onFormatChange, onClose, onSubmit }) => {
-  if (!open) return null;
-  return (
-    <div className="fixed inset-0 z-[175] flex items-center justify-center bg-black/45 px-4">
-      <div className="w-full max-w-[520px] rounded-[24px] border border-[#dfe3ee] bg-white p-6 shadow-[0_24px_80px_rgba(15,23,42,0.22)]">
-        <h2 className="text-[22px] font-semibold text-[#111827]">유튜브 강의 요약본 만들기</h2>
-        <p className="mt-3 text-[14px] leading-[1.8] text-[#5b6475]">
-          자막이 있는 유튜브 영상 링크를 넣으면 자동 생성 자막을 문맥 기준으로 후보정한 뒤 핵심 요약본을 만들어 강의자료에 추가합니다.
-        </p>
-        <label className="mt-5 block">
-          <span className="text-[12px] font-semibold text-[#4b5563]">유튜브 링크</span>
-          <input
-            type="url"
-            value={youtubeUrl}
-            onChange={(event) => onChange(event.target.value)}
-            placeholder="https://youtu.be/... 또는 https://www.youtube.com/watch?v=..."
-            className="mt-2 w-full rounded-[14px] border border-[#d1d5db] px-4 py-3 text-[13px] text-[#111827] outline-none transition focus:border-[#111827]"
-          />
-        </label>
-        <p className="mt-3 text-[11px] leading-[1.7] text-[#7c8497]">
-          자막이 없는 영상은 처리할 수 없습니다. 긴 영상은 자막 정리와 분석에 시간이 조금 더 걸릴 수 있습니다.
-        </p>
-        <div className="mt-4 flex gap-2">
-          {["DOCX", "PDF"].map((option) => (
-            <button
-              key={option}
-              type="button"
-              onClick={() => onFormatChange(option)}
-              disabled={submitting}
-              className={`rounded-[10px] border px-3 py-2 text-[11px] font-semibold ${
-                format === option
-                  ? "border-[#111827] bg-[#111827] text-white"
-                  : "border-[#d1d5db] bg-white text-[#4b5563]"
-              } disabled:opacity-55`}
-            >
-              {option} 요약본
-            </button>
-          ))}
-        </div>
-        <div className="mt-6 flex justify-end gap-2">
-          <button
-            type="button"
-            onClick={onClose}
-            disabled={submitting}
-            className="rounded-[12px] border border-[#d1d5db] px-4 py-2.5 text-[13px] font-semibold text-[#4b5563] disabled:opacity-60"
-          >
-            취소
-          </button>
-          <button
-            type="button"
-            onClick={onSubmit}
-            disabled={submitting || !String(youtubeUrl || "").trim()}
-            className="rounded-[12px] bg-[#111827] px-4 py-2.5 text-[13px] font-semibold text-white disabled:opacity-60"
-          >
-            {submitting ? "요약본 생성 요청 중..." : "요약본 만들기"}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-};
-
 const VisualAssetModal = ({ open, title, assets, onClose }) => {
   if (!open) return null;
   return (
@@ -663,15 +598,6 @@ const materialAnalyzeButtonLabel = (material, analyzingMaterialId) => {
   if (material?.ingestionStatus === "QUEUED") return "분석 대기";
   if (material?.ingestionStatus === "PROCESSING") return "분석 중";
   return "AI 분석";
-};
-
-const youtubeSummaryStatusLabel = (job) => {
-  if (job?.status === "FETCHING_CAPTIONS") return "자막 추출 중";
-  if (job?.status === "REFINING_TRANSCRIPT") return "자막 후보정 중";
-  if (job?.status === "GENERATING_SUMMARY") return "요약본 생성 중";
-  if (job?.status === "READY") return "완료";
-  if (job?.status === "FAILED") return "실패";
-  return "대기 중";
 };
 
 const materialKindMeta = (materialKind) => {
@@ -785,7 +711,6 @@ export const StudentCoursePage = () => {
   const [courses, setCourses] = useState([]);
   const [course, setCourse] = useState(null);
   const [materials, setMaterials] = useState([]);
-  const [youtubeSummaryJobs, setYoutubeSummaryJobs] = useState([]);
   const [sessions, setSessions] = useState([]);
   const [wrongAnswerSets, setWrongAnswerSets] = useState([]);
 
@@ -799,8 +724,6 @@ export const StudentCoursePage = () => {
   const [creatingSummaryDocumentFormat, setCreatingSummaryDocumentFormat] = useState(null);
   const [savingSummaryPdf, setSavingSummaryPdf] = useState(false);
   const [creatingSummaryPreview, setCreatingSummaryPreview] = useState(false);
-  const [creatingYoutubeMaterial, setCreatingYoutubeMaterial] = useState(false);
-  const [deletingYoutubeSummaryJobId, setDeletingYoutubeSummaryJobId] = useState(null);
   const [deletingSessionId, setDeletingSessionId] = useState(null);
   const [creatingRetestSetId, setCreatingRetestSetId] = useState(null);
   const [sessionGenerationMode, setSessionGenerationMode] = useState("STANDARD");
@@ -817,9 +740,6 @@ export const StudentCoursePage = () => {
   const [sessionDeleteTarget, setSessionDeleteTarget] = useState(null);
   const [visualAssetViewer, setVisualAssetViewer] = useState(null);
   const [summaryPreview, setSummaryPreview] = useState(null);
-  const [showYoutubeMaterialModal, setShowYoutubeMaterialModal] = useState(false);
-  const [youtubeMaterialUrl, setYoutubeMaterialUrl] = useState("");
-  const [youtubeSummaryFormat, setYoutubeSummaryFormat] = useState("DOCX");
 
   const handleAuthenticationFailure = useCallback((error) => {
     if (!isAuthenticationError(error)) return false;
@@ -843,20 +763,17 @@ export const StudentCoursePage = () => {
     if (!matchedCourse) {
       setCourse(null);
       setMaterials([]);
-      setYoutubeSummaryJobs([]);
       setSessions([]);
       setWrongAnswerSets([]);
       return;
     }
     setCourse(matchedCourse);
-    const [materialsPayload, youtubeJobsPayload, sessionsPayload, wrongAnswerPayload] = await Promise.all([
+    const [materialsPayload, sessionsPayload, wrongAnswerPayload] = await Promise.all([
       getStudentCourseMaterials(matchedCourse.courseId),
-      getStudentCourseYoutubeMaterialJobs(matchedCourse.courseId),
       getStudentCourseSessions(matchedCourse.courseId),
       getStudentCourseWrongAnswerSets(matchedCourse.courseId),
     ]);
     setMaterials(Array.isArray(materialsPayload) ? materialsPayload : []);
-    setYoutubeSummaryJobs(Array.isArray(youtubeJobsPayload) ? youtubeJobsPayload : []);
     setSessions(Array.isArray(sessionsPayload) ? sessionsPayload : []);
     setWrongAnswerSets(Array.isArray(wrongAnswerPayload) ? wrongAnswerPayload : []);
   }, [normalizedCourseId]);
@@ -879,7 +796,6 @@ export const StudentCoursePage = () => {
           setCourses([]);
           setCourse(null);
           setMaterials([]);
-          setYoutubeSummaryJobs([]);
           setSessions([]);
           setWrongAnswerSets([]);
           return;
@@ -939,11 +855,6 @@ export const StudentCoursePage = () => {
       ),
     [materials]
   );
-  const activeYoutubeSummaryJobs = useMemo(
-    () => youtubeSummaryJobs.filter((job) => job?.status !== "READY" && job?.status !== "FAILED"),
-    [youtubeSummaryJobs]
-  );
-  const hasOngoingYoutubeSummaryJob = activeYoutubeSummaryJobs.length > 0;
   const activeIngestionMaterial = useMemo(
     () =>
       materials.find(
@@ -979,7 +890,7 @@ export const StudentCoursePage = () => {
   }, [loadCourseData]);
 
   useEffect(() => {
-    if (!hasOngoingMaterialIngestion && !hasOngoingYoutubeSummaryJob) return undefined;
+    if (!hasOngoingMaterialIngestion) return undefined;
     const timer = window.setInterval(() => {
       void (async () => {
         try {
@@ -991,7 +902,7 @@ export const StudentCoursePage = () => {
       })();
     }, 4000);
     return () => window.clearInterval(timer);
-  }, [handleAuthenticationFailure, hasOngoingMaterialIngestion, hasOngoingYoutubeSummaryJob, refreshCourse]);
+  }, [handleAuthenticationFailure, hasOngoingMaterialIngestion, refreshCourse]);
 
   const handleUploadMaterial = async (file, materialKind = "LECTURE_MATERIAL") => {
     if (!file || !course || uploading || isAnalysisLocked) return;
@@ -1006,41 +917,6 @@ export const StudentCoursePage = () => {
       showToast(error?.message || "자료 업로드에 실패했습니다.", { type: "error" });
     } finally {
       setUploading(false);
-    }
-  };
-
-  const handleUploadYoutubeMaterial = async () => {
-    if (!course || creatingYoutubeMaterial || uploading || isAnalysisLocked) return;
-    const normalizedUrl = String(youtubeMaterialUrl || "").trim();
-    if (!normalizedUrl) return;
-    setCreatingYoutubeMaterial(true);
-    try {
-      const payload = await uploadStudentCourseYoutubeMaterial(course.courseId, normalizedUrl, youtubeSummaryFormat);
-      showToast(`"${payload?.videoTitle || "유튜브 강의"}" 요약본 생성을 시작했습니다.`, { type: "success" });
-      setYoutubeMaterialUrl("");
-      setYoutubeSummaryFormat("DOCX");
-      setShowYoutubeMaterialModal(false);
-      await refreshCourse();
-    } catch (error) {
-      if (handleAuthenticationFailure(error)) return;
-      showToast(error?.message || "유튜브 요약본 생성 요청에 실패했습니다.", { type: "error" });
-    } finally {
-      setCreatingYoutubeMaterial(false);
-    }
-  };
-
-  const handleDeleteYoutubeSummaryJob = async (job) => {
-    if (!job?.jobId) return;
-    try {
-      setDeletingYoutubeSummaryJobId(job.jobId);
-      await deleteStudentCourseYoutubeMaterialJob(normalizedCourseId, job.jobId);
-      setYoutubeSummaryJobs((prev) => prev.filter((item) => item.jobId !== job.jobId));
-      showToast("유튜브 요약본 상태를 목록에서 삭제했습니다.", { type: "success" });
-    } catch (error) {
-      if (handleAuthenticationFailure(error)) return;
-      showToast(error.message || "유튜브 요약본 상태를 삭제하지 못했습니다.", { type: "error" });
-    } finally {
-      setDeletingYoutubeSummaryJobId(null);
     }
   };
 
@@ -1422,51 +1298,6 @@ export const StudentCoursePage = () => {
                       <p className="mt-1 text-[12px] text-[#6b7280]">강의자료는 PDF/DOCX/PPTX, 족보는 PDF/DOCX/PPTX/JPG/JPEG/PNG 형식을 업로드할 수 있습니다.</p>
                     </div>
                   </div>
-                  {youtubeSummaryJobs.length > 0 ? (
-                    <div className="mt-4 rounded-[16px] border border-[#e5e7eb] bg-white p-4">
-                      <div className="flex flex-wrap items-center justify-between gap-3">
-                        <div>
-                          <p className="text-[14px] font-semibold text-[#111827]">유튜브 요약본 생성 상태</p>
-                          <p className="mt-1 text-[11px] text-[#7c8497]">최근 요청한 유튜브 강의 요약본 작업입니다.</p>
-                        </div>
-                        <p className="text-[11px] font-semibold text-[#4b5563]">{youtubeSummaryJobs.length}건</p>
-                      </div>
-                      <div className="mt-3 grid gap-2">
-                        {youtubeSummaryJobs.slice(0, 5).map((job) => (
-                          <div key={job.jobId} className="flex flex-wrap items-center justify-between gap-3 rounded-[12px] border border-[#edf0f6] bg-[#fafbff] px-3 py-3">
-                            <div className="min-w-0">
-                              <p className="truncate text-[12px] font-semibold text-[#111827]">{job.summaryTitle || job.videoTitle || job.youtubeUrl}</p>
-                              <p className="mt-1 text-[10px] text-[#7c8497]">
-                                {new Date(job.createdAt).toLocaleString("ko-KR")} · {job.format}
-                              </p>
-                              {job.errorMessage ? (
-                                <p className="mt-1 text-[11px] leading-[1.6] text-[#dc2626]">{job.errorMessage}</p>
-                              ) : null}
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <span className={`rounded-full px-2.5 py-1 text-[10px] font-semibold ${
-                                job.status === "READY"
-                                  ? "bg-[#e8fff1] text-[#14804a]"
-                                  : job.status === "FAILED"
-                                    ? "bg-[#fff1f1] text-[#dc2626]"
-                                    : "bg-[#eef2ff] text-[#4338ca]"
-                              }`}>
-                                {youtubeSummaryStatusLabel(job)}
-                              </span>
-                              <button
-                                type="button"
-                                onClick={() => handleDeleteYoutubeSummaryJob(job)}
-                                disabled={deletingYoutubeSummaryJobId === job.jobId}
-                                className="rounded-[8px] border border-[#d1d5db] bg-white px-2.5 py-1 text-[10px] font-semibold text-[#4b5563] disabled:opacity-55"
-                              >
-                                {deletingYoutubeSummaryJobId === job.jobId ? "삭제 중..." : "삭제"}
-                              </button>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  ) : null}
                   <div className="mt-4 grid gap-4 xl:grid-cols-2">
                     {[
                       { key: "LECTURE_MATERIAL", items: lectureMaterials },
@@ -1481,16 +1312,6 @@ export const StudentCoursePage = () => {
                               <p className="mt-1 text-[12px] text-[#7c8497]">{section.items.length}개 업로드됨</p>
                             </div>
                             <div className="flex flex-wrap items-center justify-end gap-2">
-                              {section.key === "LECTURE_MATERIAL" ? (
-                                <button
-                                  type="button"
-                                  onClick={() => setShowYoutubeMaterialModal(true)}
-                                  disabled={uploading || creatingYoutubeMaterial || isAnalysisLocked || hasOngoingYoutubeSummaryJob}
-                                  className="rounded-[10px] border border-[#111827] bg-white px-3 py-2 text-[11px] font-semibold text-[#111827] disabled:opacity-55"
-                                >
-                                  {creatingYoutubeMaterial ? "요청 중..." : hasOngoingYoutubeSummaryJob ? "요약본 생성 중..." : "유튜브 영상 업로드"}
-                                </button>
-                              ) : null}
                               <label className={`cursor-pointer rounded-[10px] px-3 py-2 text-[11px] font-semibold ${uploading ? "bg-[#d1d5db] text-white" : "bg-[#111827] text-white"}`}>
                                 {uploading ? "업로드 중..." : meta.uploadLabel}
                                 <input
@@ -2124,19 +1945,6 @@ export const StudentCoursePage = () => {
         title={visualAssetViewer ? `${visualAssetViewer.title} 원문 이미지` : ""}
         assets={Array.isArray(visualAssetViewer?.assets) ? visualAssetViewer.assets : []}
         onClose={() => setVisualAssetViewer(null)}
-      />
-      <YoutubeMaterialModal
-        open={showYoutubeMaterialModal}
-        youtubeUrl={youtubeMaterialUrl}
-        format={youtubeSummaryFormat}
-        submitting={creatingYoutubeMaterial}
-        onChange={setYoutubeMaterialUrl}
-        onFormatChange={setYoutubeSummaryFormat}
-        onClose={() => {
-          if (creatingYoutubeMaterial) return;
-          setShowYoutubeMaterialModal(false);
-        }}
-        onSubmit={() => void handleUploadYoutubeMaterial()}
       />
       {academicProfileRequiredModal}
       <SummaryPreviewModal

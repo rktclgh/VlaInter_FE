@@ -4,6 +4,7 @@ import { ContentTopNav } from "../../components/ContentTopNav";
 import { MobileSidebarDrawer } from "../../components/MobileSidebarDrawer";
 import { PointChargeModal } from "../../components/PointChargeModal";
 import { Sidebar } from "../../components/Sidebar";
+import { useToast } from "../../hooks/useToast";
 import tempProfileImage from "../../assets/icon/temp.png";
 import { isAuthenticationError } from "../../lib/apiClient";
 import { logout } from "../../lib/authApi";
@@ -41,7 +42,14 @@ import {
 } from "../../lib/adminApi";
 import { getInterviewSetQuestions } from "../../lib/interviewApi";
 import { extractProfile, formatPoint, parsePoint } from "../../lib/profileUtils";
-import { getMyProfile, getMyProfileImageUrl, getMyStudentCourses } from "../../lib/userApi";
+import {
+  deleteStudentCourseYoutubeMaterialJob,
+  getMyProfile,
+  getMyProfileImageUrl,
+  getMyStudentCourses,
+  getStudentCourseYoutubeMaterialJobs,
+  uploadStudentCourseYoutubeMaterial,
+} from "../../lib/userApi";
 import { normalizeServiceMode, SERVICE_MODE } from "../../lib/serviceMode";
 
 const TABS = [
@@ -49,6 +57,7 @@ const TABS = [
   { key: "sets", label: "질문 세트 운영" },
   { key: "categories", label: "카테고리 운영" },
   { key: "settings", label: "생성 정책" },
+  { key: "youtubeSummary", label: "유튜브 요약" },
   { key: "patchNotes", label: "패치노트" },
   { key: "billing", label: "결제/포인트" },
   { key: "kpi", label: "매출 KPI" },
@@ -218,8 +227,18 @@ const handleRowKeyDown = (event, action) => {
   }
 };
 
+const youtubeSummaryStatusLabel = (job) => {
+  if (job?.status === "FETCHING_CAPTIONS") return "자막 추출 중";
+  if (job?.status === "REFINING_TRANSCRIPT") return "자막 후보정 중";
+  if (job?.status === "GENERATING_SUMMARY") return "요약본 생성 중";
+  if (job?.status === "READY") return "완료";
+  if (job?.status === "FAILED") return "실패";
+  return "대기 중";
+};
+
 export const AdminConsolePage = () => {
   const navigate = useNavigate();
+  const { showToast } = useToast();
   const [userName, setUserName] = useState("관리자");
   const [userPoint, setUserPoint] = useState(0);
   const [profileImageUrl, setProfileImageUrl] = useState(tempProfileImage);
@@ -289,6 +308,13 @@ export const AdminConsolePage = () => {
     body: "",
     isPublished: true,
   });
+  const [selectedYoutubeCourseId, setSelectedYoutubeCourseId] = useState(null);
+  const [youtubeMaterialUrl, setYoutubeMaterialUrl] = useState("");
+  const [youtubeSummaryFormat, setYoutubeSummaryFormat] = useState("DOCX");
+  const [youtubeSummaryJobs, setYoutubeSummaryJobs] = useState([]);
+  const [loadingYoutubeSummaryJobs, setLoadingYoutubeSummaryJobs] = useState(false);
+  const [creatingYoutubeSummaryJob, setCreatingYoutubeSummaryJob] = useState(false);
+  const [deletingYoutubeSummaryJobId, setDeletingYoutubeSummaryJobId] = useState(null);
   const [creatingCategory, setCreatingCategory] = useState(false);
   const [savingCategory, setSavingCategory] = useState(false);
   const [deletingCategory, setDeletingCategory] = useState(false);
@@ -467,6 +493,27 @@ export const AdminConsolePage = () => {
     }
   }, []);
 
+  const loadYoutubeSummaryJobs = useCallback(async (targetCourseId, { silent = false } = {}) => {
+    const normalizedCourseId = Number(targetCourseId);
+    if (!Number.isFinite(normalizedCourseId)) {
+      setYoutubeSummaryJobs([]);
+      return;
+    }
+    if (!silent) {
+      setLoadingYoutubeSummaryJobs(true);
+    }
+    try {
+      const payload = await getStudentCourseYoutubeMaterialJobs(normalizedCourseId);
+      setYoutubeSummaryJobs(Array.isArray(payload) ? payload : []);
+    } catch (error) {
+      setPageErrorMessage(error?.message || "유튜브 요약본 상태를 불러오지 못했습니다.");
+    } finally {
+      if (!silent) {
+        setLoadingYoutubeSummaryJobs(false);
+      }
+    }
+  }, []);
+
   const studentMenuSections = useMemo(
     () => getStudentSidebarSections(studentSidebarCourses, { isAdmin: true }),
     [studentSidebarCourses]
@@ -548,6 +595,27 @@ export const AdminConsolePage = () => {
       void loadPatchNotes();
     }
   }, [activeTab, loadPatchNotes, loadingPatchNotes, patchNotes.length, patchNotesLoadFailed]);
+
+  useEffect(() => {
+    if (activeTab !== "youtubeSummary") return;
+    if (!selectedYoutubeCourseId) {
+      setYoutubeSummaryJobs([]);
+      return;
+    }
+    void loadYoutubeSummaryJobs(selectedYoutubeCourseId);
+  }, [activeTab, loadYoutubeSummaryJobs, selectedYoutubeCourseId]);
+
+  useEffect(() => {
+    const courseId = Number(selectedYoutubeCourseId);
+    let cleanup = () => {};
+    if (activeTab === "youtubeSummary" && activeYoutubeSummaryJobs.length > 0 && Number.isFinite(courseId)) {
+      const timer = window.setInterval(() => {
+        void loadYoutubeSummaryJobs(courseId, { silent: true });
+      }, 4000);
+      cleanup = () => window.clearInterval(timer);
+    }
+    return cleanup;
+  }, [activeTab, activeYoutubeSummaryJobs.length, loadYoutubeSummaryJobs, selectedYoutubeCourseId]);
 
   useEffect(() => {
     if (!selectedMemberId) {
@@ -691,6 +759,14 @@ export const AdminConsolePage = () => {
     () => patchNotes.find((item) => item.patchNoteId === selectedPatchNoteId) || null,
     [patchNotes, selectedPatchNoteId]
   );
+  const selectedYoutubeCourse = useMemo(
+    () => studentSidebarCourses.find((item) => Number(item?.courseId) === Number(selectedYoutubeCourseId)) || null,
+    [selectedYoutubeCourseId, studentSidebarCourses]
+  );
+  const activeYoutubeSummaryJobs = useMemo(
+    () => youtubeSummaryJobs.filter((job) => job?.status !== "READY" && job?.status !== "FAILED"),
+    [youtubeSummaryJobs]
+  );
   const patchNoteOrderLookup = useMemo(
     () => new Map(patchNotes.map((item, index) => [item.patchNoteId, index + 1])),
     [patchNotes]
@@ -711,6 +787,19 @@ export const AdminConsolePage = () => {
       isPublished: Boolean(selectedPatchNote.isPublished),
     });
   }, [selectedPatchNote]);
+
+  useEffect(() => {
+    if (studentSidebarCourses.length === 0) {
+      setSelectedYoutubeCourseId(null);
+      return;
+    }
+    setSelectedYoutubeCourseId((prev) => {
+      if (prev && studentSidebarCourses.some((item) => Number(item?.courseId) === Number(prev))) {
+        return prev;
+      }
+      return Number(studentSidebarCourses[0]?.courseId) || null;
+    });
+  }, [studentSidebarCourses]);
 
   const sortedCategories = useMemo(() => {
     return [...categories].sort((left, right) => {
@@ -1164,6 +1253,49 @@ export const AdminConsolePage = () => {
       setSavingSiteSettings(false);
     }
   }, [siteSettings]);
+
+  const handleCreateYoutubeSummaryJob = useCallback(async () => {
+    const normalizedCourseId = Number(selectedYoutubeCourseId);
+    const normalizedUrl = String(youtubeMaterialUrl || "").trim();
+    if (!Number.isFinite(normalizedCourseId)) {
+      setPageErrorMessage("요약본을 생성할 과목을 먼저 선택해 주세요.");
+      return;
+    }
+    if (!normalizedUrl) {
+      setPageErrorMessage("유튜브 링크를 입력해 주세요.");
+      return;
+    }
+    setCreatingYoutubeSummaryJob(true);
+    setPageErrorMessage("");
+    try {
+      const payload = await uploadStudentCourseYoutubeMaterial(normalizedCourseId, normalizedUrl, youtubeSummaryFormat);
+      showToast(`"${payload?.videoTitle || "유튜브 강의"}" 요약본 생성을 시작했습니다.`, { type: "success" });
+      setYoutubeMaterialUrl("");
+      await loadYoutubeSummaryJobs(normalizedCourseId);
+    } catch (error) {
+      setPageErrorMessage(error?.message || "유튜브 요약본 생성 요청에 실패했습니다.");
+      showToast(error?.message || "유튜브 요약본 생성 요청에 실패했습니다.", { type: "error" });
+    } finally {
+      setCreatingYoutubeSummaryJob(false);
+    }
+  }, [loadYoutubeSummaryJobs, selectedYoutubeCourseId, showToast, youtubeMaterialUrl, youtubeSummaryFormat]);
+
+  const handleDeleteYoutubeSummaryJob = useCallback(async (jobId) => {
+    const normalizedCourseId = Number(selectedYoutubeCourseId);
+    if (!Number.isFinite(normalizedCourseId) || !Number.isFinite(Number(jobId))) return;
+    setDeletingYoutubeSummaryJobId(Number(jobId));
+    setPageErrorMessage("");
+    try {
+      await deleteStudentCourseYoutubeMaterialJob(normalizedCourseId, Number(jobId));
+      setYoutubeSummaryJobs((prev) => prev.filter((item) => Number(item?.jobId) !== Number(jobId)));
+      showToast("유튜브 요약본 상태를 목록에서 삭제했습니다.", { type: "success" });
+    } catch (error) {
+      setPageErrorMessage(error?.message || "유튜브 요약본 상태를 삭제하지 못했습니다.");
+      showToast(error?.message || "유튜브 요약본 상태를 삭제하지 못했습니다.", { type: "error" });
+    } finally {
+      setDeletingYoutubeSummaryJobId(null);
+    }
+  }, [selectedYoutubeCourseId, showToast]);
 
   const handleCreatePatchNote = useCallback(async () => {
     if (isPatchNoteOrderDirty) {
@@ -2222,7 +2354,153 @@ export const AdminConsolePage = () => {
             </section>
           ) : null}
 
-                  {activeTab === "patchNotes" ? (
+          {activeTab === "youtubeSummary" ? (
+            <section className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,0.95fr)_minmax(320px,0.75fr)]">
+              <article className="rounded-[20px] border border-[#dfe4ef] bg-white p-5 shadow-[0_12px_28px_rgba(15,23,42,0.04)]">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <h2 className="text-[16px] font-semibold text-[#1f2937]">유튜브 요약본 작업 상태</h2>
+                    <p className="mt-2 text-[13px] leading-[1.7] text-[#5e6472]">
+                      학생 화면에서 숨긴 유튜브 요약본 생성 기능을 운영자 콘솔에서만 실행하고 상태를 확인합니다.
+                    </p>
+                  </div>
+                  {loadingYoutubeSummaryJobs ? <InlineSpinner label="불러오는 중" /> : null}
+                </div>
+
+                {!useStudentSidebar ? (
+                  <div className="mt-5 rounded-[14px] border border-dashed border-[#cbd5e1] bg-[#f8fafc] px-4 py-6 text-[12px] leading-[1.8] text-[#64748b]">
+                    현재 관리자 계정이 학생 모드가 아니어서 유튜브 요약본을 실행할 수 없습니다.
+                    <br />
+                    학생 모드로 전환한 뒤 다시 시도해 주세요.
+                  </div>
+                ) : studentSidebarCourses.length === 0 ? (
+                  <div className="mt-5 rounded-[14px] border border-dashed border-[#cbd5e1] bg-[#f8fafc] px-4 py-6 text-[12px] leading-[1.8] text-[#64748b]">
+                    등록된 학생 과목이 없습니다.
+                    <br />
+                    학생 페이지에서 과목을 먼저 만든 뒤 운영자 콘솔에서 실행해 주세요.
+                  </div>
+                ) : youtubeSummaryJobs.length > 0 ? (
+                  <div className="mt-5 space-y-3">
+                    {youtubeSummaryJobs.map((job) => (
+                      <div key={job.jobId} className="rounded-[16px] border border-[#e5e7eb] bg-[#fafbff] px-4 py-4">
+                        <div className="flex flex-wrap items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="truncate text-[14px] font-semibold text-[#111827]">{job.summaryTitle || job.videoTitle || job.youtubeUrl}</p>
+                            <p className="mt-1 text-[11px] text-[#7c8497]">
+                              {selectedYoutubeCourse?.courseName || "-"} · {formatDateTime(job.createdAt)} · {job.format}
+                            </p>
+                            {job.errorMessage ? (
+                              <p className="mt-2 text-[12px] leading-[1.7] text-[#dc2626]">{job.errorMessage}</p>
+                            ) : null}
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className={`rounded-full px-2.5 py-1 text-[10px] font-semibold ${
+                              job.status === "READY"
+                                ? "bg-[#e8fff1] text-[#14804a]"
+                                : job.status === "FAILED"
+                                  ? "bg-[#fff1f1] text-[#dc2626]"
+                                  : "bg-[#eef2ff] text-[#4338ca]"
+                            }`}>
+                              {youtubeSummaryStatusLabel(job)}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => void handleDeleteYoutubeSummaryJob(job.jobId)}
+                              disabled={deletingYoutubeSummaryJobId === job.jobId}
+                              className="rounded-[8px] border border-[#d1d5db] bg-white px-2.5 py-1 text-[10px] font-semibold text-[#4b5563] disabled:opacity-55"
+                            >
+                              {deletingYoutubeSummaryJobId === job.jobId ? "삭제 중..." : "삭제"}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="mt-5 rounded-[14px] border border-dashed border-[#cbd5e1] bg-[#f8fafc] px-4 py-6 text-[12px] leading-[1.8] text-[#64748b]">
+                    아직 요청된 유튜브 요약본 작업이 없습니다.
+                  </div>
+                )}
+              </article>
+
+              <article className="rounded-[20px] border border-[#dfe4ef] bg-white p-5 shadow-[0_12px_28px_rgba(15,23,42,0.04)]">
+                <div>
+                  <h2 className="text-[16px] font-semibold text-[#1f2937]">유튜브 요약본 생성</h2>
+                  <p className="mt-2 text-[13px] leading-[1.7] text-[#5e6472]">
+                    관리자 콘솔에서만 유튜브 강의 링크를 등록해 DOCX/PDF 요약본 생성을 요청합니다.
+                  </p>
+                </div>
+
+                <div className="mt-5 space-y-3">
+                  <label className="block">
+                    <span className="text-[12px] font-semibold text-[#4b5563]">대상 과목</span>
+                    <select
+                      value={selectedYoutubeCourseId || ""}
+                      onChange={(event) => setSelectedYoutubeCourseId(event.target.value ? Number(event.target.value) : null)}
+                      disabled={!useStudentSidebar || studentSidebarCourses.length === 0 || creatingYoutubeSummaryJob}
+                      className="mt-2 w-full rounded-[12px] border border-[#d9dde5] px-3 py-2 text-[13px] outline-none focus:border-[#9aa9cd] disabled:bg-[#f8fafc]"
+                    >
+                      {studentSidebarCourses.length === 0 ? <option value="">선택 가능한 과목이 없습니다.</option> : null}
+                      {studentSidebarCourses.map((item) => (
+                        <option key={item.courseId} value={item.courseId}>
+                          {item.courseName}
+                          {item.professorName ? ` · ${item.professorName}` : ""}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <label className="block">
+                    <span className="text-[12px] font-semibold text-[#4b5563]">유튜브 링크</span>
+                    <input
+                      type="url"
+                      value={youtubeMaterialUrl}
+                      onChange={(event) => setYoutubeMaterialUrl(event.target.value)}
+                      placeholder="https://youtu.be/... 또는 https://www.youtube.com/watch?v=..."
+                      disabled={!useStudentSidebar || studentSidebarCourses.length === 0 || creatingYoutubeSummaryJob}
+                      className="mt-2 w-full rounded-[12px] border border-[#d9dde5] px-3 py-2 text-[13px] outline-none focus:border-[#9aa9cd] disabled:bg-[#f8fafc]"
+                    />
+                  </label>
+
+                  <div>
+                    <p className="text-[12px] font-semibold text-[#4b5563]">출력 형식</p>
+                    <div className="mt-2 flex gap-2">
+                      {["DOCX", "PDF"].map((option) => (
+                        <button
+                          key={option}
+                          type="button"
+                          onClick={() => setYoutubeSummaryFormat(option)}
+                          disabled={creatingYoutubeSummaryJob}
+                          className={`rounded-[10px] border px-3 py-2 text-[11px] font-semibold ${
+                            youtubeSummaryFormat === option
+                              ? "border-[#111827] bg-[#111827] text-white"
+                              : "border-[#d1d5db] bg-white text-[#4b5563]"
+                          } disabled:opacity-55`}
+                        >
+                          {option} 요약본
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="rounded-[12px] border border-[#eef2f7] bg-[#fafbfd] px-3 py-3 text-[12px] leading-[1.8] text-[#64748b]">
+                    자막이 있는 유튜브 영상만 처리 가능합니다. 운영 환경 이슈 때문에 학생 화면에서는 숨기고, 운영자 콘솔에서만 제한적으로 실행합니다.
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => void handleCreateYoutubeSummaryJob()}
+                    disabled={!useStudentSidebar || studentSidebarCourses.length === 0 || creatingYoutubeSummaryJob || !String(youtubeMaterialUrl || "").trim()}
+                    className="rounded-[10px] border border-[#171b24] bg-[#171b24] px-4 py-2 text-[12px] font-semibold text-white disabled:opacity-60"
+                  >
+                    {creatingYoutubeSummaryJob ? "요청 중..." : "유튜브 요약본 생성 요청"}
+                  </button>
+                </div>
+              </article>
+            </section>
+          ) : null}
+
+          {activeTab === "patchNotes" ? (
             <section className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,0.95fr)_minmax(320px,0.75fr)]">
               <article className="rounded-[20px] border border-[#dfe4ef] bg-white p-5 shadow-[0_12px_28px_rgba(15,23,42,0.04)]">
                 <div className="flex items-center justify-between gap-3">
