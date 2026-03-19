@@ -6,6 +6,7 @@ import { MobileSidebarDrawer } from "../../components/MobileSidebarDrawer";
 import { PointChargeModal } from "../../components/PointChargeModal";
 import { PointChargeSuccessModal } from "../../components/PointChargeSuccessModal";
 import { AcademicProfileFields } from "../../components/AcademicProfileFields";
+import { GeminiApiGuideModal } from "../../components/GeminiApiKeyGuard";
 import { useToast } from "../../hooks/useToast";
 import tempProfileImage from "../../assets/icon/temp.png";
 import { isAuthenticationError } from "../../lib/apiClient";
@@ -413,6 +414,7 @@ export const MyPage = () => {
   const [geminiApiKeyInput, setGeminiApiKeyInput] = useState("");
   const [geminiApiKeySubmitting, setGeminiApiKeySubmitting] = useState(false);
   const [removingGeminiApiKey, setRemovingGeminiApiKey] = useState(false);
+  const [showGeminiApiGuideModal, setShowGeminiApiGuideModal] = useState(false);
   const [, setGeminiApiKeyMessage] = useState("");
   const [, setGeminiApiKeyErrorMessage] = useState("");
   const profileImageInputRef = useRef(null);
@@ -1049,7 +1051,17 @@ export const MyPage = () => {
               </div>
 
               <div className="mt-4 rounded-[16px] border border-[#e0e0e0] bg-white p-6">
-                <h2 className="text-[18px] font-medium text-[#1f1f1f]">Gemini API 키</h2>
+                <div className="flex items-center gap-2">
+                  <h2 className="text-[18px] font-medium text-[#1f1f1f]">Gemini API 키</h2>
+                  <button
+                    type="button"
+                    onClick={() => setShowGeminiApiGuideModal(true)}
+                    className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-[#d1d5db] text-[12px] font-semibold text-[#4b5563]"
+                    aria-label="Gemini API 키 발급 가이드 보기"
+                  >
+                    ?
+                  </button>
+                </div>
                 <p className="mt-1 whitespace-pre-line text-[12px] leading-[1.6] text-[#7a7a7a]">
                   {"본 서비스는 Gemini API를 기반으로 작동합니다.\n입력하신 API 키는 암호화되어 관리되며 비용이 따로 발생하지 않습니다."}
                 </p>
@@ -1320,6 +1332,12 @@ export const MyPage = () => {
         />
       ) : null}
       {showReLoginGuideModal ? <ReLoginGuideModal onConfirm={moveToLoginAfterPasswordChange} /> : null}
+      {showGeminiApiGuideModal ? (
+        <GeminiApiGuideModal
+          onClose={() => setShowGeminiApiGuideModal(false)}
+          onGoToMyPage={() => setShowGeminiApiGuideModal(false)}
+        />
+      ) : null}
     </div>
   );
 };

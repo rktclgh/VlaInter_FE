@@ -244,6 +244,7 @@ export const StudentWrongAnswerSetPage = () => {
       }
     } catch (error) {
       showToast(error?.message || "재시험 세션 생성에 실패했습니다.", { type: "error" });
+    } finally {
       setCreatingRetest(false);
     }
   };
@@ -263,19 +264,25 @@ export const StudentWrongAnswerSetPage = () => {
 
   if (!wrongSet) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-white px-6 text-center">
-        <div>
-          <p className="text-[15px] font-medium text-[#111827]">오답노트를 찾을 수 없습니다.</p>
-          {errorMessage ? <p className="mt-2 text-[13px] text-[#d84a4a]">{errorMessage}</p> : null}
-          <button
-            type="button"
-            onClick={() => navigate("/content/student")}
-            className="mt-4 rounded-[12px] bg-[#111827] px-4 py-2.5 text-[13px] font-semibold text-white"
-          >
-            학생 홈으로 돌아가기
-          </button>
+      <>
+        <div className="flex min-h-screen items-center justify-center bg-white px-6 text-center">
+          <div>
+            <p className="text-[15px] font-medium text-[#111827]">오답노트를 찾을 수 없습니다.</p>
+            {errorMessage ? <p className="mt-2 text-[13px] text-[#d84a4a]">{errorMessage}</p> : null}
+            <button
+              type="button"
+              onClick={() => navigate("/content/student")}
+              className="mt-4 rounded-[12px] bg-[#111827] px-4 py-2.5 text-[13px] font-semibold text-white"
+            >
+              학생 홈으로 돌아가기
+            </button>
+          </div>
         </div>
-      </div>
+        <AcademicProfileRequiredModal
+          open={requiresAcademicProfile}
+          onMoveToMyPage={() => navigate("/content/student/mypage")}
+        />
+      </>
     );
   }
 

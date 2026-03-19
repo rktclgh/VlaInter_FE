@@ -93,7 +93,7 @@ const AnalysisLockOverlay = ({ open, fileName, pendingRequest }) => {
 const SummaryPdfSavingOverlay = ({ open, count }) => {
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-[170] flex items-center justify-center bg-[#0f172acc] px-6">
+    <div className="fixed inset-0 z-[190] flex items-center justify-center bg-[#0f172acc] px-6">
       <div className="w-full max-w-[440px] rounded-[28px] border border-white/15 bg-[#111827] px-6 py-7 text-center text-white shadow-[0_28px_100px_rgba(15,23,42,0.45)]">
         <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full border border-white/15 bg-white/5">
           <div className="h-7 w-7 animate-spin rounded-full border-[3px] border-white/25 border-t-white" />
@@ -1364,19 +1364,25 @@ export const StudentCoursePage = () => {
 
   if (!course) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-white px-6 text-center">
-        <div>
-          <p className="text-[15px] font-medium text-[#111827]">과목을 찾을 수 없습니다.</p>
-          {pageErrorMessage ? <p className="mt-2 text-[13px] text-[#d84a4a]">{pageErrorMessage}</p> : null}
-          <button
-            type="button"
-            onClick={() => navigate("/content/student")}
-            className="mt-4 rounded-[12px] bg-[#111827] px-4 py-2.5 text-[13px] font-semibold text-white"
-          >
-            과목 홈으로 돌아가기
-          </button>
+      <>
+        <div className="flex min-h-screen items-center justify-center bg-white px-6 text-center">
+          <div>
+            <p className="text-[15px] font-medium text-[#111827]">과목을 찾을 수 없습니다.</p>
+            {pageErrorMessage ? <p className="mt-2 text-[13px] text-[#d84a4a]">{pageErrorMessage}</p> : null}
+            <button
+              type="button"
+              onClick={() => navigate("/content/student")}
+              className="mt-4 rounded-[12px] bg-[#111827] px-4 py-2.5 text-[13px] font-semibold text-white"
+            >
+              과목 홈으로 돌아가기
+            </button>
+          </div>
         </div>
-      </div>
+        <AcademicProfileRequiredModal
+          open={requiresAcademicProfile}
+          onMoveToMyPage={() => navigate("/content/student/mypage")}
+        />
+      </>
     );
   }
 

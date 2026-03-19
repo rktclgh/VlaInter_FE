@@ -30,7 +30,7 @@ const GUIDE_STEPS = [
   { step: 8, image: guideImage8, body: "키를 복사해서 마이페이지에 입력하고 저장하면 끝입니다." },
 ];
 
-const GeminiApiGuideModal = ({ onClose, onGoToMyPage }) => {
+export const GeminiApiGuideModal = ({ onClose, onGoToMyPage }) => {
   return (
     <div className="fixed inset-0 z-[210] flex items-center justify-center bg-black/65 px-4 py-6">
       <div
