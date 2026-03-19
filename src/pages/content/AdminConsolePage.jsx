@@ -7,6 +7,7 @@ import { Sidebar } from "../../components/Sidebar";
 import tempProfileImage from "../../assets/icon/temp.png";
 import { isAuthenticationError } from "../../lib/apiClient";
 import { logout } from "../../lib/authApi";
+import { getStudentMyMenuItems, getStudentSidebarSections } from "../../lib/studentNavigation";
 import {
   activateAdminMember,
   createAdminPatchNote,
@@ -40,7 +41,8 @@ import {
 } from "../../lib/adminApi";
 import { getInterviewSetQuestions } from "../../lib/interviewApi";
 import { extractProfile, formatPoint, parsePoint } from "../../lib/profileUtils";
-import { getMyProfile, getMyProfileImageUrl } from "../../lib/userApi";
+import { getMyProfile, getMyProfileImageUrl, getMyStudentCourses } from "../../lib/userApi";
+import { normalizeServiceMode, SERVICE_MODE } from "../../lib/serviceMode";
 
 const TABS = [
   { key: "members", label: "회원 관리" },
@@ -221,6 +223,8 @@ export const AdminConsolePage = () => {
   const [userName, setUserName] = useState("관리자");
   const [userPoint, setUserPoint] = useState(0);
   const [profileImageUrl, setProfileImageUrl] = useState(tempProfileImage);
+  const [studentSidebarCourses, setStudentSidebarCourses] = useState([]);
+  const [useStudentSidebar, setUseStudentSidebar] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [showPointChargeModal, setShowPointChargeModal] = useState(false);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
@@ -463,6 +467,13 @@ export const AdminConsolePage = () => {
     }
   }, []);
 
+  const studentMenuSections = useMemo(
+    () => getStudentSidebarSections(studentSidebarCourses, { isAdmin: true }),
+    [studentSidebarCourses]
+  );
+  const studentMyMenuItems = useMemo(() => getStudentMyMenuItems(), []);
+  const sidebarActiveKey = "admin_console";
+
   useEffect(() => {
     let cancelled = false;
     const initialize = async () => {
@@ -479,6 +490,24 @@ export const AdminConsolePage = () => {
         setUserName(profile?.name || "관리자");
         setUserPoint(parsePoint(profile?.point));
         setProfileImageUrl(getMyProfileImageUrl());
+        const normalizedMode = normalizeServiceMode(profile?.serviceMode);
+        if (normalizedMode === SERVICE_MODE.STUDENT) {
+          try {
+            const coursesPayload = await getMyStudentCourses();
+            if (!cancelled) {
+              setStudentSidebarCourses(Array.isArray(coursesPayload) ? coursesPayload : []);
+              setUseStudentSidebar(true);
+            }
+          } catch {
+            if (!cancelled) {
+              setStudentSidebarCourses([]);
+              setUseStudentSidebar(true);
+            }
+          }
+        } else if (!cancelled) {
+          setStudentSidebarCourses([]);
+          setUseStudentSidebar(false);
+        }
       } catch (error) {
         if (cancelled) return;
         if (isAuthenticationError(error)) {
@@ -503,11 +532,12 @@ export const AdminConsolePage = () => {
   }, [loadCategories, loadMembers, loadSets, navigate]);
 
   useEffect(() => {
-    if (activeTab !== "settings") return;
-    if (!interviewSettings && !loadingInterviewSettings && !interviewSettingsLoadFailed) {
+    const needsInterviewSettings = activeTab === "settings";
+    const needsSiteSettings = activeTab === "settings" || activeTab === "patchNotes";
+    if (needsInterviewSettings && !interviewSettings && !loadingInterviewSettings && !interviewSettingsLoadFailed) {
       void loadInterviewSettings();
     }
-    if (!siteSettings && !loadingSiteSettings && !siteSettingsLoadFailed) {
+    if (needsSiteSettings && !siteSettings && !loadingSiteSettings && !siteSettingsLoadFailed) {
       void loadSiteSettings();
     }
   }, [activeTab, interviewSettings, interviewSettingsLoadFailed, loadInterviewSettings, loadSiteSettings, loadingInterviewSettings, loadingSiteSettings, siteSettings, siteSettingsLoadFailed]);
@@ -1239,13 +1269,14 @@ export const AdminConsolePage = () => {
 
   const handleSavePatchNoteOrder = useCallback(async () => {
     if (patchNotes.length === 0 || !isPatchNoteOrderDirty) return;
+    const patchNoteIds = patchNotes.map((item) => item.patchNoteId);
+    if (patchNoteIds.some((value) => !Number.isFinite(value))) {
+      setPageErrorMessage("유효하지 않은 패치노트 ID가 포함되어 있어 순서를 저장할 수 없습니다.");
+      return;
+    }
     setSavingPatchNoteOrder(true);
     setPageErrorMessage("");
     try {
-      const patchNoteIds = patchNotes.map((item) => item.patchNoteId);
-      if (patchNoteIds.some((value) => !Number.isFinite(value))) {
-        throw new Error("유효하지 않은 패치노트 ID가 포함되어 있어 순서를 저장할 수 없습니다.");
-      }
       setPatchNotesLoadFailed(false);
       const payload = await reorderAdminPatchNotes(patchNoteIds);
       setPatchNotes(normalizePatchNotes(payload));
@@ -1272,7 +1303,7 @@ export const AdminConsolePage = () => {
 
       <MobileSidebarDrawer
         open={isMobileMenuOpen}
-        activeKey="admin_console"
+        activeKey={sidebarActiveKey}
         isAdmin
         onClose={() => setIsMobileMenuOpen(false)}
         onNavigate={handleSidebarNavigate}
@@ -1280,6 +1311,8 @@ export const AdminConsolePage = () => {
         profileImageUrl={profileImageUrl}
         point={formatPoint(userPoint)}
         onClickCharge={() => setShowPointChargeModal(true)}
+        menuSectionsOverride={useStudentSidebar ? studentMenuSections : null}
+        myMenuItemsOverride={useStudentSidebar ? studentMyMenuItems : null}
         onLogout={() => {
           setIsMobileMenuOpen(false);
           setShowLogoutModal(true);
@@ -1289,11 +1322,13 @@ export const AdminConsolePage = () => {
       <div className="mx-auto flex w-full max-w-[1600px] pt-[3.75rem]">
         <div className="hidden w-[17rem] shrink-0 md:block">
           <Sidebar
-            activeKey="admin_console"
+            activeKey={sidebarActiveKey}
             isAdmin
             onNavigate={handleSidebarNavigate}
             userName={userName}
             profileImageUrl={profileImageUrl}
+            menuSectionsOverride={useStudentSidebar ? studentMenuSections : null}
+            myMenuItemsOverride={useStudentSidebar ? studentMyMenuItems : null}
             onLogout={() => setShowLogoutModal(true)}
           />
         </div>
