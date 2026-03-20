@@ -5,86 +5,56 @@ import { getMyProfile } from "../lib/userApi";
 import { hasAuthenticatedBrowserSession } from "../lib/authSessionMarker";
 import { getLandingPatchNotes, getLandingSiteSettings } from "../lib/landingApi";
 import { WaveBackground } from "../components/WaveBackground";
-import logoMark from "../assets/logo/logo.png";
-import heroWordmark from "../assets/logo/vlainter.png";
-import icon11st from "../assets/icon/11st.png";
-import iconDaum from "../assets/icon/Daum.png";
-import iconHmail from "../assets/icon/Hmail.png";
-import iconHyundaicard from "../assets/icon/Hyundaicard.png";
-import iconSeason from "../assets/icon/Season.png";
-import iconCgv from "../assets/icon/cgv.png";
-import iconCj from "../assets/icon/cj.png";
-import iconHana from "../assets/icon/hana.png";
-import iconJtbc from "../assets/icon/jtbc.png";
-import iconKasa from "../assets/icon/kasa.png";
-import iconKb from "../assets/icon/kb.png";
-import iconKbs from "../assets/icon/kbs.png";
-import iconKt from "../assets/icon/kt.png";
-import iconLguplus from "../assets/icon/lguplus.png";
-import iconLotte from "../assets/icon/lotte.png";
-import iconMbc from "../assets/icon/mbc.png";
-import iconNaver from "../assets/icon/naver.png";
-import iconSaramin from "../assets/icon/saramin.png";
-import iconSbs from "../assets/icon/sbs.png";
-import iconShinhancard from "../assets/icon/shinhancard.png";
-import iconSktelecom from "../assets/icon/sktelecom.png";
-import iconToss from "../assets/icon/toss.png";
-import iconTvn from "../assets/icon/tvn.png";
-import iconYogiyo from "../assets/icon/yogiyo.png";
+import campusLogo from "../assets/logo/logo_campus.png";
+import campusWordmark from "../assets/logo/vlainter_campus.png";
 import { usePublicLocale } from "../lib/publicLocale";
 
 const CONTENT_BY_LANGUAGE = {
   ko: {
     serviceButton: "SERVICE",
-    campus: "CAMPUS",
+    brandLink: "VLAINTER",
     join: "JOIN",
     login: "LOG IN",
     languageLabel: "KOR",
     close: "닫기",
     sections: [
       { id: "service-introduce", label: "SERVICE INTRODUCE" },
-      { id: "credit", label: "CREDIT" },
       { id: "patch-note", label: "PATCH NOTE" },
     ],
-    heroSubtitle: "사용자 맞춤 AI 면접 시뮬레이터",
+    heroSubtitle: "대학생을 위한 강의자료 기반 AI 멘토 서비스",
     heroPills: [
-      { label: "실전 모의 면접", to: "/content/interview" },
-      { label: "기술질문 연습", to: "/content/tech-practice" },
-      { label: "질문 공유하기", to: "/content/question-browse" },
+      { label: "강의자료 AI 요약", to: "/content/student" },
+      { label: "실전 모의고사", to: "/content/student" },
+      { label: "오답노트", to: "/content/student" },
     ],
-    heroDescription: "이력서는 문을 열어주고, 이야기는 합격을 만들어냅니다.",
+    heroDescription: "언제나 당신과 함께할 수 있는, 따듯한 멘토가 되어드립니다.",
     joinUs: "JOIN US",
     serviceEyebrow: "SERVICE INTRODUCE",
-    serviceTitle: "준비 단계부터 면접 직전까지 한 화면으로 연결합니다.",
-    serviceBody: "업로드한 문서, 직무 선택, 기술 카테고리, 질문 세트까지 이어지는 준비 흐름을 끊기지 않게 정리했습니다.",
+    serviceTitle: "강의자료, 오답, 복습 흐름을 AI 멘토 경험으로 연결합니다.",
+    serviceBody: "학습 기록과 질문 연습, 자료 기반 피드백을 한 흐름으로 연결해 캠퍼스 학습 루틴을 더 자연스럽게 만듭니다.",
     aboutService: "ABOUT SERVICE",
     productCards: [
       {
-        title: "실전 모의 면접",
-        description: "이력서와 직무 기반으로 맞춤 문항을 생성하고 실제 면접 흐름처럼 연습합니다.",
-        to: "/content/interview",
+        title: "강의자료 AI 분석요약",
+        description: "업로드한 강의자료를 빠르게 구조화하고 핵심 개념과 시험 포인트를 AI가 요약합니다.",
+        to: "/content/student",
       },
       {
-        title: "기술질문 연습",
-        description: "기술 카테고리별 예상 질문을 빠르게 반복 연습하고 즉시 피드백을 받습니다.",
-        to: "/content/tech-practice",
+        title: "강의자료 기반 모의고사",
+        description: "강의자료 기반 문제를 자동으로 구성해 실전처럼 풀고 이해도를 바로 점검할 수 있습니다.",
+        to: "/content/student",
       },
       {
-        title: "파일 관리",
-        description: "이력서, 자기소개서, 포트폴리오를 업로드해 문서 기반 면접 준비 흐름으로 이어집니다.",
-        to: "/content/files",
+        title: "오답노트",
+        description: "틀린 문제와 취약 개념을 다시 묶어 복습 루틴으로 이어지는 오답노트를 제공합니다.",
+        to: "/content/student",
       },
     ],
     moveNow: "바로 가기",
-    creditEyebrow: "CREDIT",
-    creditTitle: "면접 준비에서 자주 마주치는 브랜드와 직무 맥락을 참고합니다.",
-    creditBody: "서비스 화면에서 사용되는 예시 브랜드 로고와 회사명은 면접 준비 문맥을 설명하기 위한 샘플입니다.",
     patchEyebrow: "PATCH NOTE",
-    patchTitle: "최근 반영된 흐름과 운영 개선 사항",
-    patchBody: "화면 구조와 배포 안정성, 보안 체계를 최근 기준으로 다시 정리했습니다.",
+    patchTitle: "캠퍼스 경험에 맞춘 최근 개선 사항",
+    patchBody: "학습 흐름과 보안 체계, 랜딩 접근성을 캠퍼스 테마에 맞게 다시 다듬고 있습니다.",
     patchHelp: "스크롤 또는 화살표 이동",
-    footerTitle: "AI INTERVIEW SOLUTION",
-    contact: "문의",
     footerLinks: [
       { label: "서비스 소개", to: "/about" },
       { label: "이용약관", to: "/terms" },
@@ -93,55 +63,49 @@ const CONTENT_BY_LANGUAGE = {
   },
   en: {
     serviceButton: "SERVICE",
-    campus: "CAMPUS",
+    brandLink: "VLAINTER",
     join: "JOIN",
     login: "LOG IN",
     languageLabel: "ENG",
     close: "Close",
     sections: [
       { id: "service-introduce", label: "SERVICE INTRODUCE" },
-      { id: "credit", label: "CREDIT" },
       { id: "patch-note", label: "PATCH NOTE" },
     ],
-    heroSubtitle: "Personalized AI interview simulator",
+    heroSubtitle: "An AI mentor built on course materials for students",
     heroPills: [
-      { label: "Mock Interview", to: "/content/interview" },
-      { label: "Tech Practice", to: "/content/tech-practice" },
-      { label: "Share Questions", to: "/content/question-browse" },
+      { label: "AI Material Summary", to: "/content/student" },
+      { label: "Mock Exam", to: "/content/student" },
+      { label: "Wrong Answer Notes", to: "/content/student" },
     ],
-    heroDescription: "Your resume opens the door. Your story closes the offer.",
+    heroDescription: "A warm mentor that can stay with you throughout the journey.",
     joinUs: "JOIN US",
     serviceEyebrow: "SERVICE INTRODUCE",
-    serviceTitle: "Connect every step from preparation to the final interview.",
-    serviceBody: "Uploaded documents, role selection, tech categories, and shared question sets are arranged as one continuous preparation flow.",
+    serviceTitle: "Connect lecture material, review, and AI mentoring in one study flow.",
+    serviceBody: "Course content, practice questions, and feedback are organized into a single campus-focused study routine.",
     aboutService: "ABOUT SERVICE",
     productCards: [
       {
-        title: "Mock Interview",
-        description: "Generate tailored questions from your resume and target role, then practice in a realistic interview flow.",
-        to: "/content/interview",
+        title: "AI Material Summary",
+        description: "Uploaded lecture material is distilled into core concepts and likely exam points for faster review.",
+        to: "/content/student",
       },
       {
-        title: "Tech Practice",
-        description: "Repeat technical questions by category and get immediate feedback after each response.",
-        to: "/content/tech-practice",
+        title: "Material-Based Mock Exam",
+        description: "Generate practice exams from your course material and check understanding in a realistic flow.",
+        to: "/content/student",
       },
       {
-        title: "File Management",
-        description: "Upload your resume, cover letter, and portfolio to continue into document-based interview preparation.",
-        to: "/content/files",
+        title: "Wrong Answer Notes",
+        description: "Collect missed questions and weak concepts into a review loop designed for repetition.",
+        to: "/content/student",
       },
     ],
     moveNow: "OPEN",
-    creditEyebrow: "CREDIT",
-    creditTitle: "We reference familiar brands and job contexts often seen in interview prep.",
-    creditBody: "Brand marks and company names shown on this page are sample references used to explain interview preparation scenarios.",
     patchEyebrow: "PATCH NOTE",
-    patchTitle: "Recent product and operations updates",
-    patchBody: "The latest improvements to structure, deployment stability, and security are summarized here.",
+    patchTitle: "Recent campus-focused improvements",
+    patchBody: "Study flow, security handling, and landing accessibility are being refined for the campus theme.",
     patchHelp: "SCROLL OR USE ARROWS",
-    footerTitle: "AI INTERVIEW SOLUTION",
-    contact: "Contact",
     footerLinks: [
       { label: "About Service", to: "/about" },
       { label: "Terms of Service", to: "/terms" },
@@ -152,69 +116,16 @@ const CONTENT_BY_LANGUAGE = {
 
 const fallbackPatchNotesByLocale = {
   ko: [
-    {
-      title: "Landing Refresh",
-      body: "웨이브 배경과 집중형 타이포 중심의 첫 화면으로 정리했습니다.",
-    },
-    {
-      title: "Interview Flow",
-      body: "실전 모의면접과 기술질문 연습으로 바로 진입할 수 있도록 CTA를 재배치했습니다.",
-    },
-    {
-      title: "Security Hardening",
-      body: "프록시 체인, rate limit, 재부팅 이후 blue/green 기동 정책을 다시 정리했습니다.",
-    },
+    { title: "Campus Theme", body: "캠퍼스 전용 랜딩을 초록-옐로우 테마로 분리해 서비스 진입 동선을 명확히 했습니다." },
+    { title: "Study Flow", body: "강의자료 기반 학습, 질문 연습, 면접 시뮬레이션을 같은 흐름 안에서 탐색할 수 있게 정리했습니다." },
+    { title: "Access Update", body: "공개 랜딩에서 바로 회원가입과 서비스 소개 섹션으로 이동하는 구조를 유지했습니다." },
   ],
   en: [
-    {
-      title: "Landing Refresh",
-      body: "The first screen was reorganized around the wave backdrop and focused typography.",
-    },
-    {
-      title: "Interview Flow",
-      body: "The CTAs were rearranged so users can move straight into mock interviews and tech practice.",
-    },
-    {
-      title: "Security Hardening",
-      body: "Proxy handling, rate limits, and blue/green restart policies were tightened again.",
-    },
+    { title: "Campus Theme", body: "A campus-specific landing flow now uses the green-yellow theme for clearer entry." },
+    { title: "Study Flow", body: "Course-based study, question practice, and interview simulation are shown as one connected path." },
+    { title: "Access Update", body: "The public landing keeps direct access to join and the main service sections." },
   ],
 };
-
-const logoColumns = [
-  [
-    { src: iconLotte, alt: "LOTTE" },
-    { src: iconHyundaicard, alt: "Hyundaicard" },
-    { src: iconKt, alt: "KT" },
-    { src: icon11st, alt: "11st" },
-    { src: iconDaum, alt: "Daum" },
-    { src: iconHmail, alt: "Hmail" },
-  ],
-  [
-    { src: iconNaver, alt: "Naver" },
-    { src: iconKasa, alt: "Kasa" },
-    { src: iconHana, alt: "Hana" },
-    { src: iconJtbc, alt: "JTBC" },
-    { src: iconKb, alt: "KB" },
-    { src: iconKbs, alt: "KBS" },
-  ],
-  [
-    { src: iconCgv, alt: "CGV" },
-    { src: iconToss, alt: "Toss" },
-    { src: iconCj, alt: "CJ" },
-    { src: iconLguplus, alt: "LG U+" },
-    { src: iconMbc, alt: "MBC" },
-    { src: iconSaramin, alt: "Saramin" },
-  ],
-  [
-    { src: iconSbs, alt: "SBS" },
-    { src: iconSeason, alt: "Season" },
-    { src: iconTvn, alt: "tvN" },
-    { src: iconShinhancard, alt: "Shinhan Card" },
-    { src: iconSktelecom, alt: "SK Telecom" },
-    { src: iconYogiyo, alt: "Yogiyo" },
-  ],
-];
 
 const sectionTitleClass =
   "text-[clamp(1.55rem,3.2vw,2.55rem)] font-medium tracking-[-0.04em] text-white";
@@ -224,8 +135,45 @@ const MotionButton = motion.button;
 const MotionAside = motion.aside;
 const MotionDiv = motion.div;
 const MotionArticle = motion.article;
+const campusGradient = "linear-gradient(90deg, #7ED957 0%, #FFD95A 100%)";
 
-export const StartingPage = () => {
+const CampusOutlineLink = ({
+  to,
+  children,
+  className = "",
+  textClassName = "",
+  viewBox = "0 0 140 36",
+  points = "14,1 139,1 126,35 1,35",
+}) => (
+  <Link
+    to={to}
+    className={`group relative inline-flex items-center justify-center overflow-hidden ${className}`}
+  >
+    <svg
+      aria-hidden="true"
+      viewBox={viewBox}
+      preserveAspectRatio="none"
+      className="absolute inset-0 h-full w-full"
+    >
+      <defs>
+        <linearGradient id="campus-outline-gradient" x1="0%" y1="50%" x2="100%" y2="50%">
+          <stop offset="0%" stopColor="#7ED957" />
+          <stop offset="100%" stopColor="#FFD95A" />
+        </linearGradient>
+      </defs>
+      <polygon
+        points={points}
+        fill="none"
+        stroke="url(#campus-outline-gradient)"
+        strokeWidth="1.5"
+        vectorEffect="non-scaling-stroke"
+      />
+    </svg>
+    <span className={`relative z-[1] ${textClassName}`}>{children}</span>
+  </Link>
+);
+
+export const StudentLandingPage = () => {
   const navigate = useNavigate();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isLanguageMenuOpen, setIsLanguageMenuOpen] = useState(false);
@@ -245,21 +193,18 @@ export const StartingPage = () => {
     let unmounted = false;
 
     const redirectIfAuthenticated = async () => {
-      if (!hasAuthenticatedBrowserSession()) {
-        return;
-      }
+      if (!hasAuthenticatedBrowserSession()) return;
       try {
         await getMyProfile();
         if (!unmounted) {
           navigate("/content", { replace: true });
         }
       } catch {
-        // ignore: unauthenticated users should stay on the starting page
+        // keep public landing visible
       }
     };
 
     redirectIfAuthenticated();
-
     return () => {
       unmounted = true;
     };
@@ -293,7 +238,7 @@ export const StartingPage = () => {
         const nextVersionLabel = String(settingsPayload?.landingVersionLabel || "").trim();
         if (nextVersionLabel) setLandingVersionLabel(nextVersionLabel);
       } catch {
-        // ignore and keep fallback notes for landing stability
+        // fallback copy is enough for public landing
       }
     };
 
@@ -310,7 +255,6 @@ export const StartingPage = () => {
     setIsSidebarOpen(false);
   }, [prefersReducedMotion]);
 
-  const logoMarqueeColumns = useMemo(() => logoColumns, []);
   const displayedPatchNotes = useMemo(
     () => (patchNotes.some((item) => item?.patchNoteId != null) ? patchNotes : fallbackPatchNotes),
     [fallbackPatchNotes, patchNotes]
@@ -365,14 +309,14 @@ export const StartingPage = () => {
                 <div className="mt-3 flex flex-col gap-1">
                   <Link
                     to="/"
-                    className="rounded-[0.8rem] bg-white/10 px-3 py-2.5 text-left text-[0.9rem] text-white transition"
+                    className="rounded-[0.8rem] px-3 py-2.5 text-left text-[0.9rem] text-white/78 transition hover:bg-white/8 hover:text-white"
                     onClick={() => setIsSidebarOpen(false)}
                   >
                     Vlainter
                   </Link>
                   <Link
                     to="/campus"
-                    className="rounded-[0.8rem] px-3 py-2.5 text-left text-[0.9rem] text-white/78 transition hover:bg-white/8 hover:text-white"
+                    className="rounded-[0.8rem] bg-white/10 px-3 py-2.5 text-left text-[0.9rem] text-white transition"
                     onClick={() => setIsSidebarOpen(false)}
                   >
                     Vlainter Campus
@@ -420,7 +364,7 @@ export const StartingPage = () => {
       </AnimatePresence>
 
       <section className="relative isolate overflow-hidden bg-[#050816]">
-        <WaveBackground />
+        <WaveBackground variant="campus" />
 
         <div className="relative z-10 mx-auto flex min-h-[min(100vh,58rem)] w-full max-w-[112rem] flex-col px-4 pb-8 pt-4 sm:px-6 lg:px-8">
           <header className="mx-auto flex w-full max-w-[95rem] items-center justify-between gap-4 px-1 py-2 md:px-2">
@@ -433,26 +377,16 @@ export const StartingPage = () => {
               <span>{copy.serviceButton}</span>
             </button>
 
-            <Link to="/" className="absolute left-1/2 top-2 -translate-x-1/2">
-              <img src={logoMark} alt="Vlainter" className="h-9 w-auto md:h-10" />
+            <Link to="/campus" className="absolute left-1/2 top-2 -translate-x-1/2">
+              <img src={campusLogo} alt="Vlainter Campus" className="h-9 w-auto md:h-10" />
             </Link>
 
             <div className="ml-auto flex items-center gap-4 text-[0.68rem] tracking-[0.12em] text-white/82 md:gap-8">
               <Link
-                to="/campus"
-                className="group relative hidden h-[1.35rem] w-[5.35rem] items-center justify-center text-[0.66rem] tracking-[0.03em] text-white transition md:inline-flex"
-                style={{
-                  clipPath: "polygon(10% 0, 100% 0, 90% 100%, 0 100%)",
-                  background: "linear-gradient(90deg, #7ED957 0%, #FFD95A 100%)",
-                  padding: "1px",
-                }}
+                to="/"
+                className="hidden bg-[linear-gradient(90deg,#5D83DE_0%,#8C63F3_46%,#FF1C91_100%)] bg-clip-text text-transparent transition hover:brightness-110 md:inline-block"
               >
-                <span
-                  className="flex h-full w-full items-center justify-center bg-[#050816] transition group-hover:bg-[#0b0f1f]"
-                  style={{ clipPath: "polygon(10% 0, 100% 0, 90% 100%, 0 100%)" }}
-                >
-                  {copy.campus}
-                </span>
+                {copy.brandLink}
               </Link>
               <Link to="/join" className="transition hover:text-white">
                 {copy.join}
@@ -504,18 +438,25 @@ export const StartingPage = () => {
                   {copy.heroSubtitle}
                 </p>
 
-                <MotionDiv
-                  className="mt-4"
-                  initial={resolveMotionProps({ opacity: 0, y: 18 }, { opacity: 1 })}
-                  animate={resolveMotionProps({ opacity: 1, y: 0 }, { opacity: 1 })}
-                  transition={prefersReducedMotion ? { duration: 0 } : { duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
-                >
-                  <img
-                    src={heroWordmark}
-                    alt="VLAINTER"
-                    className="h-auto w-[min(78vw,39rem)]"
-                  />
-                </MotionDiv>
+                <div className="mt-4 flex flex-wrap items-center justify-center gap-3">
+                  <MotionDiv
+                    className="w-[min(78vw,39rem)]"
+                    initial={resolveMotionProps({ opacity: 0, y: 18 }, { opacity: 1 })}
+                    animate={resolveMotionProps({ opacity: 1, y: 0 }, { opacity: 1 })}
+                    transition={prefersReducedMotion ? { duration: 0 } : { duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
+                  >
+                    <img
+                      src={campusWordmark}
+                      alt="VLAINTER CAMPUS"
+                      className="h-auto w-full"
+                    />
+                  </MotionDiv>
+                  <span className="mt-2 sm:mt-3">
+                    <span className="inline-flex h-[1.5rem] min-w-[5.9rem] items-center justify-center px-3 text-[0.82rem] tracking-[0.02em] text-white" style={{ background: campusGradient, clipPath: "polygon(10% 0, 100% 0, 90% 100%, 0 100%)" }}>
+                      CAMPUS
+                    </span>
+                  </span>
+                </div>
 
                 <MotionDiv
                   className="mt-5 flex flex-wrap items-center justify-center gap-2"
@@ -524,13 +465,14 @@ export const StartingPage = () => {
                   transition={prefersReducedMotion ? { duration: 0 } : { delay: 0.1, duration: 0.55 }}
                 >
                   {copy.heroPills.map((pill) => (
-                    <Link
+                    <CampusOutlineLink
                       key={pill.label}
                       to={pill.to}
-                      className="rounded-full border border-white/22 bg-black/18 px-3 py-1.5 text-[0.64rem] tracking-[0.02em] text-white/82 transition hover:border-white/44 hover:bg-white/8 hover:text-white"
+                      className="h-[1.7rem] min-w-[6.8rem] px-3"
+                      textClassName="text-[0.64rem] tracking-[0.02em] text-white/86 transition group-hover:text-white"
                     >
                       {pill.label}
-                    </Link>
+                    </CampusOutlineLink>
                   ))}
                 </MotionDiv>
 
@@ -556,12 +498,15 @@ export const StartingPage = () => {
                   animate={resolveMotionProps({ opacity: 1, y: 0 }, { opacity: 1 })}
                   transition={prefersReducedMotion ? { duration: 0 } : { delay: 0.28, duration: 0.55 }}
                 >
-                  <Link
+                  <CampusOutlineLink
                     to="/join"
-                    className="inline-flex items-center justify-center rounded-full border border-white/16 bg-[linear-gradient(135deg,rgba(93,131,222,0.42),rgba(255,28,145,0.28))] px-7 py-3 text-[0.82rem] tracking-[0.1em] text-white shadow-[0_18px_48px_rgba(0,0,0,0.32)] transition hover:scale-[1.02] hover:border-white/28"
+                    className="h-[2.45rem] min-w-[7.3rem] px-4 shadow-[0_18px_48px_rgba(0,0,0,0.32)] transition hover:scale-[1.02]"
+                    textClassName="text-[0.82rem] tracking-[0.08em] text-white"
+                    viewBox="0 0 168 48"
+                    points="17,1 167,1 151,47 1,47"
                   >
-                      {copy.joinUs}
-                  </Link>
+                    {copy.joinUs}
+                  </CampusOutlineLink>
                 </MotionDiv>
               </div>
             </div>
@@ -578,13 +523,11 @@ export const StartingPage = () => {
           <div className="mt-4 flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
             <div>
               <h2 className={sectionTitleClass}>{copy.serviceTitle}</h2>
-              <p className={`mt-4 ${sectionBodyClass}`}>
-                {copy.serviceBody}
-              </p>
+              <p className={`mt-4 ${sectionBodyClass}`}>{copy.serviceBody}</p>
             </div>
             <Link
               to="/about"
-              className="inline-flex h-11 items-center justify-center rounded-full border border-white/14 bg-white/4 px-5 text-[0.8rem] tracking-[0.08em] text-white/84 transition hover:border-white/28 hover:bg-white/8"
+              className="inline-flex h-11 items-center justify-center rounded-full border border-[#7ED957]/24 bg-white/4 px-5 text-[0.8rem] tracking-[0.08em] text-white/84 transition hover:border-[#FFD95A]/45 hover:bg-white/8"
             >
               {copy.aboutService}
             </Link>
@@ -615,49 +558,12 @@ export const StartingPage = () => {
         </section>
 
         <section
-          id="credit"
-          className="mx-auto w-full max-w-[95rem] px-4 py-20 sm:px-6 lg:px-8 lg:py-24"
-        >
-          <p className="text-[0.75rem] tracking-[0.16em] text-white/36">{copy.creditEyebrow}</p>
-          <h2 className={`mt-4 ${sectionTitleClass}`}>{copy.creditTitle}</h2>
-          <p className={`mt-4 ${sectionBodyClass}`}>
-            {copy.creditBody}
-          </p>
-
-          <div className="mt-10 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            {logoMarqueeColumns.map((column, columnIndex) => (
-              <div
-                key={`landing-credit-${columnIndex}`}
-                className="overflow-hidden rounded-[1.25rem] border border-white/8 bg-white/[0.03] p-4 shadow-[0_20px_50px_rgba(0,0,0,0.2)]"
-              >
-                <div className="flex flex-col gap-3">
-                  {column.map((icon) => (
-                    <MotionDiv
-                      key={icon.alt}
-                      className="flex h-[3.65rem] items-center justify-center rounded-[1rem] border border-white/8 bg-white/95 px-4"
-                      initial={resolveMotionProps({ opacity: 0, y: 16 }, { opacity: 1 })}
-                      whileInView={resolveMotionProps({ opacity: 1, y: 0 }, { opacity: 1 })}
-                      viewport={{ once: true, amount: 0.2 }}
-                      transition={prefersReducedMotion ? { duration: 0 } : { duration: 0.45, delay: columnIndex * 0.05 }}
-                    >
-                      <img src={icon.src} alt={icon.alt} className="max-h-[1.55rem] w-auto object-contain" />
-                    </MotionDiv>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        <section
           id="patch-note"
           className="mx-auto w-full max-w-[95rem] px-4 py-20 sm:px-6 lg:px-8 lg:py-24"
         >
           <p className="text-[0.75rem] tracking-[0.16em] text-white/36">{copy.patchEyebrow}</p>
           <h2 className={`mt-4 ${sectionTitleClass}`}>{copy.patchTitle}</h2>
-          <p className={`mt-4 ${sectionBodyClass}`}>
-            {copy.patchBody}
-          </p>
+          <p className={`mt-4 ${sectionBodyClass}`}>{copy.patchBody}</p>
 
           <div
             className="mt-10 grid gap-8 lg:grid-cols-[minmax(0,0.9fr)_minmax(320px,0.78fr)] lg:items-center"
@@ -740,7 +646,9 @@ export const StartingPage = () => {
         <div className="mx-auto flex w-full max-w-[95rem] flex-col gap-5 px-4 py-8 sm:px-6 lg:flex-row lg:items-center lg:justify-between lg:px-8">
           <div>
             <p className="text-[0.78rem] tracking-[0.12em] text-white/38">AI INTERVIEW SOLUTION</p>
-            <p className="mt-2 text-[0.86rem] text-white/52">{copy.contact}: <a href="mailto:songchih@icloud.com" className="underline underline-offset-2">songchih@icloud.com</a></p>
+            <p className="mt-2 text-[0.86rem] text-white/52">
+              Contact: <a href="mailto:songchih@icloud.com" className="underline underline-offset-2">songchih@icloud.com</a>
+            </p>
           </div>
           <nav className="flex flex-wrap items-center gap-4 text-[0.82rem] text-white/64">
             {copy.footerLinks.map((link) => (

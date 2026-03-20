@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { SupportReportModal } from "./SupportReportModal";
-import brandFavicon from "../assets/logo/favicon.png";
+import brandFavicon from "../assets/logo/logo.png";
 
 export const ContentTopNav = ({
   point = "0P",
