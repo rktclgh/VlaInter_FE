@@ -607,15 +607,16 @@ export const AdminConsolePage = () => {
 
   useEffect(() => {
     const courseId = Number(selectedYoutubeCourseId);
+    const activeYoutubeSummaryJobCount = youtubeSummaryJobs.filter((job) => job?.status !== "READY" && job?.status !== "FAILED").length;
     let cleanup = () => {};
-    if (activeTab === "youtubeSummary" && activeYoutubeSummaryJobs.length > 0 && Number.isFinite(courseId)) {
+    if (activeTab === "youtubeSummary" && activeYoutubeSummaryJobCount > 0 && Number.isFinite(courseId)) {
       const timer = window.setInterval(() => {
         void loadYoutubeSummaryJobs(courseId, { silent: true });
       }, 4000);
       cleanup = () => window.clearInterval(timer);
     }
     return cleanup;
-  }, [activeTab, activeYoutubeSummaryJobs.length, loadYoutubeSummaryJobs, selectedYoutubeCourseId]);
+  }, [activeTab, loadYoutubeSummaryJobs, selectedYoutubeCourseId, youtubeSummaryJobs]);
 
   useEffect(() => {
     if (!selectedMemberId) {
@@ -762,10 +763,6 @@ export const AdminConsolePage = () => {
   const selectedYoutubeCourse = useMemo(
     () => studentSidebarCourses.find((item) => Number(item?.courseId) === Number(selectedYoutubeCourseId)) || null,
     [selectedYoutubeCourseId, studentSidebarCourses]
-  );
-  const activeYoutubeSummaryJobs = useMemo(
-    () => youtubeSummaryJobs.filter((job) => job?.status !== "READY" && job?.status !== "FAILED"),
-    [youtubeSummaryJobs]
   );
   const patchNoteOrderLookup = useMemo(
     () => new Map(patchNotes.map((item, index) => [item.patchNoteId, index + 1])),
