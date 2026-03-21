@@ -4,7 +4,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { getMyProfile } from "../lib/userApi";
 import { hasAuthenticatedBrowserSession } from "../lib/authSessionMarker";
 import { getLandingPatchNotes, getLandingSiteSettings } from "../lib/landingApi";
-import WaveDotsBackground from "../components/WaveDotsBackground";
+import { WaveBackground } from "../components/WaveBackground";
 import campusLogo from "../assets/logo/logo_campus.png";
 import campusWordmark from "../assets/logo/vlainter_campus.png";
 import { usePublicLocale } from "../lib/publicLocale";
@@ -381,6 +381,8 @@ export const StudentLandingPage = () => {
       </AnimatePresence>
 
       <section className="relative isolate overflow-hidden bg-[#050816]">
+        <WaveBackground variant="campus" />
+
         <div className="relative z-10 mx-auto flex min-h-[min(100vh,58rem)] w-full max-w-[112rem] flex-col px-4 pb-8 pt-4 sm:px-6 lg:px-8">
           <header className="mx-auto flex w-full max-w-[95rem] items-center justify-between gap-4 px-1 py-2 md:px-2">
             <button
@@ -447,7 +449,6 @@ export const StudentLandingPage = () => {
 
           <div className="mx-auto flex w-full max-w-[95rem] flex-1 flex-col justify-center">
             <div className="relative mt-10 flex min-h-[min(78vh,44rem)] items-center justify-center overflow-hidden border border-white/8 bg-[linear-gradient(180deg,rgba(0,0,0,0.1),rgba(0,0,0,0.2))] px-6 py-14 sm:px-8 md:px-12 lg:px-16 lg:py-16">
-              <WaveDotsBackground />
               <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(1,4,16,0.08),rgba(1,4,16,0.28)_50%,rgba(1,4,16,0.08))]" />
               <div className="relative mx-auto flex h-full max-w-[58rem] flex-col items-center justify-center text-center">
                 <p className="text-[0.72rem] tracking-[0.03em] text-white/58 md:text-[0.82rem]">
