@@ -596,6 +596,15 @@ export const AdminConsolePage = () => {
     }
   }, [activeTab, loadPatchNotes, loadingPatchNotes, patchNotes.length, patchNotesLoadFailed]);
 
+  const selectedYoutubeCourse = useMemo(
+    () => studentSidebarCourses.find((item) => Number(item?.courseId) === Number(selectedYoutubeCourseId)) || null,
+    [selectedYoutubeCourseId, studentSidebarCourses]
+  );
+  const activeYoutubeSummaryJobCount = useMemo(
+    () => youtubeSummaryJobs.filter((job) => job?.status !== "READY" && job?.status !== "FAILED").length,
+    [youtubeSummaryJobs]
+  );
+
   useEffect(() => {
     if (activeTab !== "youtubeSummary") return;
     if (!selectedYoutubeCourseId) {
@@ -761,14 +770,6 @@ export const AdminConsolePage = () => {
   const selectedPatchNote = useMemo(
     () => patchNotes.find((item) => item.patchNoteId === selectedPatchNoteId) || null,
     [patchNotes, selectedPatchNoteId]
-  );
-  const selectedYoutubeCourse = useMemo(
-    () => studentSidebarCourses.find((item) => Number(item?.courseId) === Number(selectedYoutubeCourseId)) || null,
-    [selectedYoutubeCourseId, studentSidebarCourses]
-  );
-  const activeYoutubeSummaryJobCount = useMemo(
-    () => youtubeSummaryJobs.filter((job) => job?.status !== "READY" && job?.status !== "FAILED").length,
-    [youtubeSummaryJobs]
   );
   const patchNoteOrderLookup = useMemo(
     () => new Map(patchNotes.map((item, index) => [item.patchNoteId, index + 1])),
