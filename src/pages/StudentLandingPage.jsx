@@ -1,10 +1,10 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { Link, useNavigate } from "react-router-dom";
 import { getMyProfile } from "../lib/userApi";
 import { hasAuthenticatedBrowserSession } from "../lib/authSessionMarker";
 import { getLandingPatchNotes, getLandingSiteSettings } from "../lib/landingApi";
-import { WaveBackground } from "../components/WaveBackground";
+import WaveDotsBackground from "../components/WaveDotsBackground";
 import campusLogo from "../assets/logo/logo_campus.png";
 import campusWordmark from "../assets/logo/vlainter_campus.png";
 import { usePublicLocale } from "../lib/publicLocale";
@@ -144,34 +144,38 @@ const CampusOutlineLink = ({
   textClassName = "",
   viewBox = "0 0 140 36",
   points = "14,1 139,1 126,35 1,35",
-}) => (
-  <Link
-    to={to}
-    className={`group relative inline-flex items-center justify-center overflow-hidden ${className}`}
-  >
-    <svg
-      aria-hidden="true"
-      viewBox={viewBox}
-      preserveAspectRatio="none"
-      className="absolute inset-0 h-full w-full"
+}) => {
+  const gradientId = useId().replace(/:/g, "-");
+
+  return (
+    <Link
+      to={to}
+      className={`group relative inline-flex items-center justify-center overflow-hidden ${className}`}
     >
-      <defs>
-        <linearGradient id="campus-outline-gradient" x1="0%" y1="50%" x2="100%" y2="50%">
-          <stop offset="0%" stopColor="#7ED957" />
-          <stop offset="100%" stopColor="#FFD95A" />
-        </linearGradient>
-      </defs>
-      <polygon
-        points={points}
-        fill="none"
-        stroke="url(#campus-outline-gradient)"
-        strokeWidth="1.5"
-        vectorEffect="non-scaling-stroke"
-      />
-    </svg>
-    <span className={`relative z-[1] ${textClassName}`}>{children}</span>
-  </Link>
-);
+      <svg
+        aria-hidden="true"
+        viewBox={viewBox}
+        preserveAspectRatio="none"
+        className="absolute inset-0 h-full w-full"
+      >
+        <defs>
+          <linearGradient id={gradientId} x1="0%" y1="50%" x2="100%" y2="50%">
+            <stop offset="0%" stopColor="#7ED957" />
+            <stop offset="100%" stopColor="#FFD95A" />
+          </linearGradient>
+        </defs>
+        <polygon
+          points={points}
+          fill="none"
+          stroke={`url(#${gradientId})`}
+          strokeWidth="1.5"
+          vectorEffect="non-scaling-stroke"
+        />
+      </svg>
+      <span className={`relative z-[1] ${textClassName}`}>{children}</span>
+    </Link>
+  );
+};
 
 export const StudentLandingPage = () => {
   const navigate = useNavigate();
@@ -182,6 +186,7 @@ export const StudentLandingPage = () => {
   const [patchNotes, setPatchNotes] = useState([]);
   const [landingVersionLabel, setLandingVersionLabel] = useState("v0.5");
   const [activePatchNoteIndex, setActivePatchNoteIndex] = useState(0);
+  const patchNoteWheelThrottleRef = useRef(0);
   const copy = CONTENT_BY_LANGUAGE[language] || CONTENT_BY_LANGUAGE.ko;
   const prefersReducedMotion = useReducedMotion();
 
@@ -272,6 +277,18 @@ export const StudentLandingPage = () => {
   const showNextPatchNote = useCallback(() => {
     setActivePatchNoteIndex((prev) => Math.min(prev + 1, Math.max(displayedPatchNotes.length - 1, 0)));
   }, [displayedPatchNotes.length]);
+
+  const handlePatchNotesWheel = useCallback((event) => {
+    if (Math.abs(event.deltaY) < 18) return;
+    const now = Date.now();
+    if (now - patchNoteWheelThrottleRef.current < 280) return;
+    patchNoteWheelThrottleRef.current = now;
+    if (event.deltaY > 0) {
+      showNextPatchNote();
+    } else {
+      showPreviousPatchNote();
+    }
+  }, [showNextPatchNote, showPreviousPatchNote]);
 
   return (
     <div className="min-h-screen overflow-x-hidden bg-[#111111] text-white">
@@ -364,8 +381,6 @@ export const StudentLandingPage = () => {
       </AnimatePresence>
 
       <section className="relative isolate overflow-hidden bg-[#050816]">
-        <WaveBackground variant="campus" />
-
         <div className="relative z-10 mx-auto flex min-h-[min(100vh,58rem)] w-full max-w-[112rem] flex-col px-4 pb-8 pt-4 sm:px-6 lg:px-8">
           <header className="mx-auto flex w-full max-w-[95rem] items-center justify-between gap-4 px-1 py-2 md:px-2">
             <button
@@ -432,6 +447,7 @@ export const StudentLandingPage = () => {
 
           <div className="mx-auto flex w-full max-w-[95rem] flex-1 flex-col justify-center">
             <div className="relative mt-10 flex min-h-[min(78vh,44rem)] items-center justify-center overflow-hidden border border-white/8 bg-[linear-gradient(180deg,rgba(0,0,0,0.1),rgba(0,0,0,0.2))] px-6 py-14 sm:px-8 md:px-12 lg:px-16 lg:py-16">
+              <WaveDotsBackground />
               <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(1,4,16,0.08),rgba(1,4,16,0.28)_50%,rgba(1,4,16,0.08))]" />
               <div className="relative mx-auto flex h-full max-w-[58rem] flex-col items-center justify-center text-center">
                 <p className="text-[0.72rem] tracking-[0.03em] text-white/58 md:text-[0.82rem]">
@@ -567,14 +583,7 @@ export const StudentLandingPage = () => {
 
           <div
             className="mt-10 grid gap-8 lg:grid-cols-[minmax(0,0.9fr)_minmax(320px,0.78fr)] lg:items-center"
-            onWheel={(event) => {
-              if (Math.abs(event.deltaY) < 18) return;
-              if (event.deltaY > 0) {
-                showNextPatchNote();
-              } else {
-                showPreviousPatchNote();
-              }
-            }}
+            onWheel={handlePatchNotesWheel}
           >
             <div>
               <p className="text-[0.74rem] tracking-[0.16em] text-white/34">
