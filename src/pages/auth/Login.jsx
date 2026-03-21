@@ -4,7 +4,7 @@ import { TopNav } from "../../components/TopNav";
 import eyeOpenIcon from "../../assets/icon/eye-open.svg";
 import eyeOffIcon from "../../assets/icon/eye-off.svg";
 import kakaoLoginButtonImage from "../../assets/icon/kakao_login_medium_wide.png";
-import brandFavicon from "../../assets/logo/favicon.png";
+import brandFavicon from "../../assets/logo/logo.png";
 import { login, logout } from "../../lib/authApi";
 import { clearAuthenticatedBrowserSession, createKakaoOAuthState, storeKakaoOAuthState } from "../../lib/authSessionMarker";
 import { AuthFooter } from "../../components/AuthFooter";

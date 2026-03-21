@@ -1,5 +1,6 @@
 import { Routes, Route, Outlet } from 'react-router-dom'
 import { StartingPage } from './pages/StartingPage'
+import { StudentLandingPage } from './pages/StudentLandingPage'
 import { Login } from './pages/auth/Login'
 import { Join } from './pages/auth/Join'
 import { ForgotPassword } from './pages/auth/ForgotPassword'
@@ -43,6 +44,7 @@ function App() {
   return (
     <Routes>
       <Route path="/" element={<StartingPage />} />
+      <Route path="/campus" element={<StudentLandingPage />} />
       <Route path="/login" element={<Login />} />
       <Route path="/join" element={<Join />} />
       <Route path="/password/forgot" element={<ForgotPassword />} />
