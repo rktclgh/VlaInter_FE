@@ -187,6 +187,27 @@ export async function getInterviewSessionHistory(apiBasePath) {
   });
 }
 
+export async function getMockInterviewHistoryPage({ page = 0, size = 12 } = {}) {
+  const search = new URLSearchParams();
+  search.set("page", String(page));
+  search.set("size", String(size));
+  return apiRequest(`/api/interview/mock/sessions/history?${search.toString()}`, {
+    method: "GET",
+  });
+}
+
+export async function getMockInterviewHistorySummary(sessionId) {
+  return apiRequest(`/api/interview/mock/sessions/${encodeURIComponent(sessionId)}/summary`, {
+    method: "GET",
+  });
+}
+
+export async function deleteInterviewSession(apiBasePath, sessionId) {
+  return apiRequest(`${apiBasePath}/sessions/${encodeURIComponent(sessionId)}`, {
+    method: "DELETE",
+  });
+}
+
 export async function submitTechInterviewAnswer(sessionId, answer) {
   return submitInterviewAnswer("/api/interview/tech", sessionId, answer);
 }
