@@ -4,7 +4,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { getMyProfile } from "../lib/userApi";
 import { hasAuthenticatedBrowserSession } from "../lib/authSessionMarker";
 import { getLandingPatchNotes, getLandingSiteSettings } from "../lib/landingApi";
-import { WaveBackground } from "../components/WaveBackground";
+import { ParticleWaveBackground } from "../components/ParticleWaveBackground";
 import campusLogo from "../assets/logo/logo_campus.png";
 import campusWordmark from "../assets/logo/vlainter_campus.png";
 import { usePublicLocale } from "../lib/publicLocale";
@@ -381,7 +381,11 @@ export const StudentLandingPage = () => {
       </AnimatePresence>
 
       <section className="relative isolate overflow-hidden bg-[#050816]">
-        <WaveBackground variant="campus" />
+        <ParticleWaveBackground
+          reducedMotion={Boolean(prefersReducedMotion)}
+          primaryColor="#7ED957"
+          secondaryColor="#FFD95A"
+        />
 
         <div className="relative z-10 mx-auto flex min-h-[min(100vh,58rem)] w-full max-w-[112rem] flex-col px-4 pb-8 pt-4 sm:px-6 lg:px-8">
           <header className="mx-auto flex w-full max-w-[95rem] items-center justify-between gap-4 px-1 py-2 md:px-2">

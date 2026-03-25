@@ -4,7 +4,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { getMyProfile } from "../lib/userApi";
 import { hasAuthenticatedBrowserSession } from "../lib/authSessionMarker";
 import { getLandingPatchNotes, getLandingSiteSettings } from "../lib/landingApi";
-import { WaveBackground } from "../components/WaveBackground";
+import { ParticleWaveBackground } from "../components/ParticleWaveBackground";
 import logoMark from "../assets/logo/logo.png";
 import heroWordmark from "../assets/logo/vlainter.png";
 import icon11st from "../assets/icon/11st.png";
@@ -420,7 +420,7 @@ export const StartingPage = () => {
       </AnimatePresence>
 
       <section className="relative isolate overflow-hidden bg-[#050816]">
-        <WaveBackground />
+        <ParticleWaveBackground reducedMotion={Boolean(prefersReducedMotion)} />
 
         <div className="relative z-10 mx-auto flex min-h-[min(100vh,58rem)] w-full max-w-[112rem] flex-col px-4 pb-8 pt-4 sm:px-6 lg:px-8">
           <header className="mx-auto flex w-full max-w-[95rem] items-center justify-between gap-4 px-1 py-2 md:px-2">
@@ -497,8 +497,9 @@ export const StartingPage = () => {
           </header>
 
           <div className="mx-auto flex w-full max-w-[95rem] flex-1 flex-col justify-center">
-            <div className="relative mt-10 flex min-h-[min(78vh,44rem)] items-center justify-center overflow-hidden border border-white/8 bg-[linear-gradient(180deg,rgba(0,0,0,0.1),rgba(0,0,0,0.2))] px-6 py-14 sm:px-8 md:px-12 lg:px-16 lg:py-16">
-              <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(1,4,16,0.08),rgba(1,4,16,0.28)_50%,rgba(1,4,16,0.08))]" />
+            <div className="relative mt-10 flex min-h-[min(78vh,44rem)] items-center justify-center overflow-hidden border border-white/10 bg-[linear-gradient(180deg,rgba(2,5,18,0.16),rgba(2,5,18,0.34))] px-6 py-14 sm:px-8 md:px-12 lg:px-16 lg:py-16">
+              <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_18%,rgba(255,255,255,0.08),rgba(255,255,255,0)_44%)]" />
+              <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(1,4,16,0.04),rgba(1,4,16,0.26)_50%,rgba(1,4,16,0.12))]" />
               <div className="relative mx-auto flex h-full max-w-[58rem] flex-col items-center justify-center text-center">
                 <p className="text-[0.72rem] tracking-[0.03em] text-white/58 md:text-[0.82rem]">
                   {copy.heroSubtitle}
