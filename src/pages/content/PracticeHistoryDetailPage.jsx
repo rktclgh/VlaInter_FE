@@ -174,6 +174,17 @@ export const PracticeHistoryDetailPage = () => {
     };
   }, [location.state?.summary, numericSessionId]);
 
+  const markTurnAsBookmarked = useCallback((turnId) => {
+    setResults((prev) =>
+      prev
+        ? {
+            ...prev,
+            turns: prev.turns.map((item) => (item.turnId === turnId ? { ...item, bookmarked: true } : item)),
+          }
+        : prev
+    );
+  }, []);
+
   const handleBookmarkTurn = useCallback(async (turnId) => {
     if (!turnId) return;
     if (bookmarkingTurnIdsRef.current.includes(turnId)) return;
@@ -187,24 +198,10 @@ export const PracticeHistoryDetailPage = () => {
 
     try {
       await bookmarkInterviewTurn(PRACTICE_API_BASE_PATH, turnId);
-      setResults((prev) =>
-        prev
-          ? {
-              ...prev,
-              turns: prev.turns.map((item) => (item.turnId === turnId ? { ...item, bookmarked: true } : item)),
-            }
-          : prev
-      );
+      markTurnAsBookmarked(turnId);
     } catch (error) {
       if (isAlreadySavedQuestionError(error)) {
-        setResults((prev) =>
-          prev
-            ? {
-                ...prev,
-                turns: prev.turns.map((item) => (item.turnId === turnId ? { ...item, bookmarked: true } : item)),
-              }
-            : prev
-        );
+        markTurnAsBookmarked(turnId);
         return;
       }
       setPageErrorMessage(error?.message || "질문 저장에 실패했습니다.");
@@ -215,7 +212,7 @@ export const PracticeHistoryDetailPage = () => {
         return next;
       });
     }
-  }, [results]);
+  }, [markTurnAsBookmarked, results]);
 
   const summaryPills = useMemo(() => buildSummaryPills(summary), [summary]);
   const pageTitle = summary ? getPracticeHistoryTitle(summary) : "기술 질문 결과";
