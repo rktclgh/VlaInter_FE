@@ -12,6 +12,7 @@ import {
 import { formatDateTime, formatHistoryTitle, scoreToStars } from "./mockInterviewHistoryUtils";
 
 const SUMMARY_PILL_LIMIT = 6;
+const POSITIVE_INTEGER_ID_REGEX = /^[1-9]\d*$/;
 
 const buildSummaryPills = (summary) => {
   if (!summary) return [];
@@ -108,7 +109,7 @@ export const InterviewHistoryDetailPage = () => {
   const { sessionId } = useParams();
   const location = useLocation();
   const navigate = useNavigate();
-  const numericSessionId = Number(sessionId);
+  const resolvedSessionId = typeof sessionId === "string" ? sessionId.trim() : "";
   const [pageErrorMessage, setPageErrorMessage] = useState("");
   const [loadingPage, setLoadingPage] = useState(true);
   const [summary, setSummary] = useState(location.state?.summary ?? null);
@@ -117,7 +118,7 @@ export const InterviewHistoryDetailPage = () => {
   const bookmarkingTurnIdsRef = useRef([]);
 
   useEffect(() => {
-    if (!Number.isFinite(numericSessionId) || numericSessionId <= 0) {
+    if (!resolvedSessionId || !POSITIVE_INTEGER_ID_REGEX.test(resolvedSessionId)) {
       setLoadingPage(false);
       setPageErrorMessage("유효하지 않은 면접 이력입니다.");
       return;
@@ -131,8 +132,8 @@ export const InterviewHistoryDetailPage = () => {
 
       try {
         const [sessionSummary, sessionResults] = await Promise.all([
-          location.state?.summary ? Promise.resolve(location.state.summary) : getMockInterviewHistorySummary(numericSessionId),
-          getInterviewSessionResults("/api/interview/mock", numericSessionId),
+          location.state?.summary ? Promise.resolve(location.state.summary) : getMockInterviewHistorySummary(resolvedSessionId),
+          getInterviewSessionResults("/api/interview/mock", resolvedSessionId),
         ]);
         if (!active) return;
 
@@ -150,7 +151,7 @@ export const InterviewHistoryDetailPage = () => {
     return () => {
       active = false;
     };
-  }, [location.state?.summary, numericSessionId]);
+  }, [location.state?.summary, resolvedSessionId]);
 
   const markTurnAsBookmarked = useCallback((turnId) => {
     setResults((prev) =>
