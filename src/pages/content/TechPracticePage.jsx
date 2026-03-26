@@ -51,7 +51,7 @@ const LogoutConfirmModal = ({ onCancel, onConfirm }) => (
 
 const CategoryCard = ({ title, description, children, className = "" }) => (
   <section className={`grid gap-4 xl:grid-cols-[12.5rem_minmax(0,1fr)] xl:gap-x-8 xl:items-start ${className}`}>
-    <div className="shrink-0">
+    <div>
       <p className={SECTION_TITLE_CLASS}>{title}</p>
       {description ? <p className={SECTION_DESCRIPTION_CLASS}>{description}</p> : null}
     </div>
