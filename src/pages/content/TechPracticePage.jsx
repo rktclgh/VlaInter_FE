@@ -8,7 +8,7 @@ import { PointChargeModal } from "../../components/PointChargeModal";
 import { PointChargeSuccessModal } from "../../components/PointChargeSuccessModal";
 import { ResumeSessionModal } from "../../components/ResumeSessionModal";
 import { Sidebar } from "../../components/Sidebar";
-import { StarIcons } from "../../components/DifficultyStars";
+import { StarIcons, StarRatingInput } from "../../components/DifficultyStars";
 import tempProfileImage from "../../assets/icon/temp.png";
 import { isAuthenticationError } from "../../lib/apiClient";
 import { logout } from "../../lib/authApi";
@@ -25,6 +25,7 @@ import { getMyProfile, getMyProfileImageUrl } from "../../lib/userApi";
 
 const QUESTION_COUNT = 5;
 const DEFAULT_RATING = 3;
+const QUICK_START_PAGE_SIZE = 3;
 
 const formatPoint = (value) => `${new Intl.NumberFormat("ko-KR").format(Number(value) || 0)}P`;
 const parsePoint = (rawValue) => {
@@ -37,8 +38,8 @@ const parsePoint = (rawValue) => {
   return 0;
 };
 const LogoutConfirmModal = ({ onCancel, onConfirm }) => (
-  <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/35 px-4">
-    <div className="w-full max-w-[420px] rounded-[16px] border border-[#d9d9d9] bg-white p-5">
+  <div className="fixed inset-0 z-70 flex items-center justify-center bg-black/35 px-4">
+    <div className="w-full max-w-105 rounded-2xl border border-[#d9d9d9] bg-white p-5">
       <p className="text-[15px] font-medium text-[#252525]">정말 로그아웃 하시겠습니까?<br />저장되지 않은 작업은 유지되지 않습니다.</p>
       <div className="mt-4 flex justify-end gap-2">
         <button type="button" onClick={onCancel} className="rounded-[10px] border border-[#d6d6d6] px-3 py-1.5 text-[12px] text-[#666]">취소</button>
@@ -48,45 +49,110 @@ const LogoutConfirmModal = ({ onCancel, onConfirm }) => (
   </div>
 );
 
-const InlineSpinner = ({ label }) => (
-  <div className="inline-flex items-center gap-2 text-[12px] text-[#5e6472]">
-    <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-[#cbd5e1] border-t-[#171b24]" />
-    <span>{label}</span>
-  </div>
+const CategoryCard = ({ title, description, children, className = "" }) => (
+  <section className={`flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between ${className}`}>
+    <div className="shrink-0 xl:max-w-52">
+      <p className={SECTION_TITLE_CLASS}>{title}</p>
+      {description ? <p className={SECTION_DESCRIPTION_CLASS}>{description}</p> : null}
+    </div>
+    <div className="max-w-208 space-y-3">
+      {children}
+    </div>
+  </section>
 );
 
-const DifficultyChip = ({ label, active = false, onClick }) => (
-  <button type="button" onClick={onClick} className={`rounded-full border px-3 py-1 text-[11px] transition ${active ? "border-[#9d6320] bg-[#fff5ea] text-[#9d6320]" : "border-[#eceff4] bg-white text-[#6b7280]"}`}>
-    {label}
+const FilterChip = ({ label, active = false, onClick, disabled = false }) => (
+  <button
+    type="button"
+    onClick={onClick}
+    disabled={disabled}
+    className={`rounded-full p-px transition disabled:opacity-50 ${
+      active ? GRADIENT_BORDER_CLASS : "bg-[#EDEDED]"
+    }`}
+  >
+    <span className={`inline-flex min-h-6.5 min-w-12.75 items-center justify-center rounded-full bg-white px-3 text-[0.75rem] font-normal tracking-[0.02em] ${
+      active ? "text-[#000000]" : "text-[#B5B5B5]"
+    }`}>
+      {label}
+    </span>
   </button>
 );
 
-const LanguageSelect = ({ value, onChange }) => (
-  <select
-    value={value}
-    onChange={(event) => onChange(event.target.value)}
-    className="rounded-[14px] border border-[#dfe3eb] bg-white px-4 py-3 text-[13px] outline-none focus:border-[#8aa2e8]"
+const SelectionPillButton = ({
+  active = false,
+  disabled = false,
+  onClick,
+  className = "",
+  innerClassName = "",
+  minHeightClass = "min-h-[2.625rem]",
+  children,
+}) => (
+  <button
+    type="button"
+    disabled={disabled}
+    onClick={onClick}
+    className={`rounded-2xl p-px transition disabled:opacity-50 ${active ? GRADIENT_BORDER_CLASS : "bg-[#C9C9C9]"} ${className}`}
   >
-    {INTERVIEW_LANGUAGE_OPTIONS.map((option) => (
-      <option key={option.value} value={option.value}>
-        {option.label}
-      </option>
-    ))}
-  </select>
+    <span className={`flex h-full w-full items-center justify-center rounded-[calc(1rem-1px)] bg-white px-4 text-center text-[0.8125rem] font-medium tracking-[0.02em] ${
+      active ? "text-[#000000]" : "text-[#AFAFAF]"
+    } ${minHeightClass} ${innerClassName}`}>
+      {children}
+    </span>
+  </button>
+);
+
+const SummaryChip = ({ children, tone = "default" }) => (
+  <span
+    className={`inline-flex items-center rounded-full border bg-white px-3 py-1.5 text-[0.75rem] font-normal tracking-[0.02em] ${
+      tone === "accent"
+        ? "border-[#CFCFCF] text-[#000000]"
+        : "border-[#E3E3E3] text-[#6D6D6D]"
+    }`}>
+    {children}
+  </span>
 );
 
 const HelpIconButton = ({ onClick }) => (
   <button
     type="button"
     onClick={onClick}
-    className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-[#d9dde5] bg-white text-[13px] font-semibold text-[#556070] transition hover:bg-[#f8fafc]"
+    className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-white text-[0.9375rem] font-medium text-[#9E9E9E] shadow-[inset_0_0_0.1875rem_rgba(0,0,0,0.25)] transition hover:bg-[#fafafa]"
     aria-label="직무와 기술 입력 예시 보기"
   >
     ?
   </button>
 );
 
+const QuickStartCard = ({ category, rating, onStart, disabled, starting }) => {
+  const tags = [category.branchName, category.jobName, category.name].filter(Boolean).slice(0, 3);
+
+  return (
+    <article className="rounded-2xl border border-[#EDEDED] bg-white px-5 py-4 shadow-[0_0_0.1875rem_rgba(0,0,0,0.08)]">
+      <div className="flex flex-wrap gap-1.5">
+        {tags.map((tag) => (
+          <SummaryChip key={`${category.categoryId}-${tag}`}>{tag}</SummaryChip>
+        ))}
+      </div>
+      <h3 className="mt-4 text-[1.5rem] font-medium tracking-[0] text-[#000000]">{category.name}</h3>
+      <p className="mt-1 text-[0.75rem] leading-[1.7] tracking-[0.02em] text-[#9E9E9E]">선택한 난이도로 바로 연습을 시작할 수 있습니다.</p>
+      <div className="mt-4 flex items-center justify-between gap-3">
+        <div className="rounded-[0.875rem] bg-white px-3 py-2 shadow-[0_0_0.1875rem_rgba(0,0,0,0.18)]">
+          <StarIcons rating={rating} sizeClass="text-[10px]" />
+        </div>
+        <SelectionPillButton active={!disabled} disabled={disabled} onClick={onStart} className="min-w-26" minHeightClass="min-h-[2.125rem]">
+          {starting ? "시작 중..." : "빠른 시작"}
+        </SelectionPillButton>
+      </div>
+    </article>
+  );
+};
+
 const normalizeCategoryName = (value) => String(value || "").trim().toLowerCase();
+const GRADIENT_BORDER_CLASS = "bg-[linear-gradient(45deg,#5D83DE_0%,#FF1C91_100%)]";
+const SECTION_TITLE_CLASS = "text-[0.875rem] font-medium tracking-[0.02em] text-[#4B4B4B]";
+const SECTION_DESCRIPTION_CLASS = "mt-1 text-[0.75rem] font-normal leading-[1.7] tracking-[0.02em] text-[#9E9E9E]";
+const TEXT_INPUT_CLASS = "min-h-10.25 w-full rounded-[0.6875rem] border border-[#EDEDED] bg-white px-[0.9375rem] py-[0.75rem] text-[0.75rem] font-normal tracking-[0.02em] text-[#4B4B4B] shadow-[inset_0_0_0.1875rem_rgba(0,0,0,0.25)] placeholder:text-[#CCCCCC] disabled:bg-[#FAFAFA] disabled:text-[#BDBDBD]";
+const SUB_COPY_CLASS = "text-[0.75rem] font-normal leading-[1.65] tracking-[0.02em] text-[#8F8F8F]";
 
 export const TechPracticePage = () => {
   const navigate = useNavigate();
@@ -108,6 +174,7 @@ export const TechPracticePage = () => {
   const [selectedSkillId, setSelectedSkillId] = useState("");
   const [selectedRating, setSelectedRating] = useState(DEFAULT_RATING);
   const [selectedLanguage, setSelectedLanguage] = useState("KO");
+  const [quickStartPage, setQuickStartPage] = useState(0);
   const [pageErrorMessage, setPageErrorMessage] = useState("");
   const [showGeminiOverloadModal, setShowGeminiOverloadModal] = useState(false);
   const [creatingCategory, setCreatingCategory] = useState(false);
@@ -254,10 +321,10 @@ export const TechPracticePage = () => {
         branchName: getCategoryDisplayName(categoryMap.get(categoryMap.get(category.parentId)?.parentId)) || "기타",
       }));
   }, [branchFilter, categories, categoryMap, categoryQuery, jobFilter, jobs]);
-  const categoryCards = useMemo(() => {
-    if (!selectedSkillId) return visibleSkills;
-    return visibleSkills.filter((category) => String(category.categoryId) === String(selectedSkillId));
-  }, [selectedSkillId, visibleSkills]);
+  const selectedSkillCategory = useMemo(
+    () => visibleSkills.find((category) => String(category.categoryId) === String(selectedSkillId)) || null,
+    [selectedSkillId, visibleSkills]
+  );
 
   const selectedBranch = useMemo(() => branchItems.find((item) => String(item.categoryId) === String(branchFilter)) || null, [branchFilter, branchItems]);
   const selectedJob = useMemo(() => jobs.find((item) => String(item.categoryId) === String(jobFilter)) || null, [jobFilter, jobs]);
@@ -290,6 +357,13 @@ export const TechPracticePage = () => {
     jobId: jobFilter,
     keyword: "",
   }), [branchFilter, categories, jobFilter]);
+  const quickStartPageCount = Math.max(1, Math.ceil(visibleSkills.length / QUICK_START_PAGE_SIZE));
+  const quickStartCategories = useMemo(
+    () => visibleSkills.slice(quickStartPage * QUICK_START_PAGE_SIZE, (quickStartPage + 1) * QUICK_START_PAGE_SIZE),
+    [quickStartPage, visibleSkills]
+  );
+  const primaryStartCategory = selectedSkillCategory || quickStartCategories[0] || visibleSkills[0] || null;
+
   useEffect(() => {
     if (!branchFilter) return;
     if (availableJobsForBranch.some((job) => String(job.categoryId) === String(jobFilter))) return;
@@ -302,6 +376,15 @@ export const TechPracticePage = () => {
     if (availableSkillsForJob.some((skill) => String(skill.categoryId) === String(selectedSkillId))) return;
     setSelectedSkillId("");
   }, [availableSkillsForJob, selectedSkillId]);
+
+  useEffect(() => {
+    setQuickStartPage(0);
+  }, [branchFilter, jobFilter, categoryQuery]);
+
+  useEffect(() => {
+    if (quickStartPage < quickStartPageCount) return;
+    setQuickStartPage(Math.max(0, quickStartPageCount - 1));
+  }, [quickStartPage, quickStartPageCount]);
 
   const handleSidebarNavigate = (item) => {
     if (isStartingPractice) return;
@@ -468,12 +551,18 @@ export const TechPracticePage = () => {
   };
 
   return (
-    <div className="min-h-screen overflow-x-hidden bg-white pt-[3.75rem]">
-      <ContentTopNav point={formatPoint(userPoint)} onClickCharge={() => { if (!isStartingPractice) setShowPointChargeModal(true); }} onOpenMenu={() => { if (!isStartingPractice) setIsMobileMenuOpen(true); }} />
+    <div className="min-h-screen overflow-x-hidden bg-white pt-15">
+      <ContentTopNav
+        variant="mockStart"
+        point={formatPoint(userPoint)}
+        onClickCharge={() => { if (!isStartingPractice) setShowPointChargeModal(true); }}
+        onOpenMenu={() => { if (!isStartingPractice) setIsMobileMenuOpen(true); }}
+      />
 
       <MobileSidebarDrawer
         open={isMobileMenuOpen}
         activeKey="tech_practice"
+        variant="mockStart"
         onClose={() => setIsMobileMenuOpen(false)}
         onNavigate={handleSidebarNavigate}
         userName={userName}
@@ -485,153 +574,222 @@ export const TechPracticePage = () => {
       />
 
       <div className="flex min-h-[calc(100vh-3.75rem)]">
-        <div className="hidden w-[17rem] shrink-0 md:block">
-          <Sidebar activeKey="tech_practice" onNavigate={handleSidebarNavigate} userName={userName} profileImageUrl={profileImageUrl} onLogout={() => setShowLogoutModal(true)} />
+        <div className="hidden w-68 shrink-0 md:block">
+          <Sidebar
+            activeKey="tech_practice"
+            variant="mockStart"
+            onNavigate={handleSidebarNavigate}
+            userName={userName}
+            profileImageUrl={profileImageUrl}
+            onLogout={() => setShowLogoutModal(true)}
+          />
         </div>
 
-        <main className="flex min-w-0 flex-1 flex-col px-4 pb-8 pt-6 sm:px-5 md:px-8 md:pt-10">
-          <div className="mx-auto w-full max-w-[1280px]">
-            <section className="rounded-[24px] border border-[#e4e7ee] bg-[linear-gradient(180deg,#ffffff_0%,#f7f9fc_100%)] p-6">
-              <p className="text-[12px] font-semibold tracking-[0.08em] text-[#7a8190]">TECH PRACTICE</p>
-              <h1 className="mt-2 text-[30px] font-semibold tracking-[-0.02em] text-[#161a22] sm:text-[40px]">카테고리 기준으로 실전 연습을 시작합니다</h1>
-              <p className="mt-3 text-[14px] leading-[1.7] text-[#5e6472]">직무와 기술 카테고리, 난이도를 고르면 해당 기준에 맞는 기술질문 연습을 바로 시작하실 수 있습니다.</p>
-            </section>
+        <main className="flex min-w-0 flex-1 flex-col bg-white">
+          <div className="flex-1 overflow-y-auto px-4 pb-10 pt-8 sm:px-6 md:px-8 md:pt-10 xl:px-10">
+          <div className="mx-auto w-full max-w-392">
+            <div className="grid grid-cols-1 gap-8 xl:grid-cols-[minmax(0,1.08fr)_minmax(16rem,16.375rem)] xl:gap-9">
+              <section className="min-w-0 flex-1 xl:max-w-208">
+                <header>
+                  <h1 className="text-[clamp(2.1rem,3vw,2.25rem)] font-medium tracking-[0] text-[#000000]">기술질문 연습</h1>
+                  <p className="mt-3 max-w-196 text-[0.9375rem] leading-[1.9] tracking-[0] text-[#5C5C5C]">
+                    직무 및 기술에 대한 분야별 맞춤 면접 시스템입니다. 직무와 기술 카테고리, 난이도를 고르면 해당 기준에 맞는 기술질문 연습을 바로 시작하실 수 있습니다.
+                  </p>
+                </header>
 
-            <section className="mt-5 rounded-[24px] border border-[#e4e7ee] bg-white p-5 sm:p-6">
-              <div className="mb-4 flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-[12px] font-semibold tracking-[0.08em] text-[#7a8190]">입력 가이드</p>
-                  <p className="mt-1 text-[13px] leading-[1.7] text-[#5e6472]">계열, 직무, 기술이 헷갈리면 예시를 먼저 보고 같은 구조로 입력해 주세요.</p>
-                </div>
-                <div className="flex items-center gap-2">
+                <section className="mt-5 flex w-full max-w-146 items-center justify-between gap-4 rounded-[1.25rem] bg-[#FDFDFD] px-5 py-4 shadow-[0_0_0.1875rem_rgba(0,0,0,0.25)]">
+                  <div>
+                    <p className="text-[0.875rem] font-medium tracking-[0.02em] text-[#9E9E9E]">입력 가이드</p>
+                    <p className="mt-1 text-[0.9375rem] font-normal tracking-[0.02em] text-[#535353]">계열, 직무, 기술의 범위에 대한 가이드입니다</p>
+                  </div>
                   <HelpIconButton onClick={() => setShowExampleModal(true)} />
-                  <button type="button" onClick={() => setShowExampleModal(true)} className="text-[12px] font-semibold text-[#556070] underline-offset-2 hover:underline">
-                    예시 보기
-                  </button>
-                </div>
-              </div>
-              <div className="space-y-5">
-                <div className="rounded-[20px] border border-[#edf1f7] bg-[#fafbfd] p-4">
-                  <p className="text-[12px] font-semibold tracking-[0.08em] text-[#7a8190]">1. 계열 선택</p>
-                  <div className="mt-3 grid gap-3 xl:grid-cols-[1fr_auto]">
-                    <input value={branchQuery} onChange={(event) => setBranchQuery(event.target.value)} placeholder="계열 검색 또는 새 계열 입력" className="rounded-[14px] border border-[#dfe3eb] bg-white px-4 py-3 text-[13px] outline-none focus:border-[#8aa2e8]" />
-                    {canCreateBranch ? <button type="button" disabled={creatingCategory} onClick={handleCreateBranch} className="rounded-[14px] border border-[#171b24] bg-white px-4 py-2.5 text-[13px] font-semibold text-[#171b24] disabled:opacity-60">{creatingCategory ? "생성 중..." : "계열 추가"}</button> : <div />}
-                  </div>
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    <DifficultyChip label="전체 계열" active={!branchFilter} onClick={() => setBranchFilter("")} />
-                    {visibleBranches.map((branch) => (
-                      <DifficultyChip
-                        key={branch.categoryId}
-                        label={branch.name}
-                        active={branchFilter === String(branch.categoryId)}
-                        onClick={() => {
-                          setBranchFilter(String(branch.categoryId));
-                          setJobFilter("");
-                          setSelectedSkillId("");
-                        }}
-                      />
-                    ))}
-                  </div>
-                  <p className={`mt-3 text-[12px] ${branchAlreadyExists ? "text-[#d14343]" : "text-[#7a8190]"}`}>
-                    {branchAlreadyExists
-                      ? "같은 이름의 계열이 이미 있습니다. 중복/장난 입력은 관리자 확인 후 즉시 로그인 차단될 수 있습니다."
-                      : "새로 만든 계열은 바로 선택됩니다. 장난성 입력은 관리자 확인 후 즉시 로그인 차단될 수 있습니다."}
-                  </p>
-                </div>
+                </section>
 
-                <div className="rounded-[20px] border border-[#edf1f7] bg-[#fafbfd] p-4">
-                  <p className="text-[12px] font-semibold tracking-[0.08em] text-[#7a8190]">2. 직무 선택</p>
-                  <div className="mt-3 grid gap-3 xl:grid-cols-[1fr_auto]">
-                    <input value={jobQuery} onChange={(event) => setJobQuery(event.target.value)} placeholder={branchFilter ? "직무 검색 또는 새 직무 입력" : "계열을 먼저 선택해 주세요"} disabled={!branchFilter} className="rounded-[14px] border border-[#dfe3eb] bg-white px-4 py-3 text-[13px] outline-none focus:border-[#8aa2e8] disabled:bg-[#f3f5f8]" />
-                    {canCreateJob ? <button type="button" disabled={creatingCategory} onClick={handleCreateJob} className="rounded-[14px] border border-[#171b24] bg-white px-4 py-2.5 text-[13px] font-semibold text-[#171b24] disabled:opacity-60">{creatingCategory ? "생성 중..." : "직무 추가"}</button> : <div />}
-                  </div>
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    <DifficultyChip label="전체 직무" active={!jobFilter} onClick={() => setJobFilter("")} />
-                    {visibleJobs.map((job) => (
-                      <DifficultyChip
-                        key={job.categoryId}
-                        label={job.displayName || getCategoryDisplayName(job)}
-                        active={jobFilter === String(job.categoryId)}
-                        onClick={() => {
-                          setJobFilter(String(job.categoryId));
-                          setSelectedSkillId("");
-                        }}
-                      />
-                    ))}
-                  </div>
-                  <p className={`mt-3 text-[12px] ${jobAlreadyExists ? "text-[#d14343]" : "text-[#7a8190]"}`}>
-                    {jobAlreadyExists
-                      ? "같은 이름의 직무가 이미 있습니다. 중복/장난 입력은 관리자 확인 후 즉시 로그인 차단될 수 있습니다."
-                      : "새로 만든 직무는 바로 선택됩니다. 장난성 입력은 관리자 확인 후 즉시 로그인 차단될 수 있습니다."}
-                  </p>
-                </div>
-
-                <div className="rounded-[20px] border border-[#edf1f7] bg-[#fafbfd] p-4">
-                  <p className="text-[12px] font-semibold tracking-[0.08em] text-[#7a8190]">3. 기술 선택</p>
-                  <div className="mt-3 grid gap-3 xl:grid-cols-[1fr_auto]">
-                    <input value={categoryQuery} onChange={(event) => setCategoryQuery(event.target.value)} placeholder={jobFilter ? "기술 검색 또는 새 기술 입력" : "직무를 먼저 선택해 주세요"} disabled={!jobFilter} className="rounded-[14px] border border-[#dfe3eb] bg-white px-4 py-3 text-[13px] outline-none focus:border-[#8aa2e8] disabled:bg-[#f3f5f8]" />
-                    <div />
-                  </div>
-                  {canCreateCategory ? (
-                    <div className="mt-4 flex items-center justify-between gap-3 rounded-[18px] border border-dashed border-[#d7dce5] bg-white p-4">
-                      <div>
-                        <p className="text-[13px] font-semibold text-[#171b24]">`{categoryQuery.trim()}` 기술이 아직 없습니다.</p>
-                        <p className="mt-1 text-[12px] text-[#5e6472]">선택한 직무 아래에 새 기술을 만들고 바로 연습 대상으로 사용할 수 있습니다.</p>
-                      </div>
-                      <button type="button" disabled={creatingCategory} onClick={handleCreateCategory} className="rounded-[14px] border border-[#171b24] px-4 py-2.5 text-[13px] font-semibold text-[#171b24] disabled:opacity-60">{creatingCategory ? "생성 중..." : "기술 추가"}</button>
+                <div className="mt-8 max-w-208 space-y-7">
+                  <CategoryCard title="계열 선택" description="계열을 먼저 선택하면 직무 및 기술 후보를 빠르게 선택 가능합니다">
+                    <input
+                      value={branchQuery}
+                      onChange={(event) => setBranchQuery(event.target.value)}
+                      placeholder="계열 검색 또는 새 계열 입력"
+                      className={`${TEXT_INPUT_CLASS} max-w-124.75`}
+                    />
+                    <div className="flex flex-wrap gap-2">
+                      {visibleBranches.map((branch) => (
+                        <FilterChip
+                          key={branch.categoryId}
+                          label={branch.name}
+                          active={branchFilter === String(branch.categoryId)}
+                          onClick={() => {
+                            setBranchFilter(String(branch.categoryId));
+                            setJobFilter("");
+                            setSelectedSkillId("");
+                          }}
+                        />
+                      ))}
                     </div>
-                  ) : null}
-                  <p className={`mt-3 text-[12px] ${categoryAlreadyExists ? "text-[#d14343]" : "text-[#7a8190]"}`}>
-                    {categoryAlreadyExists
-                      ? "같은 이름의 기술이 이미 있습니다. 직무가 달라도 중복 생성은 막힙니다. 장난성 입력은 관리자 확인 후 즉시 로그인 차단될 수 있습니다."
-                      : "새로 만든 기술은 목록에 바로 반영됩니다. 장난성 입력은 관리자 확인 후 즉시 로그인 차단될 수 있습니다."}
-                  </p>
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    <DifficultyChip label="전체 기술" active={!selectedSkillId} onClick={() => setSelectedSkillId("")} />
-                    {visibleSkills.map((skill) => (
-                      <DifficultyChip
-                        key={skill.categoryId}
-                        label={skill.isCommon ? `${skill.name} · 공통` : skill.name}
-                        active={selectedSkillId === String(skill.categoryId)}
-                        onClick={() => setSelectedSkillId(String(skill.categoryId))}
-                      />
-                    ))}
+                    {!visibleBranches.length && !loading ? <p className={SUB_COPY_CLASS}>표시할 계열이 없습니다.</p> : null}
+                    {canCreateBranch ? (
+                      <button type="button" disabled={creatingCategory} onClick={handleCreateBranch} className="min-h-10.25 w-fit rounded-[0.875rem] border border-[#D8D8D8] bg-white px-4 text-[0.75rem] font-medium tracking-[0.02em] text-[#444444] disabled:opacity-60">
+                        {creatingCategory ? "생성 중..." : "계열 추가"}
+                      </button>
+                    ) : null}
+                    <p className={`text-[0.75rem] tracking-[0.02em] ${branchAlreadyExists ? "text-[#d14343]" : "text-[#9A9A9A]"}`}>
+                      {branchAlreadyExists ? "같은 이름의 계열이 이미 있습니다. 중복 입력은 제한됩니다." : "없는 계열은 직접 추가할 수 있습니다."}
+                    </p>
+                  </CategoryCard>
+
+                  <CategoryCard title="직무 선택" description="직무 추가는 한글로만 입력 가능합니다">
+                    <input
+                      value={jobQuery}
+                      onChange={(event) => setJobQuery(event.target.value)}
+                      placeholder="직무 검색 또는 새 직무 입력"
+                      disabled={!branchFilter}
+                      className={`${TEXT_INPUT_CLASS} max-w-124.75`}
+                    />
+                    <div className="flex flex-wrap gap-2">
+                      {visibleJobs.map((job) => (
+                        <FilterChip
+                          key={job.categoryId}
+                          label={job.displayName || getCategoryDisplayName(job)}
+                          active={jobFilter === String(job.categoryId)}
+                          onClick={() => {
+                            setJobFilter(String(job.categoryId));
+                            setSelectedSkillId("");
+                          }}
+                          disabled={!branchFilter}
+                        />
+                      ))}
+                    </div>
+                    {!visibleJobs.length && !loading ? <p className={SUB_COPY_CLASS}>표시할 직무가 없습니다.</p> : null}
+                    {canCreateJob ? (
+                      <button type="button" disabled={creatingCategory} onClick={handleCreateJob} className="min-h-10.25 w-fit rounded-[0.875rem] border border-[#D8D8D8] bg-white px-4 text-[0.75rem] font-medium tracking-[0.02em] text-[#444444] disabled:opacity-60">
+                        {creatingCategory ? "생성 중..." : "직무 추가"}
+                      </button>
+                    ) : null}
+                    <p className={`text-[0.75rem] tracking-[0.02em] ${jobAlreadyExists ? "text-[#d14343]" : "text-[#9A9A9A]"}`}>
+                      {jobAlreadyExists ? "같은 이름의 직무가 이미 있습니다." : "새로 만든 직무는 바로 선택됩니다."}
+                    </p>
+                  </CategoryCard>
+
+                  <CategoryCard title="기술 카테고리 선택" description="모의면접에는 40% 비율로 기술질문이 포함되며, 최대 3개까지 선택 가능합니다">
+                    <input
+                      value={categoryQuery}
+                      onChange={(event) => setCategoryQuery(event.target.value)}
+                      placeholder="기술 검색 또는 새 기술 입력"
+                      disabled={!jobFilter}
+                      className={`${TEXT_INPUT_CLASS} max-w-124.75`}
+                    />
+                    <div className="flex flex-wrap gap-2">
+                      {visibleSkills.map((skill) => (
+                        <FilterChip
+                          key={skill.categoryId}
+                          label={skill.isCommon ? `${skill.name} · 공통` : skill.name}
+                          active={selectedSkillId === String(skill.categoryId)}
+                          onClick={() => setSelectedSkillId(String(skill.categoryId))}
+                          disabled={!jobFilter}
+                        />
+                      ))}
+                    </div>
+                    {!visibleSkills.length && jobFilter ? <p className={SUB_COPY_CLASS}>현재 직무에 등록된 기술이 없습니다. 직접 추가하시면 바로 사용하실 수 있습니다.</p> : null}
+                    {canCreateCategory ? (
+                      <button type="button" disabled={creatingCategory} onClick={handleCreateCategory} className="min-h-10.25 w-fit rounded-[0.875rem] border border-[#D8D8D8] bg-white px-4 text-[0.75rem] font-medium tracking-[0.02em] text-[#444444] disabled:opacity-60">
+                        {creatingCategory ? "생성 중..." : "기술 추가"}
+                      </button>
+                    ) : null}
+                    <p className={`text-[0.75rem] tracking-[0.02em] ${categoryAlreadyExists ? "text-[#d14343]" : "text-[#9A9A9A]"}`}>
+                      {categoryAlreadyExists ? "같은 이름의 기술이 이미 있습니다." : "선택한 기술을 기준으로 질문을 생성합니다."}
+                    </p>
+                  </CategoryCard>
+
+                  <CategoryCard title="난이도 및 언어" description="기술 질문은 음성으로 진행하게 되면 질문과 답변, 피드백을 모두 영어로 작성하게 됩니다">
+                    <div className="flex flex-col gap-3">
+                      <div className="w-fit min-w-32 rounded-[0.875rem] bg-white px-4 py-3 shadow-[0_0_0.1875rem_rgba(0,0,0,0.25)]">
+                        <StarRatingInput
+                          value={selectedRating}
+                          onChange={setSelectedRating}
+                          size="sm"
+                          activeColorClass="text-[#FFD900]"
+                          inactiveColorClass="text-[#EAEAEA]"
+                          hoverColorClass="hover:text-[#FFD900]"
+                        />
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {INTERVIEW_LANGUAGE_OPTIONS.map((option) => (
+                        <SelectionPillButton
+                          key={option.value}
+                          active={selectedLanguage === option.value}
+                          onClick={() => setSelectedLanguage(option.value)}
+                          className="w-full max-w-35.25"
+                          minHeightClass="min-h-[2.25rem]"
+                        >
+                          {option.label}
+                        </SelectionPillButton>
+                      ))}
+                    </div>
+                    <p className={SUB_COPY_CLASS}>현재 선택: {getInterviewLanguageLabel(selectedLanguage)}</p>
+                  </CategoryCard>
+                </div>
+
+                {pageErrorMessage ? <p className="mt-5 text-[12px] text-[#dc4b4b]">{pageErrorMessage}</p> : null}
+              </section>
+
+              <aside className="w-full xl:max-w-65.5 xl:shrink-0 xl:pt-[8.4rem]">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className={SECTION_TITLE_CLASS}>빠른 시작</p>
+                  </div>
+                  <div className="flex items-center gap-2 text-[0.75rem] text-[#6D6D6D]">
+                    <button
+                      type="button"
+                      onClick={() => setQuickStartPage((prev) => Math.max(0, prev - 1))}
+                      disabled={quickStartPage === 0}
+                      className="disabled:cursor-not-allowed disabled:text-[#c7bdb4]"
+                    >
+                      ‹
+                    </button>
+                    <span>{quickStartPageCount === 0 ? "0 / 0" : `${quickStartPage + 1} / ${quickStartPageCount}`}</span>
+                    <button
+                      type="button"
+                      onClick={() => setQuickStartPage((prev) => Math.min(quickStartPageCount - 1, prev + 1))}
+                      disabled={quickStartPage >= quickStartPageCount - 1}
+                      className="disabled:cursor-not-allowed disabled:text-[#c7bdb4]"
+                    >
+                      ›
+                    </button>
                   </div>
                 </div>
-              </div>
 
-              <div className="mt-5 flex flex-wrap gap-2">
-                {[1, 2, 3, 4, 5].map((rating) => <DifficultyChip key={rating} label={<StarIcons rating={rating} sizeClass="text-[11px]" />} active={Number(selectedRating) === rating} onClick={() => setSelectedRating(rating)} />)}
-              </div>
-              <div className="mt-4 flex flex-wrap items-center gap-3">
-                <span className="text-[12px] font-semibold tracking-[0.08em] text-[#7a8190]">4. 면접 언어</span>
-                <LanguageSelect value={selectedLanguage} onChange={setSelectedLanguage} />
-                <span className="text-[12px] text-[#7a8190]">현재 선택: {getInterviewLanguageLabel(selectedLanguage)}</span>
-              </div>
-            </section>
-
-            <section className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-              {loading ? <p className="text-[13px] text-[#5e6472]">기술질문 연습 카테고리를 불러오는 중...</p> : null}
-              {!loading && categoryCards.length === 0 ? <p className="text-[13px] text-[#5e6472]">조건에 맞는 카테고리가 없습니다.</p> : null}
-              {categoryCards.map((category) => (
-                <article key={category.categoryId} className="rounded-[22px] border border-[#e4e7ee] bg-white p-5 shadow-[0_12px_32px_rgba(15,23,42,0.04)]">
-                  <div className="flex flex-wrap gap-2">
-                    <span className="rounded-full bg-[#eef6ec] px-3 py-1 text-[11px] text-[#496542]">{category.branchName}</span>
-                    <span className={`px-3 py-1 text-[11px] ${category.isCommon ? "rounded-full bg-[#e8f4ff] text-[#2563a6]" : "rounded-full bg-[#eef2f8] text-[#556070]"}`}>{category.jobName}</span>
-                    <span className="rounded-full bg-[#f4f6fb] px-3 py-1 text-[11px] text-[#556070]">{category.name}</span>
-                    <span className="rounded-full bg-[#fff7ed] px-3 py-1 text-[11px] text-[#9a5b11]">선택 난이도 {selectedRating}점</span>
-                  </div>
-                  <p className="mt-4 text-[18px] font-semibold text-[#171b24]">{category.name}</p>
-                  <p className="mt-2 text-[13px] leading-[1.7] text-[#5e6472]">선택한 난이도 기준으로 {QUESTION_COUNT}문항 연습을 시작합니다.</p>
-                  <div className="mt-5 flex items-center justify-between gap-3">
-                    {startingCategoryId === category.categoryId ? <InlineSpinner label="면접 시작 중..." /> : <span className="text-[12px] text-[#6b7280]">문항 {QUESTION_COUNT}개</span>}
-                    <button type="button" disabled={isStartingPractice} onClick={() => handleStartPractice(category)} className="rounded-[14px] bg-[#171b24] px-4 py-2.5 text-[13px] font-semibold text-white disabled:opacity-60">{startingCategoryId === category.categoryId ? "시작 중..." : "연습 시작"}</button>
-                  </div>
-                </article>
-              ))}
-            </section>
-
-            {pageErrorMessage ? <p className="mt-4 text-[12px] text-[#dc4b4b]">{pageErrorMessage}</p> : null}
+                <div className="mt-4 space-y-3">
+                  {loading ? <p className={SUB_COPY_CLASS}>기술 카테고리를 불러오는 중입니다.</p> : null}
+                  {!loading && quickStartCategories.length === 0 ? <p className={SUB_COPY_CLASS}>조건에 맞는 빠른 시작 항목이 없습니다.</p> : null}
+                  {quickStartCategories.map((category) => (
+                    <QuickStartCard
+                      key={category.categoryId}
+                      category={category}
+                      rating={selectedRating}
+                      disabled={isStartingPractice}
+                      starting={startingCategoryId === category.categoryId}
+                      onStart={() => handleStartPractice(category)}
+                    />
+                  ))}
+                </div>
+                <div className="mt-6 flex justify-end">
+                  <SelectionPillButton
+                    active={Boolean(primaryStartCategory) && !isStartingPractice}
+                    disabled={!primaryStartCategory || isStartingPractice}
+                    onClick={() => primaryStartCategory && handleStartPractice(primaryStartCategory)}
+                    className="w-full max-w-42"
+                    innerClassName="gap-2 text-[1.5rem] font-medium tracking-[0]"
+                    minHeightClass="min-h-[3rem]"
+                  >
+                    <span>{startingCategoryId === primaryStartCategory?.categoryId ? "시작 중" : "시작하기"}</span>
+                    <span aria-hidden="true">→</span>
+                  </SelectionPillButton>
+                </div>
+              </aside>
+            </div>
+          </div>
           </div>
         </main>
       </div>
@@ -654,7 +812,7 @@ export const TechPracticePage = () => {
         busy={resumeModalBusy}
       />
       {isStartingPractice ? (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-[#0f172acc]">
+        <div className="fixed inset-0 z-200 flex items-center justify-center bg-[#0f172acc]">
           <div className="rounded-[18px] border border-[#334155] bg-[#111827] px-6 py-5 text-center">
             <div className="mx-auto h-7 w-7 animate-spin rounded-full border-2 border-[#64748b] border-t-white" />
             <p className="mt-3 text-[14px] font-medium text-white">질문을 준비하고 있습니다</p>

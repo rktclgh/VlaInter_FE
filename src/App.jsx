@@ -12,7 +12,9 @@ import { InterviewStartPage } from './pages/content/InterviewStartPage'
 import { TechPracticePage } from './pages/content/TechPracticePage'
 import { InterviewSessionPage } from './pages/content/InterviewSessionPage'
 import { InterviewHistoryPage } from './pages/content/InterviewHistoryPage'
+import { InterviewHistoryDetailPage } from './pages/content/InterviewHistoryDetailPage'
 import { PracticeHistoryPage } from './pages/content/PracticeHistoryPage'
+import { PracticeHistoryDetailPage } from './pages/content/PracticeHistoryDetailPage'
 import { SavedQuestionsPage } from './pages/content/SavedQuestionsPage'
 import { QuestionSetsPage } from './pages/content/QuestionSetsPage'
 import { QuestionBrowsePage } from './pages/content/QuestionBrowsePage'
@@ -63,7 +65,9 @@ function App() {
         <Route path="/content/interview" element={<InterviewStartPage />} />
         <Route path="/content/tech-practice" element={<TechPracticePage />} />
         <Route path="/content/interview-history" element={<InterviewHistoryPage />} />
+        <Route path="/content/interview-history/:sessionId" element={<InterviewHistoryDetailPage />} />
         <Route path="/content/practice-history" element={<PracticeHistoryPage />} />
+        <Route path="/content/practice-history/:sessionId" element={<PracticeHistoryDetailPage />} />
         <Route path="/content/interview/session" element={<InterviewSessionPage />} />
         <Route path="/content/saved-questions" element={<SavedQuestionsPage />} />
         <Route path="/content/question-sets" element={<QuestionSetsPage />} />
