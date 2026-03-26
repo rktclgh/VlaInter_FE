@@ -12,6 +12,7 @@ import {
 import { formatDateTime, formatHistoryTitle, scoreToStars } from "./mockInterviewHistoryUtils";
 
 const SUMMARY_PILL_LIMIT = 6;
+const POSITIVE_INTEGER_ID_REGEX = /^[1-9]\d*$/;
 
 const buildSummaryPills = (summary) => {
   if (!summary) return [];
@@ -117,7 +118,7 @@ export const InterviewHistoryDetailPage = () => {
   const bookmarkingTurnIdsRef = useRef([]);
 
   useEffect(() => {
-    if (!resolvedSessionId) {
+    if (!resolvedSessionId || !POSITIVE_INTEGER_ID_REGEX.test(resolvedSessionId)) {
       setLoadingPage(false);
       setPageErrorMessage("유효하지 않은 면접 이력입니다.");
       return;

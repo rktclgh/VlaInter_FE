@@ -17,6 +17,7 @@ import {
 import { formatDateTime, scoreToStars } from "./mockInterviewHistoryUtils";
 
 const PRACTICE_API_BASE_PATH = "/api/interview/tech";
+const POSITIVE_INTEGER_ID_REGEX = /^[1-9]\d*$/;
 
 const getPracticeHistoryTitle = (session) => {
   const categoryName = String(session?.categoryName || "").trim();
@@ -137,7 +138,7 @@ export const PracticeHistoryDetailPage = () => {
   const bookmarkingTurnIdsRef = useRef([]);
 
   useEffect(() => {
-    if (!resolvedSessionId) {
+    if (!resolvedSessionId || !POSITIVE_INTEGER_ID_REGEX.test(resolvedSessionId)) {
       setLoadingPage(false);
       setPageErrorMessage("유효하지 않은 기술질문 연습 이력입니다.");
       return;
