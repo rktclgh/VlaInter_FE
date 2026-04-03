@@ -59,8 +59,8 @@ const HistorySessionCard = ({ item, index, deleting, onOpen, onDelete }) => {
       </div>
 
       <div className="mt-[clamp(0.875rem,0.885vw,1.0625rem)] flex flex-wrap items-center gap-[clamp(0.5rem,0.625vw,0.75rem)]">
-        {labels.map((label) => (
-          <span key={`${item.sessionId}-${label}`} className={CARD_PILL_CLASS_NAME}>
+        {labels.map((label, labelIndex) => (
+          <span key={`${item.sessionId}-${label}-${labelIndex}`} className={CARD_PILL_CLASS_NAME}>
             {label}
           </span>
         ))}
