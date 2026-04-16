@@ -1,10 +1,9 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { Link, useNavigate } from "react-router-dom";
 import { getMyProfile } from "../lib/userApi";
 import { hasAuthenticatedBrowserSession } from "../lib/authSessionMarker";
 import { getLandingPatchNotes, getLandingSiteSettings } from "../lib/landingApi";
-import { ParticleWaveBackground } from "../components/ParticleWaveBackground";
 import logoMark from "../assets/logo/logo.png";
 import heroWordmark from "../assets/logo/vlainter.png";
 import icon11st from "../assets/icon/11st.png";
@@ -32,6 +31,10 @@ import iconToss from "../assets/icon/toss.png";
 import iconTvn from "../assets/icon/tvn.png";
 import iconYogiyo from "../assets/icon/yogiyo.png";
 import { usePublicLocale } from "../lib/publicLocale";
+
+const ParticleWaveBackground = lazy(() =>
+  import("../components/ParticleWaveBackground").then((module) => ({ default: module.ParticleWaveBackground }))
+);
 
 const CONTENT_BY_LANGUAGE = {
   ko: {
@@ -420,7 +423,9 @@ export const StartingPage = () => {
       </AnimatePresence>
 
       <section className="relative isolate overflow-hidden bg-[#050816]">
-        <ParticleWaveBackground reducedMotion={Boolean(prefersReducedMotion)} />
+        <Suspense fallback={null}>
+          <ParticleWaveBackground reducedMotion={Boolean(prefersReducedMotion)} />
+        </Suspense>
 
         <div className="relative z-10 mx-auto flex min-h-[min(100vh,58rem)] w-full max-w-[112rem] flex-col px-4 pb-8 pt-4 sm:px-6 lg:px-8">
           <header className="mx-auto flex w-full max-w-[95rem] items-center justify-between gap-4 px-1 py-2 md:px-2">
