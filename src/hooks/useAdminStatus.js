@@ -4,25 +4,41 @@ import { getMyProfile } from "../lib/userApi";
 
 let cachedAdminStatus = null;
 let adminStatusPromise = null;
+let adminStatusCacheVersion = 0;
+
+export function resetAdminStatusCache() {
+  cachedAdminStatus = null;
+  adminStatusPromise = null;
+  adminStatusCacheVersion += 1;
+}
 
 const fetchAdminStatus = async () => {
   if (typeof cachedAdminStatus === "boolean") {
     return cachedAdminStatus;
   }
+  const requestVersion = adminStatusCacheVersion;
   if (!adminStatusPromise) {
     adminStatusPromise = getMyProfile()
       .then((payload) => {
+        if (requestVersion !== adminStatusCacheVersion) {
+          return cachedAdminStatus ?? false;
+        }
         const profile = extractProfile(payload);
         cachedAdminStatus = String(profile?.role || "").toUpperCase() === "ADMIN";
         return cachedAdminStatus;
       })
       .catch((error) => {
+        if (requestVersion !== adminStatusCacheVersion) {
+          return cachedAdminStatus ?? false;
+        }
         console.error("관리자 상태 확인에 실패했습니다.", error);
         cachedAdminStatus = false;
         return false;
       })
       .finally(() => {
-        adminStatusPromise = null;
+        if (requestVersion === adminStatusCacheVersion) {
+          adminStatusPromise = null;
+        }
       });
   }
   return adminStatusPromise;

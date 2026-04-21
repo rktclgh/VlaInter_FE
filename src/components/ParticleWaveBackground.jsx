@@ -1,5 +1,15 @@
 import { useEffect, useRef } from "react";
-import * as THREE from "three";
+import {
+  AdditiveBlending,
+  BufferAttribute,
+  BufferGeometry,
+  Color,
+  PerspectiveCamera,
+  Points,
+  Scene,
+  ShaderMaterial,
+  WebGLRenderer,
+} from "three";
 
 const VERTEX_SHADER = `
   attribute float scale;
@@ -43,7 +53,7 @@ const buildGridConfig = (width, reducedMotion) => {
 const getCameraPosition = (width) => {
   const mobile = width < 768;
   const distance = mobile ? 2140 : 2500;
-  const azimuth = THREE.MathUtils.degToRad(30);
+  const azimuth = (30 * Math.PI) / 180;
 
   return {
     x: -Math.sin(azimuth) * distance,
@@ -53,7 +63,7 @@ const getCameraPosition = (width) => {
 };
 
 const toRgba = (hex, alpha) => {
-  const color = new THREE.Color(hex);
+  const color = new Color(hex);
   const r = Math.round(color.r * 255);
   const g = Math.round(color.g * 255);
   const b = Math.round(color.b * 255);
@@ -81,15 +91,16 @@ export const ParticleWaveBackground = ({
     const container = containerRef.current;
     if (!container) return undefined;
 
+    let frameId = 0;
     const width = container.clientWidth || window.innerWidth;
     const height = container.clientHeight || window.innerHeight;
     const { separation, amountX, amountY, speed, amplitude, scaleStrength } = buildGridConfig(width, reducedMotion);
     const particleCount = amountX * amountY;
-    const colorBlue = new THREE.Color(primaryColor);
-    const colorPink = new THREE.Color(secondaryColor);
+    const colorBlue = new Color(primaryColor);
+    const colorPink = new Color(secondaryColor);
 
-    const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(55, width / height, 1, 10000);
+    const scene = new Scene();
+    const camera = new PerspectiveCamera(55, width / height, 1, 10000);
     const initialCameraPosition = getCameraPosition(width);
     camera.position.set(initialCameraPosition.x, initialCameraPosition.y, initialCameraPosition.z);
 
@@ -121,30 +132,29 @@ export const ParticleWaveBackground = ({
       }
     }
 
-    const geometry = new THREE.BufferGeometry();
-    geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
-    geometry.setAttribute("scale", new THREE.BufferAttribute(scales, 1));
-    geometry.setAttribute("customColor", new THREE.BufferAttribute(colors, 3));
+    const geometry = new BufferGeometry();
+    geometry.setAttribute("position", new BufferAttribute(positions, 3));
+    geometry.setAttribute("scale", new BufferAttribute(scales, 1));
+    geometry.setAttribute("customColor", new BufferAttribute(colors, 3));
 
-    const material = new THREE.ShaderMaterial({
+    const material = new ShaderMaterial({
       vertexShader: VERTEX_SHADER,
       fragmentShader: FRAGMENT_SHADER,
       transparent: true,
       depthWrite: false,
-      blending: THREE.AdditiveBlending,
+      blending: AdditiveBlending,
     });
 
-    const particles = new THREE.Points(geometry, material);
+    const particles = new Points(geometry, material);
     particles.rotation.x = -0.08;
     scene.add(particles);
 
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    const renderer = new WebGLRenderer({ antialias: true, alpha: true });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.75));
     renderer.setSize(width, height);
     renderer.setClearColor(0x000000, 0);
     container.appendChild(renderer.domElement);
 
-    let frameId = 0;
     let count = 0;
 
     const renderFrame = () => {
