@@ -44,11 +44,15 @@ export async function kakaoLogin(payload) {
   return result;
 }
 
+export async function requestServerLogout() {
+  return apiRequest("/api/auth/logout", {
+    method: "POST",
+  });
+}
+
 export async function logout() {
   try {
-    return await apiRequest("/api/auth/logout", {
-      method: "POST",
-    });
+    return await requestServerLogout();
   } finally {
     clearAuthenticatedBrowserSession();
     resetMyProfileCache();

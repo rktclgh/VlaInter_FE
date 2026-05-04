@@ -6,8 +6,9 @@ import {
   markAuthenticatedBrowserSession,
 } from "../lib/authSessionMarker";
 import { isAuthenticationError } from "../lib/apiClient";
-import { logout } from "../lib/authApi";
-import { getMyProfile } from "../lib/userApi";
+import { requestServerLogout } from "../lib/authApi";
+import { resetAdminStatusCache } from "../hooks/useAdminStatus";
+import { getMyProfile, resetMyProfileCache } from "../lib/userApi";
 
 export const BrowserSessionGuard = ({ children }) => {
   const navigate = useNavigate();
@@ -20,15 +21,16 @@ export const BrowserSessionGuard = ({ children }) => {
     let cancelled = false;
 
     const guard = async () => {
-      setReady(false);
       setLoadError("");
+      setReady(false);
 
       try {
         await getMyProfile();
-        markAuthenticatedBrowserSession();
-        if (!cancelled) {
-          setReady(true);
+        if (cancelled) {
+          return;
         }
+        markAuthenticatedBrowserSession();
+        setReady(true);
         return;
       } catch (error) {
         if (!isAuthenticationError(error)) {
@@ -37,17 +39,29 @@ export const BrowserSessionGuard = ({ children }) => {
           }
           return;
         }
+        if (cancelled) {
+          return;
+        }
         if (hasAuthenticatedBrowserSession()) {
+          if (cancelled) {
+            return;
+          }
           try {
-            await logout();
+            await requestServerLogout();
           } catch {
             // ignore logout failure and continue clearing client marker
           }
+          if (cancelled) {
+            return;
+          }
         }
         clearAuthenticatedBrowserSession();
+        resetMyProfileCache();
+        resetAdminStatusCache();
       }
 
       if (!cancelled) {
+        setReady(false);
         navigate("/login", {
           replace: true,
           state: { redirectedFrom: location.pathname },
