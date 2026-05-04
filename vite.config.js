@@ -12,6 +12,19 @@ export default defineConfig(({ command }) => {
       sourcemap: false,
       minify: 'esbuild',
       cssMinify: true,
+      rollupOptions: {
+        output: {
+          manualChunks(id) {
+            if (id.includes('node_modules/jspdf')) {
+              return 'jspdf-vendor'
+            }
+
+            if (id.includes('node_modules/html2canvas')) {
+              return 'html2canvas-vendor'
+            }
+          },
+        },
+      },
     },
     esbuild: isBuild
       ? {

@@ -1,5 +1,6 @@
 import { apiRequest } from "./apiClient";
 import { clearAuthenticatedBrowserSession, markAuthenticatedBrowserSession } from "./authSessionMarker";
+import { resetAdminStatusCache } from "../hooks/useAdminStatus";
 import { resetMyProfileCache } from "./userApi";
 
 export async function login(payload) {
@@ -7,6 +8,7 @@ export async function login(payload) {
     method: "POST",
     body: payload,
   });
+  resetAdminStatusCache();
   markAuthenticatedBrowserSession();
   return result;
 }
@@ -37,18 +39,24 @@ export async function kakaoLogin(payload) {
     method: "POST",
     body: payload,
   });
+  resetAdminStatusCache();
   markAuthenticatedBrowserSession();
   return result;
 }
 
+export async function requestServerLogout() {
+  return apiRequest("/api/auth/logout", {
+    method: "POST",
+  });
+}
+
 export async function logout() {
   try {
-    return await apiRequest("/api/auth/logout", {
-      method: "POST",
-    });
+    return await requestServerLogout();
   } finally {
     clearAuthenticatedBrowserSession();
     resetMyProfileCache();
+    resetAdminStatusCache();
   }
 }
 
