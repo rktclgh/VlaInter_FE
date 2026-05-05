@@ -7,6 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
+    "verify:pdf-vendor-preload": "node scripts/verify-pdf-vendor-preload.mjs",
     "preview": "vite preview"
   },
   "dependencies": {
